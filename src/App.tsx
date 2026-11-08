@@ -318,9 +318,64 @@ export default function App() {
     } finally { setExportBusy(false); }
   }
 
-  const active = current?.slides.find(s => s.id === slideId);
-  const chosen = draft?.elements.find(e => e.id === selected);
-  const statusText = dirty ? "Modifications non enregistrées" : "Enregistré";
+  const active = current?.slides.find(s=>s.id===slideId);
+  const statusText = externalChanges ? "Modifié depuis ChatGPT" : dirty ? "Modifications non enregistrées" : "Enregistré";
+
+  useEffect(()=>{
+    if(!token||!current?.presentation.id)return;
+    let cancelled=false;
+    const deckId=current.presentation.id;
+    const check=async()=>{
+      if(document.visibilityState!=="visible"||busy||exportBusy)return;
+      try{
+        const revision=await readDeckRevisions(token,deckId);
+        if(cancelled||currentRef.current?.presentation.id!==deckId)return;
+        const local=currentRef.current!;
+        const changed=revision.title!==local.presentation.title||
+          revision.slides.length!==local.slides.length||
+          revision.slides.some((s,i)=>s.id!==local.slides[i]?.id||s.revision!==local.slides[i]?.revision||s.position!==local.slides[i]?.position);
+        if(!changed)return;
+        if(dirtyRef.current){setExternalChanges(true);return;}
+        const updated=await readPresentation(token,deckId);
+        if(cancelled||dirtyRef.current)return;
+        setCurrent(updated);
+        const wanted=updated.slides.find(s=>s.id===slideId)??updated.slides[0];
+        pickSlide(wanted);
+        void refreshList().catch(()=>{});
+      }catch{/* Transient network issues do not discard local work. */}
+    };
+    const timer=window.setInterval(()=>void check(),16000);
+    const onFocus=()=>void check();
+    window.addEventListener("focus",onFocus);
+    return()=>{cancelled=true;window.clearInterval(timer);window.removeEventListener("focus",onFocus);};
+  },[token,current?.presentation.id,slideId,busy,exportBusy]);
+
+  useEffect(()=>{
+    if(!autoSave||!dirty||busy||exportBusy||externalChanges||!current||!draft)return;
+    const timer=window.setTimeout(()=>void save(),1900);
+    return()=>window.clearTimeout(timer);
+  },[autoSave,dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
+
+  useEffect(()=>{
+    const handler=(e:KeyboardEvent)=>{
+      if(!draftRef.current||!currentRef.current)return;
+      const target=e.target instanceof HTMLElement?e.target:null;
+      const writing=!!target?.closest("input, textarea, select, [contenteditable='true']");
+      const mod=e.ctrlKey||e.metaKey;
+      if(mod&&e.key.toLowerCase()==="s"){e.preventDefault();void save();return;}
+      if(writing)return;
+      if(mod&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return;}
+      if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return;}
+      if(mod&&e.key.toLowerCase()==="d"){e.preventDefault();copySelection();return;}
+      if(e.key==="Delete"||e.key==="Backspace"){if(selectedIds.length){e.preventDefault();removeSelection();}return;}
+      if(e.key.startsWith("Arrow")&&selectedIds.length){
+        e.preventDefault();const step=e.shiftKey?10:1;
+        nudgeSelection(e.key==="ArrowRight"?step:e.key==="ArrowLeft"?-step:0,e.key==="ArrowDown"?step:e.key==="ArrowUp"?-step:0);
+      }
+    };
+    window.addEventListener("keydown",handler);
+    return()=>window.removeEventListener("keydown",handler);
+  },[selectedIds,dirty,current?.presentation.id,notes,busy,externalChanges]);
 
   if (!token) return (
     <main className="login-screen">
