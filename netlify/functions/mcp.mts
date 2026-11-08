@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/images/search";
+import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema } from "../../src/mcp/documents";
 import {
@@ -125,6 +128,63 @@ function createServer(request: Request): McpServer {
       if(a.action==="delete"&&!a.confirm)throw new Error("confirmation_required");
       return {folder:await manageFolder(a.action,a.id,a.name,a.parentId)};
     },true);
+
+  register("search_images","Rechercher des images",
+    "Search multiple photo libraries in ONE call. Openverse and Wikimedia work without keys; Pexels and Unsplash are enabled when API keys exist. Google Images returns an external search URL (Google's legacy image API is closed to new customers). 20 candidates per source by default; compact output saves tokens.",
+    {query:z.string().min(2).max(160),sources:z.array(ImageSourceSchema).min(1).max(5).default(["openverse","wikimedia"]),
+      page:z.number().int().min(1).max(15).default(1),perSource:z.number().int().min(1).max(30).default(20),
+      orientation:z.enum(["any","landscape","portrait","square"]).default("any"),
+      compact:z.boolean().default(true)},false,
+    async a=>{
+      const found=await searchImages(a);
+      return {...found,images:a.compact?found.images.map(i=>({
+        id:i.id,source:i.provider,url:i.imageUrl,preview:i.previewUrl,
+        title:i.title,credit:i.attribution,license:i.license,sourcePage:i.pageUrl
+      })):found.images};
+    });
+
+  register("image_sources","Sources d'images disponibles",
+    "List usable providers, missing API keys without revealing secrets, and the external Google Images option.",{},false,
+    async()=>({sources:getSourceStatuses()}));
+
+  register("generate_variants","Proposer trois variantes graphiques",
+    "Generate and SAVE three optional graphic directions for an existing slide with a single call. Keeps the original text, source HTML and image URLs; never overwrites the current design. AI can additionally author fully custom proposals using create_variants.",
+    {slideId:uuid},true,
+    async a=>{
+      const slide=await getSlide(a.slideId,"full");
+      if(!("document" in slide))throw new Error("slide_not_found");
+      const proposed=proposeGraphicVariants(slide.document);
+      return {slideId:a.slideId,...await createVariants(a.slideId,
+        proposed.map(v=>({name:v.name,slide:{document:v.document,notes:slide.notes}})))};
+    });
+
+  register("place_image","Placer ou remplacer une image",
+    "One-call shortcut to insert a freely positioned, editable photo, or replace an existing image layer. Optionally track its source, attribution and rights. Supports crop, object fit and optional image filters.",
+    {presentationId:uuid,slideId:uuid,elementId:z.string().min(1).max(128).optional(),
+      url:z.url().refine(u=>u.startsWith("https:"),"An HTTPS URL is required"),
+      x:z.number().min(-20000).max(20000).default(0),y:z.number().min(-20000).max(20000).default(0),
+      width:z.number().min(10).max(20000).default(960),height:z.number().min(10).max(20000).default(540),
+      fit:z.enum(["cover","contain","fill"]).default("cover"),
+      filter:z.string().max(300).optional(),revision:z.number().int().min(1).optional(),
+      label:z.string().max(140).optional(),source:z.string().max(140).optional(),rights:z.string().max(400).optional()},true,
+    async a=>{
+      const previous=await getSlide(a.slideId,"full");
+      if(!("document" in previous))throw new Error("slide_not_found");
+      if(previous.presentation_id!==a.presentationId)throw new Error("foreign_presentation");
+      const id=a.elementId??randomUUID();
+      const exists=previous.document.elements.find(e=>e.id===id);
+      if(exists&&exists.type!=="image")throw new Error("element_is_not_an_image");
+      const styles={...(exists?.styles??{}),left:a.x+"px",top:a.y+"px",width:a.width+"px",height:a.height+"px",
+        objectFit:a.fit,...(a.filter?{filter:a.filter}:{})};
+      const edited=await editSlides(a.presentationId,[{id:a.slideId,revision:a.revision,
+        operations:[{op:"upsert_element",element:{id,type:"image",src:a.url,styles}}]}]);
+      let assetNote:string|undefined;
+      try{
+        await saveAssets(a.presentationId,[{url:a.url,label:a.label,source:a.source,rights:a.rights}]);
+      }catch{assetNote="Image placed but source metadata could not be saved.";}
+      return {slideId:a.slideId,elementId:id,updated:edited.updated,newRevision:edited.slides[0]?.revision,
+        ...(assetNote?{warning:assetNote}:{})};
+    });
 
   register("save_assets","Enregistrer plusieurs images",
     "Register up to 40 source URLs and optional attribution/rights in the presentation asset catalog. Does not download or search the internet; ChatGPT can supply URLs discovered independently.",
