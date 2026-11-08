@@ -151,6 +151,25 @@ export async function exportPowerPoint(
   }
 
   const fileName = safeDownloadName(deck.presentation.title);
-  await pptx.writeFile({ fileName, compression: true });
+  // Keep control of the Blob instead of relying on a library's 100ms revoke timer.
+  // This also lets us validate the ZIP signature before reporting success.
+  const generated = await pptx.write({ outputType: "blob", compression: true });
+  const blob = generated instanceof Blob
+    ? generated
+    : new Blob([generated as ArrayBuffer], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  if (blob.size < 800 || signature[0] !== 0x50 || signature[1] !== 0x4B) {
+    throw new Error("Le fichier PowerPoint généré ne semble pas être une archive PPTX valide.");
+  }
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.download = fileName;
+  anchor.href = href;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Allow slow download managers and embedded browsers to read the Blob fully.
+  window.setTimeout(() => URL.revokeObjectURL(href), 60_000);
   return { fileName, slideCount: deck.slides.length, warnings, mode };
 }
