@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { database } from "./security";
 import { fingerprint } from "./fingerprint";
+import { recordSlideHistory, listSlideHistory } from "./history";
 import { editSlide, initialSlide, summarizeSlide, type InitialSlide, type SlideOperation } from "./documents";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide";
 
@@ -120,7 +121,17 @@ export async function editSlides(deckId: string, changes: SlideChange[], dryRun 
   const result=await database().query(
     "SELECT public.mcp_apply_slide_batch($1::uuid,$2::jsonb) AS updated",
     [deckId,JSON.stringify(prepared)]);
-  return { updated:result[0]?.updated??0,slides:prepared.map(c=>({id:c.id,revision:c.revision+1,
+  let historyWarning:string|undefined;
+  try{
+    await recordSlideHistory(prepared.map(c=>({
+      slideId:c.id,revision:c.revision,document:SlideDocumentSchema.parse(byId.get(c.id)!.document),
+      notes:byId.get(c.id)!.notes,origin:"MCP" as const
+    })));
+  }catch(error){
+    console.error("MCP history recording unavailable:",error instanceof Error?error.message:String(error));
+    historyWarning="Les modifications sont enregistrées, mais l'instantané historique n'a pas pu être conservé.";
+  }
+  return { updated:result[0]?.updated??0,...(historyWarning?{historyWarning}:{}),slides:prepared.map(c=>({id:c.id,revision:c.revision+1,
     mode:c.document.mode,elements:c.document.elements.length,animations:c.document.animations.length})) };
 }
 export async function listFolders() {
@@ -186,7 +197,7 @@ export async function createVariants(slideId: string, variants: {name:string,sli
 export async function listVariants(slideId: string, full=false) {
   uuid.parse(slideId);
   const cols=full?"id::text AS id,name,document,notes,created_at":"id::text AS id,name,created_at";
-  return database().query("SELECT "+cols+" FROM public.slide_variants WHERE slide_id=$1::uuid ORDER BY created_at DESC LIMIT 50",[slideId]);
+  return database().query("SELECT "+cols+" FROM public.slide_variants WHERE slide_id=$1::uuid AND name NOT LIKE 'Historique r%' ORDER BY created_at DESC LIMIT 50",[slideId]);
 }
 
 export async function getVariant(slideId:string,variantId:string){
@@ -234,6 +245,6 @@ export async function activateVariant(slideId: string, variantId: string, expect
   if(!updated[0])throw new Error("revision_conflict");
   // Archive the former slide, so the selection is reversible.
   await db.query("INSERT INTO public.slide_variants(slide_id,name,document,notes) VALUES($1::uuid,$2,$3::jsonb,$4)",
-    [slideId,"Avant sélection "+new Date().toISOString(),JSON.stringify(row.document),row.notes]);
+    [slideId,"Historique r"+row.revision+" · restauration",JSON.stringify(row.document),row.notes]);
   return {slideId,revision:updated[0].revision,previousVersionSaved:true};
 }
