@@ -64,7 +64,7 @@ export function normalizeWikimedia(json:Record<string,unknown>):ImageCandidate[]
     const title=asString(row.title,180).replace(/^File:/,"");
     const attribution=asString(asRecord(meta.Artist).value,300).replace(/<[^>]*>/g," ").trim();
     const license=asString(asRecord(meta.LicenseShortName).value,140)||"Voir la fiche Wikimedia";
-    return [{id:"wikimedia:"+asString(row.pageid,80),provider:"wikimedia" as const,title,alt:title,
+    return [{id:"wikimedia:"+String(row.pageid??"").slice(0,80),provider:"wikimedia" as const,title,alt:title,
       previewUrl:thumb,imageUrl:raw,pageUrl:allowedHttps(info.descriptionurl)||"https://commons.wikimedia.org/",
       creator:attribution,license,attribution:(attribution||"Wikimedia Commons")+" · "+license,
       width:asNumber(info.width),height:asNumber(info.height)}];
