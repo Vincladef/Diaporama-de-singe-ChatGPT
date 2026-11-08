@@ -19,8 +19,8 @@ export const AnimationStepSchema = z.object({
   trigger: z.enum(["click", "after-previous"]),
   effect: z.enum(["appear", "fade", "move", "scale", "wipe", "highlight", "dim", "hide", "custom"]),
   durationMs: z.number().int().min(0).max(60000).default(350),
-  delayMs: z.number().int().min(0).max(30000).default(0),
-  easing: z.enum(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]).default("ease-out"),
+  delayMs: z.number().int().min(0).max(30000).optional(),
+  easing: z.enum(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]).optional(),
   offsetX: z.number().min(-4096).max(4096).optional(),
   offsetY: z.number().min(-4096).max(4096).optional(),
   /** Browser Web Animations API keyframes, e.g. opacity/transform/filter/clipPath. */
