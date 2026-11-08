@@ -2,6 +2,8 @@ import pptxgen from "pptxgenjs";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import type { PresentationDetail } from "../lib/api";
 import { captureSlide } from "./capture";
+import { captureNativeHtml, type NativeTextRun } from "./nativeHtml";
+import { visibleStructuredElements } from "./nativeSteps";
 import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 import { buildExportFrames, type RevealExportMode } from "./reveals";
@@ -106,6 +108,29 @@ async function appendNativeObjects(
   }
 }
 
+/** Editable typography reconstructed from measured HTML text runs. */
+function appendNativeHtmlText(
+  slide: ReturnType<pptxgen["addSlide"]>, runs: NativeTextRun[],
+  document: SlideDocument, slideW: number, slideH: number,
+): void {
+  for (const [index, run] of runs.entries()) {
+    const x = pptxInches(run.x, document.canvas.width, slideW);
+    const y = pptxInches(run.y, document.canvas.height, slideH);
+    const w = pptxInches(run.w, document.canvas.width, slideW);
+    const h = pptxInches(run.h, document.canvas.height, slideH);
+    if (w <= 0 || h <= 0) continue;
+    const family = run.fontFamily.split(",")[0]?.replace(/["']/g, "").trim() || "Aptos";
+    const pt = Math.max(5, Math.min(280,
+      pptxInches(run.fontSize, document.canvas.width, slideW) * 72));
+    slide.addText(run.text, {
+      x, y, w, h, objectName: "Texte HTML modifiable " + (index + 1),
+      fontFace: family, fontSize: pt, color: asColor(run.color, "26342C"),
+      bold: run.fontWeight >= 600, italic: run.italic, align: run.align,
+      valign: "top", margin: 0, breakLine: false,
+    });
+  }
+}
+
 function emptyFreeform(document: SlideDocument): boolean {
   return !document.freeform?.html?.trim() && !document.freeform?.css?.trim();
 }
@@ -137,7 +162,7 @@ export async function buildPowerPoint(
   const imageCache=new Map<string,Promise<string>>();
   if(preflight.animatedSlides)warnings.push(revealMode === "steps"
     ? preflight.animatedSlides + " diapositive(s) animées développées en " + frames.length +
-      " écrans successifs au total. Les clics dévoilent le contenu en avançant d'une diapositive ; les fondus et déplacements Web ne sont pas des animations natives Google Slides/PowerPoint."
+      " écrans successifs au total. En mode modifiable, les textes et objets convertibles restent éditables ; les fondus et déplacements Web ne sont pas des animations natives Google Slides/PowerPoint."
     : preflight.animatedSlides + " diapositive(s) comportent des animations Web ; l'export statique ne conserve pas leurs apparitions au clic.");
   if(preflight.totalRemoteImages)warnings.push(
     "Les photos externes dépendent de la politique CORS de leurs hébergeurs. En cas de blocage, utilisez un média librement téléchargeable.");
@@ -155,33 +180,37 @@ export async function buildPowerPoint(
       warnings.push("Diapositive " + number + " : format différent ; les éléments seront adaptés au format du premier écran.");
     }
 
-    if (frame.revealClickCount !== null) {
-      // One rendered page per click boundary. This is more robust than hoping that
-      // imported PowerPoint animation XML survives the Google Slides conversion.
-      const image = await captureSlide(document, { revealClickCount: frame.revealClickCount });
+    if (mode === "faithful") {
+      const image = await captureSlide(document,
+        frame.revealClickCount === null ? {} : { revealClickCount: frame.revealClickCount });
       slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH,
-        objectName: "Reveal " + number + "." + frame.revealClickCount });
-    } else if (mode === "faithful") {
-      const image = await captureSlide(document);
-      slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH, objectName: "Render " + number });
+        objectName: frame.revealClickCount === null ? "Render " + number :
+          "Reveal " + number + "." + frame.revealClickCount });
     } else {
       if(document.elements.some(el=>el.styles.textShadow||el.styles.boxShadow)) {
-        warnings.push("Diapositive "+number+" : ombres CSS ignorées en mode objets modifiables, afin de conserver le texte éditable.");
+        warnings.push("Diapositive "+number+" : certaines ombres CSS ne sont pas convertibles en objets.");
       }
       const unsupported = document.elements.some(element => !isNativePptxObject(element));
       if (unsupported) {
-        const image = await captureSlide(document);
+        const image = await captureSlide(document,
+          frame.revealClickCount === null ? {} : { revealClickCount: frame.revealClickCount });
         slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH });
-        warnings.push("Diapositive " + number + " : certains objets ou effets ne sont pas convertibles ; image de secours.");
+        warnings.push("Diapositive " + number + " : objets complexes conservés en image de secours.");
       } else {
         const hasFreeform = document.mode !== "structured" && !emptyFreeform(document);
         if (hasFreeform) {
-          const backdrop: SlideDocument = { ...document, mode: "freeform", elements: [] };
-          const image = await captureSlide(backdrop);
-          slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH });
-          warnings.push("Diapositive " + number + " : HTML/CSS libre conservé comme fond image. Les objets structurés restent modifiables.");
+          const extracted = await captureNativeHtml(document,
+            frame.revealClickCount === null ? undefined : frame.revealClickCount);
+          slide.addImage({ data: extracted.background, x: 0, y: 0, w: slideW, h: slideH,
+            objectName: "Décor HTML et médias" });
+          appendNativeHtmlText(slide, extracted.texts, document, slideW, slideH);
+          warnings.push("Diapositive " + number +
+            " : " + extracted.texts.length + " texte(s) HTML converti(s) en objets modifiables ; photos, diagrammes et effets CSS complexes restent dans le décor.");
         }
-        await appendNativeObjects(pptx, slide, document, slideW, slideH,imageCache);
+        const visible = frame.revealClickCount === null ? document.elements :
+          visibleStructuredElements(document, frame.revealClickCount);
+        await appendNativeObjects(pptx, slide,
+          { ...document, elements: visible }, slideW, slideH, imageCache);
       }
     }
     onProgress?.({ completed: index + 1, total: frames.length });
