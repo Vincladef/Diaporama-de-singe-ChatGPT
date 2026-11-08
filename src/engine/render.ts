@@ -54,6 +54,6 @@ export function renderSlideHtml(document: SlideDocument): string {
   const body = (free ? "<!--singe-free-start-->" + free.html + "<!--singe-free-end-->" : "") + (document.mode === "freeform" ? "" : renderObjects(document));
   const csp = "default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:; media-src https: data: blob:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
   return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + escapeHtml(csp) + '"><meta name="viewport" content="width=' + width + ',initial-scale=1">' +
-    '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative;background:white;}' +
+    '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative;background:#101715;}' +
     css + '</style></head><body>' + body + '</body></html>';
 }
