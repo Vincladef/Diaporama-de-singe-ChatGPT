@@ -22,7 +22,7 @@
 - Le prédiagnostic distingue objets natifs, fond raster avec calques éditables, et capture raster intégrale. Il signale les différences de format, les images HTTPS et la perte de l'animation Web dans PowerPoint.
 - prepare_export fournit ces avertissements dans la réponse MCP ; l'éditeur conserve les modes PPTX « Visuel fidèle » et « Objets modifiables ».
 - L'import PPTX existant conserve les formes simples, les photographies et notes quand elles sont accessibles. Les animations originales, thèmes, masters, SmartArt, masques, transitions et effets PowerPoint avancés restent partiels.
-- Google Slides : export PPTX puis import manuel dans Google Drive. La publication directe nécessite une connexion OAuth Google propre à l'application.
+- Google Slides : bouton de publication depuis l'éditeur Web via OAuth Google et conversion PPTX par Drive API, après configuration d'un ID client OAuth public. Le MCP ne publie pas directement et aucun test de connexion avec un compte réel n'a encore été effectué.
 - Projection : écran noir synchronisé via **B**, aller à une diapositive via **G**, pause et remise à zéro du chronomètre.
 
 ## Google Images sans clé
@@ -43,7 +43,7 @@
 | Recherche multisource de photographies (20 par source par page) | Implémenté ; Google sans clé via URL manuelle, fournisseurs tiers selon configuration |
 | Animations Web au clic, timeline, fenêtre publique | Implémenté ; non converti en animations PowerPoint natives |
 | PowerPoint fidèle et partiellement éditable | Implémenté avec limites de rasterisation et de CORS |
-| Publication native Google Slides depuis l'application | Non implémentée ; OAuth Google requis |
+| Publication native Google Slides depuis l'application | Implémentée côté éditeur, configuration OAuth Google nécessaire ; essai réel avec compte Google à effectuer |
 | Mode complètement hors ligne | Non implémenté ; Neon et ressources HTTPS restent nécessaires |
 | Synchronisation événementielle en temps réel | Partielle ; interrogation périodique et au focus |
 | Historique des versions et restauration | Implémenté ; écriture des checkpoints non atomique avec chaque modification |
