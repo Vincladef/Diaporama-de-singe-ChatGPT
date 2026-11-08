@@ -182,7 +182,7 @@ function createServer(request: Request): McpServer {
       try{
         await saveAssets(a.presentationId,[{url:a.url,label:a.label,source:a.source,rights:a.rights}]);
       }catch{assetNote="Image placed but source metadata could not be saved.";}
-      return {slideId:a.slideId,elementId:id,updated:edited.updated,newRevision:edited.slides[0]?.revision,
+      return {slideId:a.slideId,elementId:id,updated:edited.updated,newRevision:edited.slides?.[0]?.revision,
         ...(assetNote?{warning:assetNote}:{})};
     });
 
