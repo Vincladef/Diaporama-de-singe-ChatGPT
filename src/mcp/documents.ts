@@ -129,7 +129,13 @@ export function editSlide(
 }
 export function summarizeSlide(slide: { id: string; position: number; document: SlideDocument; notes?: string; revision?: number }) {
   const d = slide.document;
-  const excerpt = (d.freeform?.html ?? d.elements.filter(e => e.type === "text").map(e => e.text ?? "").join(" ")).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 145);
+  const structuredText=d.elements.filter(e=>e.type==="text").map(e=>e.text??"").join(" ");
+  const htmlText=(d.freeform?.html??"")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<[^>]+>/g," ");
+  const excerpt=[structuredText,htmlText].filter(s=>s.trim()).join(" ")
+    .replace(/\s+/g," ").trim().slice(0,145);
   return { id: slide.id, position: slide.position, revision: slide.revision ?? 1,
     mode: d.mode, elementCount: d.elements.length, animationCount: d.animations.length, excerpt,
     hasNotes: !!slide.notes?.trim() };

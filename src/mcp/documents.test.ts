@@ -49,3 +49,20 @@ test("short summary avoids transferring the full HTML and CSS",()=>{
  assert.equal(result.excerpt,"Un titre");
  assert.equal("freeform" in result,false);
 });
+
+test("hybrid synopsis retains structured captions even when freeform HTML is empty",()=>{
+ const d=createEmptySlideDocument();
+ d.mode="hybrid";
+ d.freeform={html:"",css:"body{background:#EEE}"};
+ d.elements=[{id:"title",type:"text",text:"Message scientifique",styles:{}}];
+ const result=summarizeSlide({id:"s",position:0,revision:1,document:d});
+ assert.equal(result.excerpt,"Message scientifique");
+});
+test("hybrid synopsis combines HTML and editable text but omits scripts and styles",()=>{
+ const d=createEmptySlideDocument();
+ d.mode="hybrid";
+ d.freeform={html:"<style>ghost{display:block}</style><script>alert(123)</script><h1>Contexte</h1>",css:""};
+ d.elements=[{id:"title",type:"text",text:"Titre utile",styles:{}}];
+ const result=summarizeSlide({id:"s",position:0,revision:1,document:d});
+ assert.equal(result.excerpt,"Titre utile Contexte");
+});
