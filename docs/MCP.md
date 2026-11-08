@@ -67,3 +67,11 @@ Nouveaux outils qui complètent les commandes de création et de modification :
 La lecture des fichiers PPTX/HTML/JSON s'effectue dans le navigateur via **Importer**, puis la copie validée se retrouve dans Neon et devient pilotable depuis ChatGPT à travers le MCP. La connexion OAuth du MCP nécessite toujours une autorisation explicite ; ce chantier n'installe aucun plugin à la place de l'utilisateur.
 
 Détails : `docs/INTEGRATION_IMPORT.md`.
+
+## Actualisation des outils dans ChatGPT
+
+Le serveur MCP publié expose **29 outils** dans son catalogue à l'étape 8. Si une conversation ChatGPT ne montre encore que les 20 outils du premier catalogue, **actualiser les outils du plugin Diaporama de singe** dans les paramètres des plugins, puis rouvrir une conversation si nécessaire. Ce rafraîchissement ne modifie pas le projet GitHub ou la base Neon et ne reconnecte pas un compte Google.
+
+## Contrôles de dépendances
+
+Le workflow GitHub Actions exécute désormais `npm audit --audit-level=moderate` après l'installation ; les mises à jour de l'outillage Netlify et de la bibliothèque indirecte `image-size` éliminent les alertes modérées et élevées signalées lors de l'étape 8. Une alerte de faible gravité subsiste dans les dépendances de développement ; elle ne bloque pas le build.
