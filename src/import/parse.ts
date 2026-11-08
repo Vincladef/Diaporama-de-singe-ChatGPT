@@ -91,6 +91,31 @@ function extType(filename:string):string {
   const ext=filename.split(".").pop()?.toLowerCase();
   return ({jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",webp:"image/webp",gif:"image/gif"} as Record<string,string>)[ext??""]??"";
 }
+/** Reject decompression bombs before any ZIP member is expanded.
+ * JSZip stores central-directory uncompressedSize on CompressedObject after loadAsync.
+ */
+export function assertPowerPointArchiveBudget(zip:JSZip):void{
+  const MAX_TOTAL=130_000_000;
+  const MAX_XML=7_000_000;
+  const MAX_MEDIA=16_000_000;
+  let total=0,count=0;
+  for(const [path,file] of Object.entries(zip.files)){
+    if(file.dir)continue;
+    count++;
+    if(count>3000)throw Error("Le PowerPoint comporte trop de ressources.");
+    const entry=file as unknown as {_data?:{uncompressedSize?:number}};
+    const bytes=entry._data?.uncompressedSize;
+    if(typeof bytes!=="number"||!Number.isFinite(bytes)||bytes<0)
+      throw Error("Le fichier PowerPoint contient des tailles ZIP non vérifiables.");
+    total+=bytes;
+    if(total>MAX_TOTAL)throw Error("Le PowerPoint décompressé dépasse 130 Mo. Réduisez les médias avant l'import.");
+    if(path.endsWith(".xml")||path.endsWith(".rels")){
+      if(bytes>MAX_XML)throw Error("Une section XML du PowerPoint dépasse 7 Mo.");
+    }else if(path.startsWith("ppt/media/")&&bytes>MAX_MEDIA)
+      throw Error("Une image du PowerPoint dépasse 16 Mo ; allégez ce média.");
+  }
+}
+
 function getSlideFiles(z:JSZip, warnings:string[]):Promise<{files:string[];size:{w:number;h:number}}> {
   return (async()=>{
     const presentation=await z.file("ppt/presentation.xml")?.async("string");
@@ -206,6 +231,7 @@ export function importHtml(html:string,filename:string):ImportedDeck {
 export async function importPowerPoint(bytes:ArrayBuffer,filename:string,mediaAdapter?:MediaAdapter):Promise<ImportedDeck>{
   if(bytes.byteLength>45_000_000)throw Error("Le PowerPoint dépasse 45 Mo. Réduisez les images avant l'import.");
   const zip=await JSZip.loadAsync(bytes,{checkCRC32:false});
+  assertPowerPointArchiveBudget(zip);
   const warnings:string[]=[];
   const {files,size}=await getSlideFiles(zip,warnings);
   const canvas={width:1920,height:Math.max(240,Math.min(8192,Math.round(1920*size.h/size.w)))};
