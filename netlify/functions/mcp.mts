@@ -8,6 +8,7 @@ import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from ".
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
 import { AnimationStepSchema, type AnimationStep } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
+import { auditDeck } from "../../src/quality/audit";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
@@ -54,10 +55,10 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.4.0",storage:"Neon",transport:"Streamable HTTP",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.8.0",storage:"Neon",transport:"Streamable HTTP",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -69,6 +70,21 @@ function createServer(request: Request): McpServer {
     {id:uuid,scope:z.enum(["outline","full"]).default("outline"),offset:z.number().int().min(0).default(0),
       limit:z.number().int().min(1).max(100).default(30)},false,
     async a=>getDeck(a.id,a.scope,a.offset,a.limit));
+
+  register("audit_presentation","Vérifier une présentation avant projection ou export",
+    "Check in one compact call all slides for missing images, broken animation references, invisible objects, oversized data, mixed aspect ratios and PPTX rasterization caveats. Shared with the manual editor's 'Vérifier' panel. Does not modify content.",
+    {presentationId:uuid,maxFindings:z.number().int().min(1).max(200).default(60)},false,
+    async a=>{
+      const deck=await getDeck(a.presentationId,"full",0,100);
+      const full=deck.slides.filter((s):s is DbSlide=>"document" in s);
+      const result=auditDeck(full);
+      return {presentationId:a.presentationId,slideCount:result.slideCount,
+        readyToProject:result.readyToProject,
+        errors:result.errorCount,warnings:result.warningCount,infos:result.infoCount,
+        findings:result.findings.slice(0,a.maxFindings),
+        omitted:Math.max(0,result.findings.length-a.maxFindings),
+        ...(deck.nextOffset===null?{}:{partial:true,note:"Audit is limited to 100 slides per request."})};
+    });
 
   register("get_improvement_brief","Préparer l'amélioration d'une présentation",
     "Summarize the COMPLETE slide deck for AI restyling in a single token-efficient call. Preserves important text, notes, source image origins and revision numbers without sending full HTML/CSS or embedded base64. Use before edit_slides and create_variants.",
