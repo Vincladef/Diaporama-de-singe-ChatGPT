@@ -6,10 +6,10 @@ import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/im
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
-import { AnimationStepSchema, type AnimationStep } from "../../src/domain/slide";
+import { AnimationStepSchema, type AnimationStep, type SlideDocument } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
-import { composeDocument, CompositionSchema, reviewDocument, repairDocument } from "../../src/mcp/visual";
+import { composeDocument, CompositionSchema, reviewDocument, repairDocument, type Composition } from "../../src/mcp/visual";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
@@ -246,7 +246,7 @@ function createServer(request: Request): McpServer {
         composition:CompositionSchema})).min(1).max(40),
       confirmReplace:z.boolean().default(false),dryRun:z.boolean().default(false)},true,
     async a=>{
-      const prepared=a.slides.map((s:{slideId?:string;revision?:number;composition:import("../../src/mcp/visual").Composition})=>({
+      const prepared:{slideId?:string;revision?:number;composition:Composition;document:SlideDocument}[]=a.slides.map((s:{slideId?:string;revision?:number;composition:Composition})=>({
         ...s,document:composeDocument(s.composition)
       }));
       if(a.action==="append"){
