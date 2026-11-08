@@ -79,3 +79,7 @@ Le workflow GitHub Actions exécute désormais `npm audit --audit-level=moderate
 ## Étape 9 : efficacité visuelle et réconciliation du catalogue
 
 Le serveur 0.9.0 publie **32 outils**. `workspace_status` retourne le nombre et les noms exacts des outils enregistrés ; les nouvelles commandes `compose_slides`, `review_slides` et `repair_slides` permettent la composition de 40 diapositives par appel, les liens de prévisualisation éphémères et les corrections atomiques avec révisions. Le client ChatGPT peut conserver son ancien catalogue en cache ; **actualiser les outils** du plugin si seulement 29 commandes apparaissent. Une actualisation du serveur ne suffit pas à imposer une réindexation côté client. Les captures d'écran réelles supposent un navigateur ; le diagnostic MCP reste heuristique. Voir [AI_STEP9.md](AI_STEP9.md).
+
+## Étape 10 : composition graphique
+
+Le serveur 0.10.0 publie **37 outils**, dont `compose_diagrams`, `curate_images`, `apply_images`, `compare_variants`, `revise_variant`. `generate_variants` accepte maintenant `count` (3 à 6 ; défaut 6). Les diagrammes génèrent des textes éditables et des liaisons SVG ; les variantes peuvent être comparées par métriques et aperçus signés, puis modifiées sans activer la nouvelle version. Les trois sources commerciales demandent toujours leurs clés Netlify ; Openverse et Wikimedia restent accessibles sans clé. Référence complète : [CREATIVITY_STEP10.md](CREATIVITY_STEP10.md).
