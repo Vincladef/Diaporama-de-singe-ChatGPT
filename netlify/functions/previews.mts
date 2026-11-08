@@ -34,7 +34,7 @@ export default async function handler(request:Request):Promise<Response>{
     const body='<!doctype html><html lang="fr"><head><meta charset="utf-8">'+
       '<meta name="viewport" content="width=device-width, initial-scale=1">'+
       '<title>Aperçu de diapositive</title><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#17201b}'+
-      '#slide{position:absolute;border:0;background:white;transform-origin:top left}</style></head><body>'+
+      '#slide{position:absolute;border:0;background:#101715;transform-origin:top left}</style></head><body>'+
       '<iframe id="slide" title="Aperçu" referrerpolicy="no-referrer" sandbox=""'+
       ' width="'+width+'" height="'+height+'" srcdoc="'+escapeHtml(doc)+'"></iframe>'+
       '<script nonce="'+nonce+'">const f=document.getElementById("slide"),w='+width+',h='+height+';'+
@@ -43,7 +43,7 @@ export default async function handler(request:Request):Promise<Response>{
       'addEventListener("resize",fit);fit();</script></body></html>';
     return new Response(body,{headers:{
       "Content-Type":"text/html; charset=utf-8",
-      "Content-Security-Policy":"default-src 'none'; frame-src 'self' about:; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; base-uri 'none'; form-action 'none'; object-src 'none'",
+      "Content-Security-Policy":"default-src 'none'; img-src https: data: blob:; font-src https: data:; frame-src 'self' about:; style-src 'unsafe-inline' https:; script-src 'nonce-"+nonce+"'; base-uri 'none'; form-action 'none'; object-src 'none'",
       "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
       "Referrer-Policy":"no-referrer","X-Robots-Tag":"noindex, nofollow",
       "Access-Control-Allow-Origin":ORIGIN
