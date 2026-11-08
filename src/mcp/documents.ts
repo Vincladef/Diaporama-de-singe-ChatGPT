@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AnimationStepSchema, createEmptySlideDocument, SlideDocumentSchema, SlideElementSchema, type SlideDocument, type SlideElement } from "../domain/slide";
+import { AnimationStepSchema, createEmptySlideDocument, SlideDocumentSchema, SlideElementSchema, type SlideDocument, type SlideElement } from "../domain/slide.ts";
 
 const limitCss = z.string().max(240_000);
 const limitHtml = z.string().max(600_000);
