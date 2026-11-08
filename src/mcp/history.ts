@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { database } from "./security";
+import { database } from "./security.ts";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide.ts";
 
 const uuid=z.uuid();
