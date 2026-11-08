@@ -22,4 +22,4 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 
 ## Phase du projet
 
-Étape 4 : serveur MCP HTTPS stateless disponible sur /mcp ; 20 outils et OAuth 2.1 PKCE avec DCR ; base de documents et modifications en lot atomiques ; éditeur et exports PPTX opérationnels. La connexion de ce serveur dans ChatGPT attend une action de l’utilisateur. L'édition visuelle avancée, les animations exécutables et l'import Google Slides direct ne sont pas implémentés.
+Étape 6 : éditeur graphique, recherche d'images Openverse/Wikimedia, sources optionnelles Pexels/Unsplash/SerpApi, retouches photo et variantes graphiques partagées via MCP. Serveur OAuth et exports PPTX toujours actifs. Ne pas promettre une recherche Google intégrée sans clé SerpApi, ni des animations exécutables ou un export Google Slides natif. Vérifier les droits d'utilisation des médias. La connexion MCP au compte ChatGPT attend toujours une action de l’utilisateur.
