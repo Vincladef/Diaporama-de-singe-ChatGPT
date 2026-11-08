@@ -55,3 +55,15 @@ Un jeu temporaire de deux diapositives a confirmé : création groupée, mise à
 Tests GitHub Actions : TypeScript, documents, géométrie PowerPoint et vérification de build.
 
 Voir aussi README.md, docs/ARCHITECTURE.md et docs/EXPORT.md.
+
+## Étape 8 : améliorer une présentation existante
+
+Nouveaux outils qui complètent les commandes de création et de modification :
+
+- `get_improvement_brief` : sommaire compact des textes, notes, médias, modes de document et révisions ; ne transfère pas le HTML/CSS complet ni les images encodées.
+- `make_visual_copy` : crée en un appel une nouvelle présentation avec l'une de trois directions graphiques déterministes ; l'original reste inchangé.
+- `audit_presentation` : vérifie les cibles d'animation, les images, les dimensions, la taille des documents et les avertissements d'export ; même moteur de diagnostic que le bouton **Vérifier** de l'éditeur.
+
+La lecture des fichiers PPTX/HTML/JSON s'effectue dans le navigateur via **Importer**, puis la copie validée se retrouve dans Neon et devient pilotable depuis ChatGPT à travers le MCP. La connexion OAuth du MCP nécessite toujours une autorisation explicite ; ce chantier n'installe aucun plugin à la place de l'utilisateur.
+
+Détails : `docs/INTEGRATION_IMPORT.md`.
