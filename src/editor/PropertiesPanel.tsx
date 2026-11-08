@@ -142,6 +142,11 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
                 <input type="range" min={min} max={max} value={readFilter(selected.styles.filter,key)}
                   onChange={e=>patchStyle("filter",changeFilter(selected.styles.filter,key,Number(e.target.value)))}/>
               </label>)}
+              <label>Rotation (degrés)
+                <input type="number" min="-180" max="180"
+                  value={Number(String(selected.styles.transform??"").match(/rotate\((-?\d+(?:\.\d+)?)deg\)/)?.[1]??0)}
+                  onChange={e=>patchStyle("transform","rotate("+Math.max(-180,Math.min(180,Number(e.target.value)||0))+"deg)")}/>
+              </label>
               <button className="subtle-btn" onClick={()=>patchStyle("filter","")}>Réinitialiser les réglages photo</button>
             </>}
             <label>Opacité ({Math.round(Number(selected.styles.opacity??1)*100)} %)
