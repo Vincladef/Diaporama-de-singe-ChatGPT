@@ -355,3 +355,24 @@
 .quality-empty{padding:24px;text-align:center;background:#f9fbf8;border-radius:8px;color:#66836f;font-size:12px}
 .quality-disclaimer{font-size:10px;color:#96a79a;line-height:1.7;margin:20px 0 0}
 @media(max-width:640px){.quality-content{padding:12px}.quality-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.quality-finding{gap:9px;padding:9px}.quality-finding-type{min-width:62px}.quality-finding button{padding:7px}}
+
+
+/* Export Google Slides : action discrète et configuration ponctuelle. */
+.google-export-action{white-space:nowrap;border-color:#b5cab8;background:#eff5ef;color:#294f37;font-weight:650}
+.google-export-action:hover:not(:disabled){background:#e3efe5}
+.google-success-report{border-color:#cadbd0;background:#f5f9f5}
+.google-setup-backdrop{position:fixed;inset:0;z-index:8000;background:rgba(17,32,25,.55);display:grid;place-items:center;padding:18px}
+.google-setup-card{width:min(575px,100%);max-height:min(90vh,780px);overflow:auto;background:#fff;border-radius:13px;border:1px solid #d6e1d7;box-shadow:0 25px 80px #122d2540;padding:23px 26px;color:#243c2d}
+.google-setup-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.google-setup-heading h2{font-family:Georgia,serif;font-size:23px;font-weight:400;margin:0}
+.google-setup-card p{font-size:12px;line-height:1.7;color:#667a6a}
+.google-setup-card a{text-decoration:underline;text-underline-offset:2px;color:#346349}
+.google-setup-instructions{background:#f6f9f5;border:1px solid #dbe7dc;border-radius:8px;padding:9px 13px;margin:18px 0}
+.google-setup-instructions p{margin:7px 0}
+.google-setup-instructions code{display:block;font-size:12px;word-break:break-all;padding:9px;border:1px solid #d5e1d5;background:white;border-radius:5px;color:#26452d}
+.google-setup-form{display:flex;flex-direction:column;gap:9px}
+.google-setup-form label{font-size:12px;font-weight:650}
+.google-setup-form input{width:100%;font-size:13px;padding:12px;border:1px solid #cbd9ce;border-radius:7px}
+.google-setup-form small{font-size:11px;line-height:1.55;color:#728575}
+.google-setup-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+@media(max-width:760px){.google-setup-card{padding:18px}.google-setup-heading h2{font-size:21px}.google-setup-actions{flex-wrap:wrap}}
