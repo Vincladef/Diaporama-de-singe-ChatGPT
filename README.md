@@ -47,6 +47,10 @@ L'application exporte maintenant des fichiers PPTX en deux modes. Le mode « Vis
 
 Pour Google Slides, téléchargez le PPTX puis importez-le dans Google Drive. La publication directe via OAuth n'est pas encore disponible.
 
-Le MCP distant est développé avec vingt outils, OAuth PKCE et opérations groupées atomiques. L'authentification finale dans ChatGPT nécessite une connexion approuvée par l'utilisateur. L'édition visuelle avancée, la recherche d'images intégrée, la synchronisation temps réel et les animations au clic restent à développer.
+Le MCP distant est développé avec vingt outils, OAuth PKCE et opérations groupées atomiques. L'authentification finale dans ChatGPT nécessite une connexion approuvée par l'utilisateur. L'éditeur visuel (étape 5) offre le déplacement, le redimensionnement, les calques, le clavier et la synchronisation par révisions. L'étape 6 ajoute la galerie d'images Openverse et Wikimedia, les réglages photo et les variantes comparables. Google Images est accessible par lien externe, ou via SerpApi avec une clé. Pexels et Unsplash nécessitent également leurs clés. Les animations exécutables et la création directe Google Slides restent à développer.
 
 Consulter `docs/ARCHITECTURE.md`, `docs/EXPORT.md` et `docs/MCP.md` pour le détail des deux méthodes et de leurs limites.
+
+## Images et propositions graphiques
+
+Depuis l'éditeur, **+ Image** ouvre une galerie multi-sources (jusqu'à 20 résultats par source et par page). **Variantes** présente plusieurs directions visuelles et conserve les propositions dans Neon, accessibles via MCP. Les réglages du cadrage, des filtres et de la rotation restent stockés dans le document JSON de la diapositive. Consulter `docs/IMAGES_VARIANTS.md` pour le fonctionnement, les clés API facultatives et les limites de licence.
