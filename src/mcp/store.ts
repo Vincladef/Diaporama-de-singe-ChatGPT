@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { database } from "./security";
-import { fingerprint } from "../variants/compare";
+import { fingerprint } from "./fingerprint";
 import { editSlide, initialSlide, summarizeSlide, type InitialSlide, type SlideOperation } from "./documents";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide";
 
