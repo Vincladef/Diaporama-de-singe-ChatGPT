@@ -137,6 +137,24 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     if(g.moved)commit();
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
+  function styleSelected(property:string,value:string) {
+    const element=activeElement.current;
+    if(!element)return;
+    element.style.setProperty(property,value,"important");
+    commit();
+  }
+  function selectedFontSize():number {
+    const element=activeElement.current;
+    const win=element?.ownerDocument.defaultView;
+    return element && win ? Number.parseFloat(win.getComputedStyle(element).fontSize)||48 : 48;
+  }
+  function selectedColor():string {
+    const element=activeElement.current;
+    const win=element?.ownerDocument.defaultView;
+    const value=element && win ? win.getComputedStyle(element).color : "rgb(32, 50, 40)";
+    const rgb=value.match(/rgba?\\(\\s*(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/i);
+    return rgb ? "#"+rgb.slice(1,4).map(x=>Math.min(255,Math.max(0,Number(x))).toString(16).padStart(2,"0")).join("") : "#203228";
+  }
   function editHtml() {
     const element=activeElement.current;
     if(!element||editingRef.current)return;
@@ -160,6 +178,16 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     onDoubleClick={e=>{e.stopPropagation();editHtml();}}
     title="Élément HTML : double-cliquez pour modifier le texte, faites glisser pour déplacer">
     <span className="visual-selection-name">HTML · {selected.tag}</span>
+    <div className="freeform-quickbar" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}>
+      <button title="Modifier le texte" onClick={e=>{e.stopPropagation();editHtml();}}>Texte</button>
+      <button title="Gras" onClick={e=>{e.stopPropagation();const el=activeElement.current;const font=el?.ownerDocument.defaultView?.getComputedStyle(el).fontWeight??"400";styleSelected("font-weight",font==="bold"||Number(font)>=600?"normal":"bold");}}><strong>B</strong></button>
+      <button title="Diminuer le texte" onClick={e=>{e.stopPropagation();styleSelected("font-size",Math.max(8,selectedFontSize()-8)+"px");}}>A−</button>
+      <button title="Augmenter le texte" onClick={e=>{e.stopPropagation();styleSelected("font-size",Math.min(500,selectedFontSize()+8)+"px");}}>A+</button>
+      <input type="color" title="Couleur du texte HTML" aria-label="Couleur du texte HTML"
+        value={selectedColor()} onPointerDown={e=>e.stopPropagation()}
+        onChange={e=>styleSelected("color",e.target.value)}/>
+      <button title="Aligner le texte au centre" onClick={e=>{e.stopPropagation();styleSelected("text-align","center");}}>≡</button>
+    </div>
     {handles.map(mode=><span key={mode} className={"visual-resize-handle handle-"+mode}
       onPointerDown={e=>begin(e,mode)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}/>)}
   </div>;
