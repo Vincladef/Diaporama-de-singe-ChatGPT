@@ -2,6 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/diagrams";
+import { compareOneVariant } from "../../src/variants/compare";
+import { curateCandidates } from "../../src/images/curate";
+import { editImageStyles } from "../../src/images/edit";
+import { trackUnsplashDownload } from "../../src/images/track";
 import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/images/search";
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
@@ -13,7 +18,7 @@ import { composeDocument, CompositionSchema, reviewDocument, repairDocument, typ
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
-  saveAssets, updateDeck, type DbSlide
+  saveAssets, saveAssetsIfMissing, getVariant, reviseVariant, updateDeck, type DbSlide
 } from "../../src/mcp/store";
 
 type JsonObject = Record<string, unknown>;
@@ -25,8 +30,8 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.9.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.10.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -58,11 +63,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.9.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.9.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.10.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.10.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -276,6 +281,43 @@ function createServer(request: Request): McpServer {
         layouts:prepared.map(s=>s.composition.layout)};
     });
 
+
+  register("compose_diagrams","Créer des diagrammes et cartes mentales",
+    "Create or replace up to 20 visual teaching diagrams in ONE call. Supported: mind maps, processes, cycles, hierarchical trees, causal chains, and matrices. AI supplies semantic nodes and relationships; editable text cards and vector connectors are generated automatically. Existing HTML/CSS freedom remains available in edit_slides. For replacement use exact slide revisions and confirmReplace=true.",
+    {presentationId:uuid,action:z.enum(["append","replace"]).default("append"),
+      slides:z.array(z.object({slideId:uuid.optional(),revision:z.number().int().min(1).optional(),
+        diagram:DiagramSchema})).min(1).max(20),
+      confirmReplace:z.boolean().default(false),dryRun:z.boolean().default(false)},true,
+    async a=>{
+      const specs=(a.slides as Array<{slideId?:string;revision?:number;diagram:Diagram}>)
+        .map(s=>({...s,document:composeDiagram(s.diagram)}));
+      if(a.action==="append"){
+        if(specs.some(s=>s.slideId||s.revision))throw new Error("invalid_append_targets");
+        if(a.dryRun){
+          await getDeck(a.presentationId,"outline",0,1);
+          return {dryRun:true,action:"append",previews:specs.map(s=>({
+            kind:s.diagram.kind,nodes:s.diagram.nodes.length,
+            relationships:s.diagram.edges.length,
+            elements:s.document.elements.length}))};
+        }
+        const outcome=await addSlides(a.presentationId,specs.map(s=>({
+          document:s.document,notes:s.diagram.notes??""
+        })));
+        return {action:"append",created:outcome.created,slides:outcome.slides,
+          kinds:specs.map(s=>s.diagram.kind)};
+      }
+      if(!a.confirmReplace)throw new Error("invalid_replace_requires_confirmation");
+      if(specs.some(s=>!s.slideId||!s.revision))throw new Error("invalid_replace_requires_ids_and_revisions");
+      const outcome=await editSlides(a.presentationId,specs.map(s=>({
+        id:s.slideId!,revision:s.revision!,operations:[
+          {op:"replace_document" as const,document:s.document},
+          ...(s.diagram.notes!==undefined?[{op:"set_notes" as const,notes:s.diagram.notes}]:[])
+        ]
+      })),a.dryRun);
+      return {action:"replace",dryRun:a.dryRun,slides:outcome.slides??outcome.changes,
+        kinds:specs.map(s=>s.diagram.kind)};
+    });
+
   register("get_animation_plan","Lire la chronologie des animations",
     "Compact click-by-click sequence of a slide, grouping automatic after-previous cues. No HTML/CSS payload. Use this to understand the projected teaching order with minimal tokens.",
     {slideId:uuid},false,
@@ -358,13 +400,13 @@ function createServer(request: Request): McpServer {
     "List usable providers, missing API keys without revealing secrets, and the external Google Images option.",{},false,
     async()=>({sources:getSourceStatuses()}));
 
-  register("generate_variants","Proposer trois variantes graphiques",
-    "Generate and SAVE three optional graphic directions for an existing slide with a single call. Keeps the original text, source HTML and image URLs; never overwrites the current design. AI can additionally author fully custom proposals using create_variants.",
-    {slideId:uuid},true,
+  register("generate_variants","Proposer jusqu’à six variantes graphiques",
+    "Generate and SAVE 3 to 6 optional directions: immersive, editorial, manifesto, scientific atlas, archive paper and cinematic. Preserves source text, notes and image links; current slide stays unchanged. For original HTML/CSS art, use create_variants.",
+    {slideId:uuid,count:z.number().int().min(3).max(6).default(6)},true,
     async a=>{
       const slide=await getSlide(a.slideId,"full");
       if(!("document" in slide))throw new Error("slide_not_found");
-      const proposed=proposeGraphicVariants(slide.document);
+      const proposed=proposeGraphicVariants(slide.document,a.count as 3|4|5|6);
       return {slideId:a.slideId,...await createVariants(a.slideId,
         proposed.map(v=>({name:v.name,slide:{document:v.document,notes:slide.notes}})))};
     });
