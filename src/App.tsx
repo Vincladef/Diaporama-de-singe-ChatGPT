@@ -14,6 +14,7 @@ import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
+import type { RevealExportMode } from "./export/reveals";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
   uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
@@ -68,6 +69,8 @@ export default function App() {
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
   const [exportTarget, setExportTarget] = useState<"pptx" | "google" | null>(null);
   const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
+  const [googleExportSlideCount, setGoogleExportSlideCount] = useState<number | null>(null);
+  const [revealExportMode, setRevealExportMode] = useState<RevealExportMode>("steps");
 
   useEffect(() => {
     if (!token) return;
@@ -385,7 +388,7 @@ export default function App() {
     try {
       await verifyExportRevision(current);
       const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
-        setExportProgress("Diapositive " + completed + "/" + total));
+        setExportProgress("Écran " + completed + "/" + total), revealExportMode);
       setExportReport(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
@@ -406,7 +409,7 @@ export default function App() {
     if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
     const deck = current;
     setExportBusy(true); setExportTarget("google");
-    setGoogleReport(null); setExportReport(null);
+    setGoogleReport(null); setGoogleExportSlideCount(null); setExportReport(null);
     setExportProgress("Connexion Google…"); setError("");
     try {
       // OAuth must start on the original user click, before the first await.
@@ -414,9 +417,10 @@ export default function App() {
       setExportProgress("Vérification des diapositives…");
       await verifyExportRevision(deck);
       const artifact = await buildPowerPoint(deck, exportMode, ({ completed, total }) =>
-        setExportProgress("Préparation " + completed + "/" + total));
+        setExportProgress("Écran " + completed + "/" + total), revealExportMode);
       setExportProgress("Conversion dans Google Drive…");
       const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, deck.presentation.title);
+      setGoogleExportSlideCount(artifact.slideCount);
       setGoogleReport(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "La conversion dans Google Slides a échoué.");
@@ -557,6 +561,11 @@ export default function App() {
                     <option value="editable">Objets modifiables</option>
                   </select>
                 </label>
+                <label className="reveal-export-toggle" title="Les apparitions au clic sont conservées sous forme de plusieurs écrans successifs, compatibles avec Google Slides et PowerPoint.">
+                  <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
+                    onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
+                  Étapes au clic
+                </label>
                 <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || dirty || !current.slides.length}>
                   {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
                 </button>
@@ -583,7 +592,11 @@ export default function App() {
             {googleReport && <div className="export-report google-success-report" role="status">
               <strong>Présentation créée dans Google Slides : {googleReport.name}</strong>
               <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir la présentation Google Slides</a>
-              <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"} ; les animations Web ne sont pas transposées.</span>
+              <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"}
+                {revealExportMode === "steps" && googleExportSlideCount !== null
+                  ? " · " + googleExportSlideCount + " écrans. Les apparitions au clic avancent par diapositives successives ; les fondus et mouvements Web ne sont pas des animations natives Google Slides."
+                  : " · Export statique sans animations Web."}
+              </span>
             </div>}
             <div className="editor-layout">
               <aside className="slide-rail">
