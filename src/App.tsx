@@ -516,7 +516,8 @@ export default function App() {
                   <div className="visual-toolbar">
                     <div className="visual-toolbar-group">
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
-                      <button onClick={()=>addObject("image")} title="Insérer une image">+ Image</button>
+                      <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
+                      <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
@@ -551,10 +552,18 @@ export default function App() {
               </section>
               {draft && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onChange={editDocument} tab={tab} onTabChange={setTab}
-                onAdd={addObject} onDelete={removeSelection} onArrange={arrangeSelection}/>}
+                onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
+                onOpenImages={()=>setImageStudioOpen(true)}/>}
             </div>
           </div>
         )}
+
+        {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
+          selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
+          onPick={chooseImage}/>}
+        {variantsStudioOpen&&token&&slideId&&draft&&<VariantsStudio key={slideId} token={token}
+          slideId={slideId} document={draft} notes={notes} dirty={dirty} onApply={applyVariant}
+          onClose={()=>setVariantsStudioOpen(false)}/>}
         <footer className="footer">Diaporama de singe · Version ChatGPT <span>Neon · Netlify</span></footer>
       </main>
     </div>
