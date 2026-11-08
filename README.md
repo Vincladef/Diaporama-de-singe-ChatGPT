@@ -58,3 +58,15 @@ Depuis l'éditeur, **+ Image** ouvre une galerie multi-sources (jusqu'à 20 rés
 ## Animations et mode présentateur
 
 Depuis chaque diapositive, le panneau **Animations** permet d'ajouter et d'ordonner les apparitions au clic, effets automatiques, fondus, mouvements, masquages et effets personnalisés. Le bouton **▶ Présenter** ouvre la console avec notes, chronomètre, écran public séparé et raccourcis clavier. Les séquences sont compatibles avec le serveur MCP. Voir `docs/ANIMATIONS.md`.
+
+## Étape 8 : import, amélioration et contrôle qualité
+
+- **⇧ Importer** : import PowerPoint (`.pptx`), fichiers Google Slides téléchargés en PPTX, JSON natif ou HTML ; aperçu des diapositives, sélection et création d'une copie indépendante dans Neon.
+- **✦ Améliorer** : comparaison de trois directions graphiques, création d'une copie avec textes et notes préservés ; consigne à transmettre à ChatGPT lorsqu'il est connecté au MCP.
+- **✓ Vérifier** : audit des documents, images, animations, tailles et limites d'export ; accès à la même analyse via `audit_presentation`.
+- **MCP** : `get_improvement_brief`, `make_visual_copy` et `audit_presentation` facilitent les travaux de l'IA sur l'intégralité d'une présentation sans recopier les documents à chaque appel.
+- **Robustesse** : contrôle des tailles ZIP avant extraction, conservation de l'ordre des objets et des notes, tests aller-retour PPTX et tests de régression automatiques.
+
+Les effets avancés PowerPoint, les masters, les diagrammes complexes et la synchronisation native Google Slides restent partiels ou non disponibles ; la capture Web fidèle et les objets natifs ne constituent pas une conversion complète de tous les styles.
+
+**Documentation : [docs/INTEGRATION_IMPORT.md](docs/INTEGRATION_IMPORT.md)**.
