@@ -4,6 +4,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/diagrams";
 import { compareOneVariant } from "../../src/variants/compare";
+import { fingerprint } from "../../src/mcp/fingerprint";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -598,7 +599,7 @@ function createServer(request: Request): McpServer {
       return {slideId:a.slideId,revision:current.revision,
         current:{...compareOneVariant(baseline,baseline),
           ...(a.includePreviews?{previewUrl:token(a.slideId+":preview:"+expires)}:{})},
-        variants:stored.map(v=>({...compareOneVariant(baseline,v),
+        variants:stored.map(v=>({...compareOneVariant(baseline,v),fingerprint:fingerprint(v),
           ...(a.includePreviews?{previewUrl:token(a.slideId+":"+v.id+":variant-preview:"+expires)}:{})})),
         previewExpiresAt:a.includePreviews?new Date(expires).toISOString():undefined,
         comparisonMethod:"Static hints and preservation flags; open the signed preview URLs in a browser to inspect rendering, typography and images."};
