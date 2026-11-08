@@ -1,39 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
-import { renderSlideHtml } from "./engine/render";
+import { VisualCanvas } from "./editor/VisualCanvas";
+import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
+import { SlideThumbnail } from "./editor/SlideThumbnail";
+import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
-import { ApiError, command, listPresentations, readPresentation, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
+import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
 const SESSION_KEY = "diaporama-chatgpt-owner-token";
 const DECK_KEY = "diaporama-chatgpt-current-deck";
-type EditorTab = "html" | "css" | "elements";
-
-function Canvas({ document }: { document: SlideDocument }) {
-  const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(900);
-  useEffect(() => {
-    if (!box.current) return;
-    const observer = new ResizeObserver(entries => {
-      if (entries[0]) setWidth(entries[0].contentRect.width);
-    });
-    observer.observe(box.current);
-    return () => observer.disconnect();
-  }, []);
-  const srcDoc = useMemo(() => renderSlideHtml(document), [document]);
-  const scale = width / document.canvas.width;
-  return (
-    <div className="canvas-box" ref={box} style={{ aspectRatio: document.canvas.width + " / " + document.canvas.height }}>
-      <iframe
-        title="Aperçu sécurisé de la diapositive"
-        sandbox=""
-        referrerPolicy="no-referrer"
-        srcDoc={srcDoc}
-        style={{ width: document.canvas.width, height: document.canvas.height, transform: "scale(" + scale + ")", transformOrigin: "top left" }}
-      />
-    </div>
-  );
-}
-
 function ErrorMessage({ text, clear }: { text: string; clear: () => void }) {
   if (!text) return null;
   return <div role="alert" className="error-line">{text} <button className="text-btn" onClick={clear}>Fermer</button></div>;
@@ -48,8 +23,20 @@ export default function App() {
   const [draft, setDraft] = useState<SlideDocument | null>(null);
   const [notes, setNotes] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [tab, setTab] = useState<EditorTab>("html");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [tab, setTab] = useState<InspectorTab>("design");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [grid, setGrid] = useState(10);
+  const [autoSave, setAutoSave] = useState(true);
+  const [externalChanges, setExternalChanges] = useState(false);
+  const draftRef = useRef<SlideDocument | null>(null);
+  const currentRef = useRef<PresentationDetail | null>(null);
+  const dirtyRef = useRef(false);
+  const versionRef = useRef(0);
+  const historyRef = useRef<{undo:SlideDocument[];redo:SlideDocument[];key:string;time:number}>({undo:[],redo:[],key:"",time:0});
+  const [, setHistoryTick] = useState(0);
+  currentRef.current = current;
+  dirtyRef.current = dirty;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -104,14 +91,18 @@ export default function App() {
     if (dirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
-    setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); setNotes(""); setDirty(false);
+    setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
   }
 
   function pickSlide(slide?: SlideRecord) {
     setSlideId(slide?.id ?? null);
-    setDraft(slide ? structuredClone(slide.document) : null);
-    setNotes(slide?.notes ?? "");
-    setSelected(null); setDirty(false); setTab("html");
+    const next=slide ? structuredClone(slide.document):null;
+    draftRef.current=next;
+    setDraft(next);
+    setNotes(slide?.notes??"");
+    setSelectedIds([]);setDirty(false);setTab("design");setExternalChanges(false);
+    historyRef.current={undo:[],redo:[],key:"",time:0};
+    setHistoryTick(v=>v+1);
   }
   function confirmLeave() { return !dirty || window.confirm("Quitter sans enregistrer les modifications ?"); }
   async function refreshList() { setDecks(await listPresentations(token)); }
@@ -174,7 +165,27 @@ export default function App() {
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  function editDocument(next: SlideDocument) { setDraft(next); setDirty(true); }
+  function editDocument(next:SlideDocument,key="change"){
+    const previous=draftRef.current;
+    if(previous===next)return;
+    const time=Date.now(), h=historyRef.current;
+    const grouped=/^(text|style-|code-|object)/.test(key)&&key===h.key&&time-h.time<850;
+    if(previous&&!grouped){h.undo=[...h.undo.slice(-49),structuredClone(previous)];h.redo=[];}
+    h.key=key;h.time=time;draftRef.current=next;versionRef.current++;
+    setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+  }
+  function undo(){
+    const h=historyRef.current,prior=h.undo.pop(),now=draftRef.current;
+    if(!prior||!now)return;
+    h.redo.push(structuredClone(now));h.key="";
+    draftRef.current=prior;versionRef.current++;setDraft(prior);setDirty(true);setHistoryTick(v=>v+1);
+  }
+  function redo(){
+    const h=historyRef.current,next=h.redo.pop(),now=draftRef.current;
+    if(!next||!now)return;
+    h.undo.push(structuredClone(now));h.key="";
+    draftRef.current=next;versionRef.current++;setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+  }
   function updateFreeform(part: "html" | "css", value: string) {
     if (!draft) return;
     const freeform = { html: draft.freeform?.html ?? "", css: draft.freeform?.css ?? "", [part]: value };
@@ -196,7 +207,7 @@ export default function App() {
         : { top: "260px", left: "200px", width: "520px", height: "260px", backgroundColor: "#a4bdac", borderRadius: "8px" },
     };
     editDocument({ ...draft, mode: draft.mode === "freeform" ? "hybrid" : draft.mode, elements: [...draft.elements, element] });
-    setTab("elements"); setSelected(id);
+    setTab("design");setSelectedIds([id]);
   }
   function updateObject(id: string, patch: Partial<SlideElement>) {
     if (!draft) return;
@@ -205,7 +216,7 @@ export default function App() {
   function deleteObject(id: string) {
     if (!draft) return;
     editDocument({ ...draft, elements: draft.elements.filter(item => item.id !== id && item.parentId !== id) });
-    setSelected(null);
+    setSelectedIds([]);
   }
   async function save() {
     if (!draft || !slideId || !current) return;
