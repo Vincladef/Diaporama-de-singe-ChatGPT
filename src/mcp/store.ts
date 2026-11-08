@@ -151,6 +151,25 @@ export async function saveAssets(deckId: string, assets: {url:string,label?:stri
     [deckId,JSON.stringify(data)]);
   return { added:rows.length,assets:rows };
 }
+
+export async function saveAssetsIfMissing(
+  deckId:string,assets:{url:string;label?:string;source?:string;rights?:string}[]
+){
+  uuid.parse(deckId);
+  const distinct=[...new Map(assets.map(a=>[a.url,a])).values()];
+  if(!distinct.length)return {added:0,existing:0};
+  if(distinct.length>40)throw new Error("invalid_asset_count");
+  for(const a of distinct)if(!a.url.startsWith("https://")||a.url.length>3000)
+    throw new Error("invalid_asset_url");
+  const rows=await database().query(
+    "SELECT DISTINCT url FROM public.assets WHERE presentation_id=$1::uuid AND url=ANY($2::text[])",
+    [deckId,distinct.map(a=>a.url)]);
+  const known=new Set(rows.map(r=>String(r.url)));
+  const toAdd=distinct.filter(a=>!known.has(a.url));
+  if(toAdd.length)await saveAssets(deckId,toAdd);
+  return {added:toAdd.length,existing:distinct.length-toAdd.length};
+}
+
 export async function listAssets(deckId: string, limit=60) {
   uuid.parse(deckId);
   return database().query("SELECT id::text AS id,url,label,source,rights FROM public.assets WHERE presentation_id=$1::uuid ORDER BY created_at DESC LIMIT $2",[deckId,Math.min(limit,150)]);
