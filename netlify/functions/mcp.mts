@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/diagrams";
 import { compareOneVariant } from "../../src/variants/compare";
 import { fingerprint } from "../../src/mcp/fingerprint";
+import { listSlideHistory } from "../../src/mcp/history";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -57,8 +58,8 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.10.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.11.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -90,11 +91,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.10.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.10.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.11.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.11.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -345,6 +346,21 @@ function createServer(request: Request): McpServer {
         kinds:specs.map(s=>s.diagram.kind)};
     });
 
+
+  register("list_slide_history","Lister les versions conservées d'une diapositive",
+    "Retrieve up to 60 persisted pre-edit snapshots from both MCP and editor, without unrelated artistic variants. Returns short source labels, timestamps and optional full slide documents. Use before restoring a previous revision.",
+    {slideId:uuid,limit:z.number().int().min(1).max(60).default(20),
+      includeDocuments:z.boolean().default(false)},false,
+    async a=>listSlideHistory(a.slideId,a.limit,a.includeDocuments));
+
+  register("restore_slide_revision","Restaurer un ancien état enregistré",
+    "Restore exactly one previously saved slide snapshot, preserving the version currently active as a new undo checkpoint. Requires an observed current slide revision, so newer edits cannot be overwritten by stale requests.",
+    {slideId:uuid,checkpointId:uuid,revision:z.number().int().min(1)},true,
+    async a=>{
+      const history=await listSlideHistory(a.slideId,60,false);
+      if(!history.items.some(row=>row.id===a.checkpointId))throw new Error("history_not_found");
+      return activateVariant(a.slideId,a.checkpointId,a.revision);
+    });
   register("get_animation_plan","Lire la chronologie des animations",
     "Compact click-by-click sequence of a slide, grouping automatic after-previous cues. No HTML/CSS payload. Use this to understand the projected teaching order with minimal tokens.",
     {slideId:uuid},false,
