@@ -29,6 +29,9 @@ export const DiagramSchema=z.object({
   for(const e of s.edges)if(!ids.has(e.from)||!ids.has(e.to)||e.from===e.to)
     ctx.addIssue({code:"custom",message:"invalid_diagram_edge"});
   if(s.focus&&!ids.has(s.focus))ctx.addIssue({code:"custom",message:"invalid_diagram_focus"});
+  const limits:Record<string,number>={mindmap:12,cycle:10,causal:12};
+  if(s.nodes.length>(limits[s.kind]??16))
+    ctx.addIssue({code:"custom",message:"diagram_too_dense_split_across_slides"});
 });
 export type Diagram=z.infer<typeof DiagramSchema>;
 type Point={x:number;y:number};
@@ -100,10 +103,12 @@ export function composeDiagram(raw:Diagram):SlideDocument{
       break;
     }
     case "flow":{
-      const cols=n<=5?n:Math.min(4,Math.ceil(n/2)),rows=Math.ceil(n/cols);
-      const gapX=38,gapY=48,w=(area.width-(cols-1)*gapX)/cols,h=rows===1?280:210;
+      const cols=n<=5?n:Math.min(6,Math.ceil(n/3)),rows=Math.ceil(n/cols);
+      const gapX=26,gapY=26,w=(area.width-(cols-1)*gapX)/cols;
+      const h=rows===1?250:Math.floor((area.height-(rows-1)*gapY)/rows);
+      const firstY=area.top+Math.max(0,(area.height-(rows*h+(rows-1)*gapY))/2);
       spec.nodes.forEach((node,i)=>{const r=Math.floor(i/cols),col=i%cols;
-        boxes.set(node.id,{x:round(area.left+col*(w+gapX)),y:round(area.top+45+r*(h+gapY)),w:round(w),h});
+        boxes.set(node.id,{x:round(area.left+col*(w+gapX)),y:round(firstY+r*(h+gapY)),w:round(w),h});
       });
       break;
     }
@@ -116,15 +121,18 @@ export function composeDiagram(raw:Diagram):SlideDocument{
       break;
     }
     case "hierarchy":{
-      // Input order assigns rows only when no explicit parent links are supplied.
+      // Without explicit links, build a 3-branch hierarchy instead of crowding every node into one row.
+      const links=spec.edges.length?spec.edges:spec.nodes.slice(1).map((node,i)=>({
+        from:spec.nodes[Math.floor(i/3)]!.id,to:node.id
+      }));
       const incoming=new Map(spec.nodes.map(node=>[node.id,0]));
-      for(const e of spec.edges)incoming.set(e.to,(incoming.get(e.to)??0)+1);
+      for(const e of links)incoming.set(e.to,(incoming.get(e.to)??0)+1);
       const roots=spec.nodes.filter(s=>(incoming.get(s.id)??0)===0);
       const levels=new Map<string,number>();
       const queue=(roots.length?roots:[spec.nodes[0]!]).map(n=>n.id);
       queue.forEach(id=>levels.set(id,0));
       while(queue.length){const id=queue.shift()!,level=levels.get(id)!;
-        for(const edge of spec.edges.filter(e=>e.from===id)){
+        for(const edge of links.filter(e=>e.from===id)){
           if(levels.has(edge.to))continue;
           levels.set(edge.to,Math.min(3,level+1));queue.push(edge.to);
         }
@@ -142,9 +150,9 @@ export function composeDiagram(raw:Diagram):SlideDocument{
       const focus=spec.focus??spec.nodes[n-1]!.id;
       const sources=spec.nodes.filter(a=>a.id!==focus);
       const cols=sources.length>6?2:1,rows=Math.ceil(sources.length/cols);
-      const h=Math.min(168,Math.max(94,520/rows-15));
+      const h=Math.min(168,Math.floor((515-(rows-1)*15)/rows));
       sources.forEach((node,i)=>{const col=Math.floor(i/rows),row=i%rows;
-        boxes.set(node.id,{x:130+col*375,y:round(430+row*(h+20)),w:330,h:round(h)});
+        boxes.set(node.id,{x:130+col*375,y:round(430+row*(h+15)),w:330,h:round(h)});
       });
       boxes.set(focus,{x:1232,y:552,w:490,h:210});
       break;
@@ -167,7 +175,9 @@ export function composeDiagram(raw:Diagram):SlideDocument{
       :spec.kind==="causal"
         ?spec.nodes.filter(node=>node.id!==(spec.focus??spec.nodes[n-1]!.id))
           .map(node=>({from:node.id,to:spec.focus??spec.nodes[n-1]!.id}))
-        :spec.kind==="flow" || spec.kind==="hierarchy"
+        :spec.kind==="hierarchy"
+          ?spec.nodes.slice(1).map((node,i)=>({from:spec.nodes[Math.floor(i/3)]!.id,to:node.id}))
+        :spec.kind==="flow"
           ?spec.nodes.slice(0,-1).map((node,i)=>({from:node.id,to:spec.nodes[i+1]!.id}))
           :[];
   const paths=generated.map(e=>{
