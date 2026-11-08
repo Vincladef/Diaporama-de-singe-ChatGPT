@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/domain/slide.test.ts src/engine/render.test.ts src/export/geometry.test.ts src/mcp/documents.test.ts"
+    "test": "node --experimental-strip-types --test src/domain/slide.test.ts src/engine/render.test.ts src/export/geometry.test.ts src/mcp/documents.test.ts src/mcp/security.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
