@@ -265,7 +265,7 @@ export default function App() {
       changed=false;
       for(const e of doc.elements)if(e.parentId&&removed.has(e.parentId)&&!removed.has(e.id)){removed.add(e.id);changed=true;}
     }
-    editDocument({...doc,elements:doc.elements.filter(e=>!removed.has(e.id)),animations:doc.animations.filter(a=>!removed.has(a.targetElementId))},"delete");
+    editDocument({...doc,elements:doc.elements.filter(e=>!removed.has(e.id)),animations:doc.animations.filter(a=>!a.targetElementId||!removed.has(a.targetElementId))},"delete");
     setSelectedIds([]);
   }
   function copySelection() {
