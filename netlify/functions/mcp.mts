@@ -11,7 +11,7 @@ import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/im
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
-import { AnimationStepSchema, type AnimationStep, type SlideDocument } from "../../src/domain/slide";
+import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
 import { composeDocument, CompositionSchema, reviewDocument, repairDocument, type Composition } from "../../src/mcp/visual";
@@ -25,6 +25,32 @@ type JsonObject = Record<string, unknown>;
 type ToolSchema = Record<string,z.ZodTypeAny>;
 const uuid = z.uuid();
 const uuidArray = z.array(uuid);
+
+const ImagePlacementSchema=z.object({
+  slideId:uuid,revision:z.number().int().min(1),
+  elementId:z.string().min(1).max(128).optional(),
+  url:z.url().refine(u=>u.startsWith("https://")).optional(),
+  frame:z.object({
+    x:z.number().min(-20000).max(20000).optional(),
+    y:z.number().min(-20000).max(20000).optional(),
+    width:z.number().min(10).max(20000).optional(),
+    height:z.number().min(10).max(20000).optional(),
+    opacity:z.number().min(0).max(1).optional(),
+  }).strict().optional(),
+  adjustments:z.object({
+    brightness:z.number().min(0).max(300).optional(),contrast:z.number().min(0).max(300).optional(),
+    saturate:z.number().min(0).max(300).optional(),grayscale:z.number().min(0).max(100).optional(),
+    blur:z.number().min(0).max(40).optional(),cropX:z.number().min(0).max(100).optional(),
+    cropY:z.number().min(0).max(100).optional(),rotation:z.number().min(-180).max(180).optional(),
+    fit:z.enum(["cover","contain","fill"]).optional(),
+  }).strict().optional(),
+  credit:z.object({
+    label:z.string().max(140).optional(),source:z.string().max(140).optional(),
+    rights:z.string().max(400).optional(),downloadLocation:z.url().optional(),
+  }).strict().optional(),
+}).strict();
+type ImagePlacement=z.infer<typeof ImagePlacementSchema>;
+
 const slim = (value: unknown): JsonObject => value && typeof value === "object" && !Array.isArray(value)
   ? value as JsonObject : { result: value };
 
@@ -399,6 +425,95 @@ function createServer(request: Request): McpServer {
   register("image_sources","Sources d'images disponibles",
     "List usable providers, missing API keys without revealing secrets, and the external Google Images option.",{},false,
     async()=>({sources:getSourceStatuses()}));
+
+
+  register("curate_images","Rechercher et sélectionner des photographies multisources",
+    "Search up to four queries in parallel across Openverse, Wikimedia, Pexels, Unsplash and Google Images (SerpApi when configured). Return a compact deduplicated shortlist ranked by topic, dimensions, orientation and provider diversity, with license and source links. Ranking does not imply copyright clearance.",
+    {queries:z.array(z.string().trim().min(2).max(160)).min(1).max(4),
+      sources:z.array(ImageSourceSchema).min(1).max(5).default(["openverse","wikimedia"]),
+      orientation:z.enum(["any","landscape","portrait","square"]).default("landscape"),
+      perSource:z.number().int().min(2).max(15).default(8),
+      limit:z.number().int().min(2).max(30).default(16),
+      minWidth:z.number().int().min(0).max(10000).default(1200),
+      minHeight:z.number().int().min(0).max(10000).default(650)},false,
+    async a=>{
+      const queries=[...new Set(a.queries as string[])];
+      const results=await Promise.all(queries.map(query=>searchImages({
+        query,sources:a.sources,page:1,perSource:a.perSource,orientation:a.orientation
+      })));
+      const best=curateCandidates(results.map((r,i)=>({query:queries[i]!,images:r.images})),{
+        orientation:a.orientation,preferLarge:true,minWidth:a.minWidth,minHeight:a.minHeight
+      },a.limit);
+      return {queries,sources:getSourceStatuses(),shortlist:best.map(image=>({
+        id:image.id,provider:image.provider,query:image.matchedQuery,
+        url:image.imageUrl,preview:image.previewUrl,title:image.title,
+        credit:image.attribution,license:image.license,sourcePage:image.pageUrl,
+        dimensions:{width:image.width,height:image.height},relevanceScore:Number(image.score.toFixed(2)),
+        ...(image.downloadLocation?{downloadLocation:image.downloadLocation}:{})
+      })),providerResults:results.map(r=>({query:r.query,providers:r.providers,
+        googleSearchUrl:r.googleSearchUrl})),
+        note:"Confirm usage rights on the source page. Keys for Pexels, Unsplash or SerpApi must be configured on Netlify for integrated search."};
+    });
+
+  register("apply_images","Sélectionner, enregistrer et retoucher des images en lot",
+    "Insert, replace or transform up to 40 photos across 40 slides atomically using checked revisions. Crop, filters, rotation, opacity and framing remain editable structured properties; preserve unrelated image styles. Record source metadata without duplicating known asset URLs. No image download. If present, Unsplash tracking attempted after save.",
+    {presentationId:uuid,images:z.array(ImagePlacementSchema).min(1).max(40),
+      dryRun:z.boolean().default(false)},true,
+    async a=>{
+      const photos=a.images as ImagePlacement[];
+      const slideIds=[...new Set(photos.map(p=>p.slideId))];
+      if(slideIds.length>40)throw new Error("too_many_slides");
+      const group=await Promise.all(slideIds.map(async slideId=>{
+        const items=photos.filter(p=>p.slideId===slideId);
+        if(new Set(items.map(p=>p.revision)).size>1)throw new Error("revision_conflict:"+slideId);
+        const current=await getSlide(slideId,"full");
+        if(!("document" in current))throw new Error("slide_not_found");
+        if(current.presentation_id!==a.presentationId)throw new Error("invalid_presentation_scope");
+        if(current.revision!==items[0]!.revision)throw new Error("revision_conflict:"+slideId);
+        const ids=new Set<string>();
+        const ops:SlideOperation[]=[];
+        const saved:{id:string;url:string}[]=[];
+        for(const photo of items){
+          const id=photo.elementId??randomUUID();
+          if(ids.has(id))throw new Error("duplicate_image_target");ids.add(id);
+          const original=current.document.elements.find(e=>e.id===id);
+          if(original&&original.type!=="image")throw new Error("invalid_image_target");
+          const src=photo.url??original?.src;
+          if(!src||!src.startsWith("https://"))throw new Error("invalid_image_source");
+          const frame=photo.frame;
+          const styles:SlideElement["styles"]={left:"150px",top:"150px",width:"1200px",height:"675px",
+            objectFit:"cover",objectPosition:"50% 50%",...(original?.styles??{})};
+          if(frame){
+            if(frame.x!==undefined)styles.left=frame.x+"px";
+            if(frame.y!==undefined)styles.top=frame.y+"px";
+            if(frame.width!==undefined)styles.width=frame.width+"px";
+            if(frame.height!==undefined)styles.height=frame.height+"px";
+            if(frame.opacity!==undefined)styles.opacity=frame.opacity;
+          }
+          const element=editImageStyles({id,type:"image",src,styles},photo.adjustments??{});
+          ops.push({op:"upsert_element",element});
+          saved.push({id,url:src});
+        }
+        return {id:slideId,revision:items[0]!.revision,operations:ops,images:saved};
+      }));
+      const outcome=await editSlides(a.presentationId,group.map(({id,revision,operations})=>({
+        id,revision,operations
+      })),a.dryRun);
+      if(a.dryRun)return {dryRun:true,slides:group.map(g=>({id:g.id,images:g.images}))};
+      const credits=photos.filter(p=>p.url).map(p=>({
+        url:p.url!,label:p.credit?.label??"",
+        source:p.credit?.source??"Source non renseignée",
+        rights:p.credit?.rights??"Droits non vérifiés"
+      }));
+      let assets:{added:number;existing:number}|undefined,metadataWarning:string|undefined;
+      try{assets=await saveAssetsIfMissing(a.presentationId,credits);}
+      catch{metadataWarning="Image changes saved, but asset credits could not be indexed.";}
+      const tracking=await Promise.all(photos.filter(p=>p.credit?.downloadLocation)
+        .map(async p=>({slideId:p.slideId,...await trackUnsplashDownload(p.credit!.downloadLocation!)})));
+      return {dryRun:false,updated:outcome.updated,slides:outcome.slides,
+        assets,tracking,...(metadataWarning?{warning:metadataWarning}:{}),
+        rightsNotice:"Image usage permissions must still be verified on each publisher's source page."};
+    });
 
   register("generate_variants","Proposer jusqu’à six variantes graphiques",
     "Generate and SAVE 3 to 6 optional directions: immersive, editorial, manifesto, scientific atlas, archive paper and cinematic. Preserves source text, notes and image links; current slide stays unchanged. For original HTML/CSS art, use create_variants.",
