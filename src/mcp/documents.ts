@@ -95,7 +95,7 @@ export function editSlide(
           }
         }
         doc.elements = doc.elements.filter(e => !removed.has(e.id));
-        doc.animations = doc.animations.filter(a => !removed.has(a.targetElementId));
+        doc.animations = doc.animations.filter(a => !a.targetElementId || !removed.has(a.targetElementId));
         break;
       }
       case "edit_element": {
