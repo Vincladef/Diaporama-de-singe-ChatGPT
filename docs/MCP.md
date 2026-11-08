@@ -44,8 +44,8 @@ Les liens signés HTML/JSON donnent accès à la présentation pendant dix minut
 
 ## Limites actuelles
 
-Le serveur ne recherche pas lui-même des images sur Google Images, Unsplash ou Pexels ; ChatGPT peut chercher des médias via ses autres outils et enregistrer leurs URLs avec save_assets.
-La lecture d’animations au clic, l’édition avancée par glisser-déposer, la publication Google Slides directe et la synchronisation instantanée restent à développer.
+Le serveur intègre maintenant `image_sources` et `search_images`. Openverse et Wikimedia fonctionnent sans clé ; Pexels et Unsplash demandent leurs secrets Netlify ; Google Images est accessible par URL externe ou par SerpApi lorsque `SERPAPI_API_KEY` est configurée. `place_image` remplace ou insère une image avec ses réglages sans recopier tout le document ; `generate_variants` enregistre trois directions graphiques. Pour des propositions originales issues du raisonnement de ChatGPT, continuer à utiliser `create_variants` avec des compositions HTML/CSS libres.
+La lecture d’animations au clic, la publication Google Slides directe et les animations exécutables restent à développer. L'éditeur graphique assure maintenant l'édition à la souris et la vérification périodique des révisions.
 Le protocole, la découverte OAuth, le DCR et l’émission du code d’autorisation ont été testés ; le cycle complet d’autorisation dans un plugin installé devra être validé par l’utilisateur après connexion.
 
 ## Tests
