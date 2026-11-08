@@ -8,6 +8,7 @@ import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 export type PowerPointMode = "faithful" | "editable";
 export interface ExportProgress { completed: number; total: number; }
 export interface ExportReport { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; downloadUrl: string; }
+export interface PowerPointArtifact { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; blob: Blob; }
 
 function getNumber(style: SlideElement["styles"], key: string, reference: number, fallback: number): number {
   return cssLength(style[key], reference, fallback);
@@ -112,10 +113,10 @@ function emptyFreeform(document: SlideDocument): boolean {
  * Create a PPTX in the browser. All slides share the first slide's aspect ratio,
  * as required by the PowerPoint format.
  */
-export async function exportPowerPoint(
+export async function buildPowerPoint(
   deck: PresentationDetail, mode: PowerPointMode,
   onProgress?: (progress: ExportProgress) => void,
-): Promise<ExportReport> {
+): Promise<PowerPointArtifact> {
   if (!deck.slides.length) throw new Error("La présentation ne contient aucune diapositive.");
   const first = deck.slides[0]!;
   const aspect = first.document.canvas.width / first.document.canvas.height;
@@ -192,15 +193,26 @@ export async function exportPowerPoint(
       throw new Error("Le PowerPoint généré ne contient pas la diapositive " + i + ".");
     }
   }
-  const href = URL.createObjectURL(blob);
+  return { fileName, slideCount: deck.slides.length, warnings, mode, blob };
+}
+
+/** The file download and Google Slides conversion reuse the exact same PPTX builder. */
+export async function exportPowerPoint(
+  deck: PresentationDetail, mode: PowerPointMode,
+  onProgress?: (progress: ExportProgress) => void,
+): Promise<ExportReport> {
+  const artifact = await buildPowerPoint(deck, mode, onProgress);
+  const href = URL.createObjectURL(artifact.blob);
   const anchor = document.createElement("a");
-  anchor.download = fileName;
+  anchor.download = artifact.fileName;
   anchor.href = href;
   anchor.style.display = "none";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  // Allow slow download managers and embedded browsers to read the Blob fully.
   window.setTimeout(() => URL.revokeObjectURL(href), 300_000);
-  return { fileName, slideCount: deck.slides.length, warnings, mode, downloadUrl: href };
+  return {
+    fileName: artifact.fileName, slideCount: artifact.slideCount,
+    warnings: artifact.warnings, mode: artifact.mode, downloadUrl: href,
+  };
 }
