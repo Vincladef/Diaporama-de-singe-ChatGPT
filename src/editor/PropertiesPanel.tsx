@@ -1,5 +1,6 @@
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { elementBox } from "./geometry";
+import { cropCoordinates, changeFilter, readFilter, type ImageFilterKey } from "../images/edit";
 
 export type InspectorTab = "design" | "layers" | "html" | "css";
 type Props = {
@@ -12,11 +13,12 @@ type Props = {
   onAdd: (type:"text"|"image"|"shape") => void;
   onDelete: () => void;
   onArrange: (direction:"front"|"back"|"forward"|"backward") => void;
+  onOpenImages?: () => void;
 };
 const cleanHex = (value:unknown, defaultValue:string) => typeof value === "string" && /^#[a-f\d]{6}$/i.test(value) ? value : defaultValue;
 const numeric = (input:string, fallback:number) => Number.isFinite(Number(input)) ? Number(input) : fallback;
 
-export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,onTabChange,onAdd,onDelete,onArrange}:Props) {
+export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,onTabChange,onAdd,onDelete,onArrange,onOpenImages}:Props) {
   const selected=selectedIds.length===1 ? doc.elements.find(e=>e.id===selectedIds[0]) : undefined;
   const box=selected ? elementBox(selected,doc) : undefined;
 
@@ -68,9 +70,12 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
             {selected.type==="text" && <label>Contenu du texte
               <textarea rows={3} value={selected.text??""} onChange={e=>patchObject({text:e.target.value})}/>
             </label>}
-            {selected.type==="image" && <label>Adresse de l'image
-              <input type="url" value={selected.src??""} onChange={e=>patchObject({src:e.target.value})}/>
-            </label>}
+            {selected.type==="image" && <>
+              <button type="button" className="primary" onClick={onOpenImages}>Rechercher ou remplacer une image</button>
+              <label>Adresse de l'image
+                <input type="url" value={selected.src??""} onChange={e=>patchObject({src:e.target.value})}/>
+              </label>
+            </>}
             <div className="property-coordinates">
               {box && coordinate("left","X",box.x)}
               {box && coordinate("top","Y",box.y)}
@@ -112,11 +117,33 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
             {selected.type==="shape" && <label>Angles arrondis (px)
               <input type="number" min="0" max="1000" value={parseFloat(String(selected.styles.borderRadius??"0"))||0}
                 onChange={e=>patchStyle("borderRadius",Math.max(0,numeric(e.target.value,0))+"px")}/></label>}
-            {selected.type==="image" && <label>Recadrage
-              <select value={String(selected.styles.objectFit??"cover")} onChange={e=>patchStyle("objectFit",e.target.value)}>
-                <option value="cover">Recadrer</option><option value="contain">Afficher en entier</option><option value="fill">Étirer</option>
-              </select>
-            </label>}
+            {selected.type==="image" && <>
+              <label>Recadrage
+                <select value={String(selected.styles.objectFit??"cover")} onChange={e=>patchStyle("objectFit",e.target.value)}>
+                  <option value="cover">Remplir sans déformer</option><option value="contain">Image entière</option><option value="fill">Étirer</option>
+                </select>
+              </label>
+              {(["x","y"] as const).map(axis=>{
+                const current=cropCoordinates(selected.styles.objectPosition);
+                return <label key={axis}>Cadrage {axis==="x"?"horizontal":"vertical"} ({current[axis]} %)
+                  <input type="range" min="0" max="100" value={current[axis]}
+                    onChange={e=>patchStyle("objectPosition",
+                      (axis==="x"?e.target.value:current.x)+"% "+(axis==="y"?e.target.value:current.y)+"%")}/>
+                </label>;
+              })}
+              {([
+                ["brightness","Luminosité",0,200],
+                ["contrast","Contraste",0,200],
+                ["saturate","Saturation",0,200],
+                ["grayscale","Noir et blanc",0,100],
+                ["blur","Flou",0,20],
+              ] as [ImageFilterKey,string,number,number][]).map(([key,label,min,max])=><label key={key}>
+                {label} ({readFilter(selected.styles.filter,key)} {key==="blur"?"px":"%"})
+                <input type="range" min={min} max={max} value={readFilter(selected.styles.filter,key)}
+                  onChange={e=>patchStyle("filter",changeFilter(selected.styles.filter,key,Number(e.target.value)))}/>
+              </label>)}
+              <button className="subtle-btn" onClick={()=>patchStyle("filter","")}>Réinitialiser les réglages photo</button>
+            </>}
             <label>Opacité ({Math.round(Number(selected.styles.opacity??1)*100)} %)
               <input type="range" min="0" max="100" value={Math.round(Number(selected.styles.opacity??1)*100)}
                 onChange={e=>patchStyle("opacity",Math.max(0,Math.min(100,numeric(e.target.value,100)))/100)}/>
