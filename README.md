@@ -10,7 +10,7 @@ Projet indépendant de la version Codex.
 
 Ne jamais modifier le dépôt Codex, son site Netlify ni sa base Neon.
 
-## Étapes 1 à 3 : moteur HTML/CSS et exports PowerPoint
+## Étapes 1 à 4 : moteur HTML/CSS, export PowerPoint et serveur MCP
 
 Fonctions disponibles : création, renommage et suppression de présentations ; ajout, duplication et suppression de diapositives ; édition HTML/CSS libre ; objets individuels texte, image et forme ; aperçu immédiat dans une iframe isolée ; notes ; sauvegarde et relecture dans Neon ; conflits de modification détectés par numéro de révision.
 
@@ -47,6 +47,6 @@ L'application exporte maintenant des fichiers PPTX en deux modes. Le mode « Vis
 
 Pour Google Slides, téléchargez le PPTX puis importez-le dans Google Drive. La publication directe via OAuth n'est pas encore disponible.
 
-Le MCP distant, la manipulation visuelle avancée, les galeries d'images et les animations au clic restent à développer. Le modèle conserve les animations mais leur exécution n'est pas implémentée.
+Le MCP distant est développé avec vingt outils, OAuth PKCE et opérations groupées atomiques. L'authentification finale dans ChatGPT nécessite une connexion approuvée par l'utilisateur. L'édition visuelle avancée, la recherche d'images intégrée, la synchronisation temps réel et les animations au clic restent à développer.
 
-Consulter `docs/ARCHITECTURE.md` et `docs/EXPORT.md` pour le détail des deux méthodes et de leurs limites.
+Consulter `docs/ARCHITECTURE.md`, `docs/EXPORT.md` et `docs/MCP.md` pour le détail des deux méthodes et de leurs limites.
