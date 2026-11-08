@@ -61,3 +61,11 @@ Pas encore de création de présentations dans l'interface, de moteur graphique 
 - Toutes les opérations privées passent par `netlify/functions/workspace.mts` et vérifient le secret EDITOR_ACCESS_TOKEN.
 - Aucun utilisateur anonyme n'a accès à la lecture ou à l'écriture. Les images externes et polices Web nécessitent une connexion réseau.
 - L'éditeur manuel complet, les animations exécutables, le MCP et les exports restent des étapes ultérieures.
+
+## Étape 3 : export PowerPoint et Google Slides
+
+La génération se déroule dans le navigateur, sans API publique d'export. PptxGenJS crée les objets natifs et le fichier OOXML ; html-to-image capture les mises en page HTML/CSS libres. Deux stratégies sont proposées : fidélité visuelle par image complète, ou conversion hybride avec fond HTML/CSS rasterisé et objets structurés natifs.
+
+Le moteur capture chaque diapositive dans un iframe temporaire sans exécution JavaScript, vérifie le contenu ZIP avant de proposer le PPTX et autorise un téléchargement manuel de secours.
+
+Google Slides est pris en charge par import du fichier PPTX, et non par synchronisation directe. Voir docs/EXPORT.md pour les contraintes, la matrice de compatibilité et les tests effectués.
