@@ -332,3 +332,26 @@
 .improve-prompt{white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;padding:12px;background:#eaf2e9;border-radius:6px;font-size:10px;line-height:1.5;color:#3b5941}
 @media(max-width:900px){.import-slide-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.improve-workspace{grid-template-columns:1fr}.improve-directions{border-right:0;border-bottom:1px solid #e1eae2}}
 @media(max-width:600px){.import-intro{grid-template-columns:1fr;padding:12px}.import-slide-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}.import-preview-head{padding:11px;flex-direction:column;align-items:stretch}.import-preview-head>div{text-align:left}.import-choice-toolbar{padding:8px;flex-wrap:wrap}.import-choice-toolbar span{flex-basis:100%}.import-warnings{margin:8px}.import-footer{padding:11px;flex-wrap:wrap}.import-footer>span{flex-basis:100%}.import-done{padding:18px}.improve-workspace>section{padding:15px}.improve-compare-grid{gap:7px}.import-top-button{margin:0 6px 0 auto}}
+
+
+/* Step 8: audit desk, consistent with the minimal import and improvement workspaces */
+.quality-dialog{width:min(920px,95vw);max-height:86vh}
+.quality-content{padding:22px;overflow:auto;min-height:0}
+.quality-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.quality-overview>div{border:1px solid #e2eae1;background:#f9fcf9;border-radius:8px;padding:17px 12px;display:flex;flex-direction:column;gap:5px;text-align:center}
+.quality-overview strong{font-size:24px;color:#34573f;font-variant-numeric:tabular-nums}
+.quality-overview span{font-size:11px;color:#8a9b8b}
+.quality-lead{font-size:12px;color:#5e7563;line-height:1.8;margin:16px 0 20px}
+.quality-findings{display:flex;flex-direction:column;gap:7px;max-height:420px;overflow:auto}
+.quality-finding{display:flex;align-items:center;gap:15px;background:#fff;border:1px solid #e3eae3;border-radius:8px;padding:12px}
+.quality-finding-type{font-size:10px;min-width:85px;color:#617d68;font-weight:700}
+.quality-error{border-left:3px solid #b74e40}.quality-error .quality-finding-type{color:#b34e41}
+.quality-warning{border-left:3px solid #d1a145}.quality-warning .quality-finding-type{color:#a17825}
+.quality-info{border-left:3px solid #9ab49f}
+.quality-finding-body{flex:1;min-width:0}
+.quality-finding-body strong{font-size:12px;color:#34543d}
+.quality-finding-body p{color:#708575;font-size:11px;line-height:1.6;margin:4px 0 0}
+.quality-finding button{white-space:nowrap}
+.quality-empty{padding:24px;text-align:center;background:#f9fbf8;border-radius:8px;color:#66836f;font-size:12px}
+.quality-disclaimer{font-size:10px;color:#96a79a;line-height:1.7;margin:20px 0 0}
+@media(max-width:640px){.quality-content{padding:12px}.quality-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.quality-finding{gap:9px;padding:9px}.quality-finding-type{min-width:62px}.quality-finding button{padding:7px}}
