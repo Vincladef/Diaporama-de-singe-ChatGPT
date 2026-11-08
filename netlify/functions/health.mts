@@ -8,7 +8,7 @@ export default async () => {
   try {
     const sql = neon(databaseUrl)
     await sql`SELECT 1 AS connected`
-    return Response.json({ ok: true, database: 'connected', service: 'diaporama-de-singe' }, { headers: { 'cache-control': 'no-store' } })
+    return Response.json({ ok: true, database: 'connected', service: 'diaporama-de-singe-chatgpt' }, { headers: { 'cache-control': 'no-store' } })
   } catch {
     return Response.json({ ok: false, database: 'unavailable' }, { status: 503, headers: { 'cache-control': 'no-store' } })
   }
