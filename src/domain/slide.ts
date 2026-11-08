@@ -9,14 +9,24 @@ export const SlideElementSchema = z.object({
   styles: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
 }).strict();
 
+/** Timeline cues are stored in the same versioned JSON document edited through MCP. */
 export const AnimationStepSchema = z.object({
-  id: z.string().min(1),
-  targetElementId: z.string().min(1),
+  id: z.string().min(1).max(128),
+  targetElementId: z.string().min(1).max(128).optional(),
+  /** CSS selector for elements inside freely authored HTML; no JavaScript is executed. */
+  targetSelector: z.string().min(1).max(240).optional(),
   order: z.number().int().min(0),
   trigger: z.enum(["click", "after-previous"]),
-  effect: z.enum(["appear", "fade", "move", "scale"]),
+  effect: z.enum(["appear", "fade", "move", "scale", "wipe", "highlight", "dim", "hide", "custom"]),
   durationMs: z.number().int().min(0).max(60000).default(350),
-}).strict();
+  delayMs: z.number().int().min(0).max(30000).default(0),
+  easing: z.enum(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]).default("ease-out"),
+  offsetX: z.number().min(-4096).max(4096).optional(),
+  offsetY: z.number().min(-4096).max(4096).optional(),
+  /** Browser Web Animations API keyframes, e.g. opacity/transform/filter/clipPath. */
+  keyframes: z.array(z.record(z.string(), z.union([z.string(), z.number()]))).min(2).max(16).optional(),
+}).strict().refine(step => !!(step.targetElementId || step.targetSelector),
+  {message:"An animation must target an element or a CSS selector."});
 
 export const SlideDocumentSchema = z.object({
   schemaVersion: z.literal(1),
@@ -27,11 +37,12 @@ export const SlideDocumentSchema = z.object({
   }).strict(),
   elements: z.array(SlideElementSchema).max(1000),
   freeform: z.object({ html: z.string(), css: z.string() }).strict().optional(),
-  animations: z.array(AnimationStepSchema),
+  animations: z.array(AnimationStepSchema).max(1000),
 }).strict();
 
 export type SlideDocument = z.infer<typeof SlideDocumentSchema>;
 export type SlideElement = z.infer<typeof SlideElementSchema>;
+export type AnimationStep = z.infer<typeof AnimationStepSchema>;
 
 export function createEmptySlideDocument(): SlideDocument {
   return {
