@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptySlideDocument } from "../domain/slide.ts";
 import { inspectExport } from "./preflight.ts";
-test("distinguishes editable text, mixed HTML and raster-only diagrams",()=>{
+test("distinguishes editable text, mixed HTML and unsupported grouped objects",()=>{
  const native=createEmptySlideDocument();
  native.elements=[{id:"title",type:"text",text:"Titre",styles:{left:"0px",top:"0px"}}];
  const mixed=structuredClone(native);
  mixed.mode="hybrid";mixed.freeform={html:"<div>Composition</div>",css:""};
  const raster=structuredClone(native);
- raster.elements.push({id:"art",type:"svg",text:"<svg></svg>",styles:{}});
+ raster.elements.push({id:"art",type:"group",styles:{}});
  const report=inspectExport([{document:native,notes:"Intro"},
    {document:mixed},{document:raster}]);
  assert.equal(report.slideCount,3);
@@ -43,4 +43,13 @@ test("freeform HTML is recognized as hybrid-editable and its photos counted",()=
  assert.equal(report.mixedEditable,1);
  assert.equal(report.totalRemoteImages,2);
  assert.equal(report.slides[0]?.images,1);
+});
+
+test("diagram connector SVG stays an independent vector picture",()=>{
+ const doc=createEmptySlideDocument();
+ doc.elements=[{id:"connector",type:"svg",text:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L2 2"/></svg>',styles:{}}];
+ const report=inspectExport([{document:doc}]);
+ assert.equal(report.fullyNative,1);
+ assert.equal(report.rasterOnly,0);
+ assert.ok(report.warnings.some(x=>x.includes("SVG")));
 });
