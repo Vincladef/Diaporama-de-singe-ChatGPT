@@ -102,3 +102,63 @@
 .freeform-quickbar button{font:600 28px system-ui;color:#52412a;background:#fdf8f0;border:1px solid #ecd7ba;border-radius:5px;padding:10px 15px;min-height:53px;cursor:pointer}
 .freeform-quickbar button:hover{background:#f7e7d4}
 .freeform-quickbar input[type=color]{width:60px;height:53px;min-width:60px;padding:4px;border:1px solid #dec49e;border-radius:5px;background:white;cursor:pointer}
+
+
+/* Stage 6: image discovery and graphic comparison in overlay workspaces */
+.studio-backdrop{position:fixed;inset:0;z-index:2000;background:rgba(14,30,22,.67);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(5px)}
+.studio-dialog{display:flex;flex-direction:column;background:#fcfdfb;color:#25372c;border:1px solid #d4dfd4;border-radius:13px;box-shadow:0 25px 80px #0b1b1244;width:min(1220px,96vw);max-height:min(92vh,950px);overflow:hidden}
+.studio-header{padding:20px 24px;border-bottom:1px solid #e0e7df;display:flex;gap:12px;align-items:center;justify-content:space-between;background:#fff}
+.studio-header>div{display:flex;flex-direction:column;gap:4px}
+.studio-header strong{font-family:Georgia,serif;font-weight:500;font-size:25px;letter-spacing:-.8px}
+.studio-header span{font-size:12px;color:#819084}
+.studio-close{border:0;background:#eef3ed;border-radius:7px;font-size:23px;color:#4b6454;min-height:34px;min-width:34px}
+.studio-search{display:flex;gap:10px;padding:16px 23px 8px}
+.studio-search input{flex:1;min-width:100px;border:1px solid #d3dfd2;border-radius:7px;padding:12px;background:white}
+.studio-sources{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:6px 24px 13px;border-bottom:1px solid #e1e8e1}
+.studio-source{display:flex;gap:5px;align-items:center;font-size:12px;color:#415b48;cursor:pointer}
+.studio-source input{accent-color:#3e7952}
+.studio-google-link{font-size:12px;color:#276e4a;margin-left:auto;text-decoration:underline;text-underline-offset:3px}
+.studio-content{padding:14px 22px;overflow:auto;min-height:150px;flex:1}
+.studio-notes{display:flex;gap:12px;flex-wrap:wrap;align-items:center;color:#748573;font-size:11px;margin:0 0 15px}
+.studio-notes .source-warning{color:#9d673e}
+.studio-notes .source-ok{color:#3c7e4e}
+.image-gallery{columns:5 165px;column-gap:11px}
+.image-choice{break-inside:avoid;margin:0 0 11px;width:100%;text-align:left;background:#fff;padding:5px;border:2px solid transparent;border-radius:8px;box-shadow:0 2px 12px #28362a0c;display:block;overflow:hidden}
+.image-choice:hover{border-color:#a6c6ab}
+.image-choice.chosen{border-color:#30714c;background:#eef6ed}
+.image-choice img{display:block;width:100%;height:auto;min-height:90px;max-height:235px;object-fit:cover;border-radius:5px;background:#edf1ec}
+.image-choice img.failed-image{min-height:95px;opacity:.2}
+.image-choice-credit{padding:8px 3px 4px;display:block;font-size:10px;color:#718472;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.studio-empty{padding:35px 15px;color:#829384;font-size:13px;max-width:490px;line-height:1.7}
+.image-details{margin-top:18px;padding:12px;background:#eff5ef;border-radius:8px;display:flex;gap:16px;align-items:center}
+.image-details>img{height:100px;width:146px;object-fit:cover;border-radius:6px}
+.image-details>div{flex:1;min-width:0}
+.image-details strong{font-size:13px}
+.image-details p{font-size:11px;color:#728174;margin:7px 0}
+.image-details a{font-size:11px;text-decoration:underline}
+.image-details button{margin-left:auto}
+.studio-pagination{display:flex;justify-content:center;align-items:center;gap:12px;margin:19px 0;color:#718075;font-size:12px}
+.studio-pagination button,.studio-footer button,.studio-variant-toolbar button:not(.primary),.studio-variant-footer button:not(.primary){background:white;color:#395240;border:1px solid #d9e3d9;border-radius:6px;padding:9px 12px;font-size:12px}
+.studio-pagination button:disabled{opacity:.35}
+.studio-footer{padding:12px 24px 16px;border-top:1px solid #dfe8df;background:#fafcf9;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.studio-footer label{font-size:11px;color:#5a6f5d;display:flex;flex-direction:column;gap:5px;flex:1;min-width:200px}
+.studio-footer input{font-size:12px;border:1px solid #d5dfd5;border-radius:6px;padding:10px;width:100%}
+.studio-footer small{font-size:10px;color:#829286;flex-basis:100%;line-height:1.5}
+.studio-variant-toolbar{display:flex;gap:12px;align-items:center;padding:13px 20px;border-bottom:1px solid #e0e7df;flex-wrap:wrap}
+.studio-variant-toolbar>span{font-size:11px;color:#7f8f83}
+.studio-variant-grid{padding:24px 21px;flex:1;overflow:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:16px}
+.variant-card{border:2px solid #e3e9e2;background:white;border-radius:8px;padding:10px;text-align:left;display:flex;flex-direction:column;min-width:0;min-height:185px}
+.variant-card.selectable{cursor:pointer}
+.variant-card.selectable:hover{border-color:#a1c4a9}
+.variant-card.selected{border-color:#317748;background:#f3f9f2}
+.variant-card.current-variant{background:#eef2eb}
+.variant-preview{background:#e7ece6;border:1px solid #e3e8e2;border-radius:5px;padding:3px}
+.variant-preview .slide-thumb{width:100%!important;display:block}
+.variant-description{padding:9px 4px 2px;font-size:12px;color:#273c2d}
+.variant-description strong{font-size:13px}
+.variant-description p{color:#708071;font-size:11px;line-height:1.5;margin:6px 0}
+.variant-description>span{font-size:10px;color:#6c8874}
+.studio-variant-footer{border-top:1px solid #e1e7df;padding:15px 23px;display:flex;justify-content:flex-end;align-items:center;gap:11px}
+.studio-variant-footer>span{margin-right:auto;color:#7e8d80;font-size:11px}
+@media(max-width:900px){.studio-variant-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.image-gallery{columns:3 160px}}
+@media(max-width:620px){.studio-dialog{width:100%;max-height:96vh}.studio-header{padding:14px}.studio-search{padding:12px;flex-wrap:wrap}.studio-sources{padding:9px 12px}.studio-content{padding:10px}.image-gallery{columns:2 130px}.studio-variant-grid{grid-template-columns:1fr;padding:12px}.studio-footer{padding:12px}.image-details{flex-wrap:wrap}.image-details>img{height:72px;width:100px}.studio-variant-footer{padding:10px;flex-wrap:wrap}}
