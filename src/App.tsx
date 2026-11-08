@@ -63,7 +63,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [exportMode, setExportMode] = useState<PowerPointMode>(() =>
-    new URLSearchParams(window.location.search).get("export") === "editable" ? "editable" : "faithful");
+    new URLSearchParams(window.location.search).get("export") === "faithful" ? "faithful" : "editable");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
@@ -558,10 +558,10 @@ export default function App() {
                   <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
                     onChange={e => setExportMode(e.target.value as PowerPointMode)}>
                     <option value="faithful">Visuel fidèle</option>
-                    <option value="editable">Objets modifiables</option>
+                    <option value="editable">Objets modifiables (recommandé)</option>
                   </select>
                 </label>
-                <label className="reveal-export-toggle" title="Les apparitions au clic sont conservées sous forme de plusieurs écrans successifs, compatibles avec Google Slides et PowerPoint.">
+                <label className="reveal-export-toggle" title="Les apparitions se déroulent sur des diapositives successives. En mode modifiable, textes et objets compatibles restent éditables ; les mouvements ne sont pas des animations natives.">
                   <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
                     onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
                   Étapes au clic
