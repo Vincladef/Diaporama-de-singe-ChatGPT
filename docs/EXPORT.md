@@ -73,6 +73,24 @@ L'éditeur propose désormais `Importer`, qui peut relire les PPTX générés pa
 
 Un test en navigateur sur deux diapositives importées, dont une avec image et notes, a confirmé la création de copie graphique, l'export en PPTX modifiable, puis le réimport des textes, photographies et notes. Ce test ne constitue pas une comparaison des pixels dans PowerPoint ou Google Slides. Voir `docs/INTEGRATION_IMPORT.md`.
 
+## Progression pédagogique dans Google Slides et PowerPoint
+
+Le moteur Web conserve les véritables animations `click` et `after-previous`. Le PowerPoint exporté **ne possède pas d'animations d'objet natives** : sa conversion Google Slides ne peut donc pas restituer directement les effets Web.
+
+Le réglage **« Étapes au clic »** (coché par défaut) garantit à présent la progression des cartes mentales dans le fichier exporté :
+
+- Les séquences sont lues avec le même `SlideAnimationPlayer` et `buildPlaybackPlan` que le mode projection Web.
+- Pour une page contenant N déclenchements `click`, le PPTX contient N+1 vues successives de cette page, de la disposition initiale à la composition complète.
+- Les actions `after-previous` sont regroupées avec leur clic précédent ; les introductions automatiques sont appliquées à la première vue.
+- Chaque état est capturé à la fin des animations, sans dépendre de la prise en charge des animations importées par Google.
+- Dans Google Slides, **un clic passe à la vue suivante** et révèle le contenu supplémentaire. L'animation est visuelle mais **ce sont des diapositives successives**, pas des animations natives à l'intérieur d'une seule diapositive.
+- Les fondus, déplacements, durées, mouvements continus et courbes d'accélération ne sont **pas reproduits** ; seul l'état final après chaque clic est conservé.
+- Les pages concernées sont volontairement rasterisées, y compris si l'export est en mode objets éditables ; les diapositives sans animation continuent à utiliser le mode choisi.
+- Un plafond de 240 vues empêche une multiplication excessive ; le système signale clairement la limite.
+- Décocher « Étapes au clic » restaure l'export statique précédent, une vue par diapositive.
+
+Une présentation de 4 diapositives contenant respectivement 2, 5, 9 et 11 clics produit ainsi 31 vues exportées. L'application d'origine demeure en 4 diapositives.
+
 ## Étape 11 : vérification avant l'export
 
 Le modèle de prédiagnostic `src/export/preflight.ts` distingue les objets convertibles nativement, les compositions hybrides et les captures raster intégrales ; il repère les animations Web, images HTTPS externes et changements de proportions. L'éditeur vérifie les révisions distantes juste avant le PPTX. Le moteur d'export réutilise les images identiques durant une opération, avec bornes de téléchargement. Le MCP retourne les avertissements depuis `prepare_export`, sans prétendre créer le PowerPoint lui-même. L'import dans Google Slides reste celui d'un PPTX via Drive, sans publication automatique dans le compte Google.
