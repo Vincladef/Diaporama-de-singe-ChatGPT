@@ -235,7 +235,7 @@ export async function importPowerPoint(bytes:ArrayBuffer,filename:string,mediaAd
     const doc:SlideDocument={...createEmptySlideDocument(),canvas,
       mode:bg?"hybrid":"structured",elements,animations:[],
       ...(bg?{freeform:{html:"",css:"body{background:"+bg+";}"}}:{})};
-    const notesRel=[...rels.values()].find(r=>r.type.endsWith("/notesSlide"));
+    const notesRel=[...rels.values()].find(r=>r.type.endsWith("/notesSlide")||r.type==="notesSlide");
     let notes="";
     if(notesRel){
       const note=await zip.file(notesRel.part)?.async("string");
