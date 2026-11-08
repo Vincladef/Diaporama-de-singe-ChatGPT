@@ -6,7 +6,7 @@ import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/im
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
-import { AnimationStepSchema } from "../../src/domain/slide";
+import { AnimationStepSchema, type AnimationStep } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
@@ -147,7 +147,7 @@ function createServer(request: Request): McpServer {
       if(!("document" in slide))throw new Error("slide_not_found");
       if(slide.presentation_id!==a.presentationId)throw new Error("foreign_presentation");
       const base=a.replace?0:Math.max(-1,...slide.document.animations.map(c=>c.order))+1;
-      const cues=a.targets.map((target:string,index:number)=>{
+      const cues:AnimationStep[]=(a.targets as string[]).map((target:string,index:number)=>{
         const free=target.startsWith("css:");
         const selector=free?target.slice(4).trim():"";
         if(free&&(!selector||/[<>]/.test(selector)))throw new Error("invalid_css_selector");
