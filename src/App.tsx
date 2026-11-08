@@ -321,6 +321,7 @@ export default function App() {
             </div>
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
+              <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
               <span>{exportReport.slideCount} diapositive{exportReport.slideCount > 1 ? "s" : ""} · {exportReport.mode === "faithful" ? "Rendu en images" : "Éléments éditables lorsque compatibles"}.</span>
               {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
                 <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
