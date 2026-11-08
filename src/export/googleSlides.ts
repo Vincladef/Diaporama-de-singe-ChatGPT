@@ -115,23 +115,67 @@ export async function uploadPowerPointToGoogleSlides(
 ): Promise<GoogleSlidesResult> {
   if (!accessToken) throw new Error("Autorisation Google manquante.");
   if (pptx.size < 800) throw new Error("Le PowerPoint est vide ou invalide.");
-  const boundary = "singe_" + crypto.randomUUID().replace(/-/g, "");
-  const body = makeGoogleUploadBody(pptx, name, boundary);
   let response: Response;
   try {
-    response = await fetcher(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + accessToken,
-          "Content-Type": "multipart/related; boundary=" + boundary,
+    if (pptx.size > 5_000_000) {
+      // Drive recommends resumable uploads for files above 5 MB.
+      // Google returns a one-use session URL; never store or display it.
+      const started = await fetcher(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType",
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Type": PPTX_MIME,
+            "X-Upload-Content-Length": String(pptx.size),
+          },
+          body: JSON.stringify({ name: name.trim().slice(0, 200) || "Présentation sans titre",
+            mimeType: GOOGLE_SLIDES_MIME }),
+          signal: AbortSignal.timeout(60000),
         },
-        body,
-        signal: AbortSignal.timeout(180000),
-      },
-    );
-  } catch {
+      );
+      if (!started.ok) {
+        response = started;
+      } else {
+        const location = started.headers.get("location");
+        if (!location) throw new Error(
+          "Google n'a pas fourni d'adresse de transfert. Vérifiez votre Drive avant de relancer.");
+        const target = new URL(location);
+        if (target.origin !== "https://www.googleapis.com" || target.pathname !== "/upload/drive/v3/files") {
+          throw new Error("Adresse de transfert Google invalide.");
+        }
+        response = await fetcher(location, {
+          method: "PUT",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": PPTX_MIME,
+            "Content-Range": "bytes 0-" + (pptx.size - 1) + "/" + pptx.size,
+          },
+          body: pptx,
+          signal: AbortSignal.timeout(180000),
+        });
+      }
+    } else {
+      const boundary = "singe_" + crypto.randomUUID().replace(/-/g, "");
+      const body = makeGoogleUploadBody(pptx, name, boundary);
+      response = await fetcher(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType",
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "multipart/related; boundary=" + boundary,
+          },
+          body,
+          signal: AbortSignal.timeout(180000),
+        },
+      );
+    }
+  } catch (cause) {
+    if (cause instanceof Error && (
+      cause.message.includes("transfert Google") ||
+      cause.message.includes("adresse de transfert"))) throw cause;
     throw new Error("Impossible de confirmer la conversion Google Slides. Vérifiez d'abord votre Drive pour éviter un doublon avant de réessayer.");
   }
   const result = await response.json().catch(() => null);
