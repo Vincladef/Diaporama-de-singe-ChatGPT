@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/domain/slide.test.ts src/engine/render.test.ts src/export/geometry.test.ts src/mcp/documents.test.ts src/mcp/security.test.ts src/editor/geometry.test.ts src/images/search.test.ts src/images/edit.test.ts src/variants/propose.test.ts src/animation/timeline.test.ts src/import/parse.test.ts src/quality/audit.test.ts src/mcp/visual.test.ts src/graphics/diagrams.test.ts src/images/curate.test.ts src/variants/compare.test.ts src/images/direct.test.ts src/export/preflight.test.ts src/mcp/history.test.ts"
+    "test": "node --experimental-strip-types --test src/domain/slide.test.ts src/engine/render.test.ts src/export/geometry.test.ts src/mcp/documents.test.ts src/mcp/security.test.ts src/editor/geometry.test.ts src/images/search.test.ts src/images/edit.test.ts src/variants/propose.test.ts src/animation/timeline.test.ts src/import/parse.test.ts src/quality/audit.test.ts src/mcp/visual.test.ts src/graphics/diagrams.test.ts src/images/curate.test.ts src/variants/compare.test.ts src/images/direct.test.ts src/export/preflight.test.ts src/mcp/history.test.ts src/export/googleSlides.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
