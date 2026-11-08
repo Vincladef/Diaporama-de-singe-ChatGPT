@@ -16,6 +16,8 @@ test("distinguishes editable text, mixed HTML and raster-only diagrams",()=>{
  assert.equal(report.rasterOnly,1);
  assert.equal(report.slides[0]?.notesPresent,true);
  assert.equal(report.googleSlides.directPublish,false);
+ assert.equal(report.googleSlides.webEditorPublish,true);
+ assert.equal(report.googleSlides.requiresOAuth,true);
 });
 test("flags CORS risks, non-native animation and aspect ratio changes",()=>{
  const a=createEmptySlideDocument(),b=createEmptySlideDocument();
