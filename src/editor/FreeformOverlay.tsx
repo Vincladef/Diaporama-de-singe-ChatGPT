@@ -152,7 +152,7 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     const element=activeElement.current;
     const win=element?.ownerDocument.defaultView;
     const value=element && win ? win.getComputedStyle(element).color : "rgb(32, 50, 40)";
-    const rgb=value.match(/rgba?\\(\\s*(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/i);
+    const rgb=value.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
     return rgb ? "#"+rgb.slice(1,4).map(x=>Math.min(255,Math.max(0,Number(x))).toString(16).padStart(2,"0")).join("") : "#203228";
   }
   function editHtml() {
