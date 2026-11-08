@@ -1,26 +1,25 @@
-import { describe, expect, it } from "vitest";
-import { SlideDocumentSchema, createEmptySlideDocument } from "./slide";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { SlideDocumentSchema, createEmptySlideDocument } from "./slide.ts";
 
-describe("versioned slide document", () => {
-  it("accepts an empty 16:9 document", () => {
-    const doc = createEmptySlideDocument();
-    expect(SlideDocumentSchema.parse(doc).canvas).toEqual({ width: 1920, height: 1080 });
-  });
+test("un document vierge est valide et au format 16:9", () => {
+  const doc = createEmptySlideDocument();
+  assert.deepEqual(SlideDocumentSchema.parse(doc).canvas, { width: 1920, height: 1080 });
+});
 
-  it("supports freeform HTML/CSS without discarding the structured data", () => {
-    const doc = { ...createEmptySlideDocument(), mode: "hybrid", freeform: { html: "<h1>Bonjour</h1>", css: "h1{font-size:4rem}" } };
-    expect(SlideDocumentSchema.parse(doc).freeform?.html).toContain("Bonjour");
-  });
+test("un document hybride autorise du HTML/CSS libre", () => {
+  const doc = { ...createEmptySlideDocument(), mode: "hybrid", freeform: { html: "<h1>Bonjour</h1>", css: "h1{font-size:4rem}" } };
+  assert.equal(SlideDocumentSchema.parse(doc).freeform?.html, "<h1>Bonjour</h1>");
+});
 
-  it("rejects unsupported schema versions", () => {
-    expect(() => SlideDocumentSchema.parse({ ...createEmptySlideDocument(), schemaVersion: 2 })).toThrow();
-  });
+test("une version inconnue est rejetée", () => {
+  assert.throws(() => SlideDocumentSchema.parse({ ...createEmptySlideDocument(), schemaVersion: 2 }));
+});
 
-  it("validates click-based animation steps", () => {
-    const doc = {
-      ...createEmptySlideDocument(),
-      animations: [{ id: "a1", targetElementId: "title", order: 0, trigger: "click", effect: "appear", durationMs: 300 }],
-    };
-    expect(SlideDocumentSchema.parse(doc).animations[0]?.trigger).toBe("click");
-  });
+test("les apparitions au clic sont modélisables", () => {
+  const doc = {
+    ...createEmptySlideDocument(),
+    animations: [{ id: "a1", targetElementId: "title", order: 0, trigger: "click", effect: "appear", durationMs: 300 }],
+  };
+  assert.equal(SlideDocumentSchema.parse(doc).animations[0]?.trigger, "click");
 });
