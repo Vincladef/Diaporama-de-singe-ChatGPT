@@ -41,6 +41,15 @@ export default async function workspace(request: Request): Promise<Response> {
         if (!p[0]) return result({ ok: false, error: "not_found" }, 404);
         return result({ ok: true, presentation: p[0], slides });
       }
+      if (operation === "revisions") {
+        const id=idSchema.parse(query.searchParams.get("id"));
+        const [deck, slides]=await Promise.all([
+          db.query("SELECT id::text AS id,title FROM public.presentations WHERE id=$1::uuid",[id]),
+          db.query("SELECT id::text AS id,position,revision FROM public.slides WHERE presentation_id=$1::uuid ORDER BY position LIMIT 500",[id]),
+        ]);
+        if(!deck[0])return result({ok:false,error:"not_found"},404);
+        return result({id:deck[0].id,title:deck[0].title,slides});
+      }
       return result({ ok: false, error: "unknown_operation" }, 400);
     }
     if (request.method !== "POST") return result({ ok: false, error: "method_not_allowed" }, 405);
@@ -95,6 +104,12 @@ export default async function workspace(request: Request): Promise<Response> {
           "UPDATE public.slides SET document=$2::jsonb, notes=$3, revision=revision+1, updated_at=now() WHERE id=$1::uuid AND revision=$4 RETURNING id::text AS id, revision, updated_at",
           [id, JSON.stringify(doc), notes, revision]);
         return rows[0] ? result({ ok: true, slide: rows[0] }) : result({ ok: false, error: "revision_conflict" }, 409);
+      }
+      case "reorderSlides": {
+        const id=idSchema.parse(data.presentationId);
+        const ids=z.array(idSchema).max(500).parse(data.orderedIds);
+        const rows=await db.query("SELECT public.mcp_reorder_slides($1::uuid,$2::uuid[]) AS reordered",[id,ids]);
+        return result({ok:true,reordered:rows[0]?.reordered??0});
       }
       case "deleteSlide": {
         const id = idSchema.parse(data.id);
