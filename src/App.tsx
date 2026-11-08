@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
+import { AnimationTimeline } from "./editor/AnimationTimeline";
+import { PresenterStudio } from "./presenter/PresenterStudio";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
@@ -30,6 +32,8 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
+  const [presenting,setPresenting]=useState(false);
+  const [animationPanelOpen,setAnimationPanelOpen]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [autoSave, setAutoSave] = useState(true);
