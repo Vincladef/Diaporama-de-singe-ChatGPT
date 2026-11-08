@@ -45,7 +45,7 @@ Les liens signés HTML/JSON donnent accès à la présentation pendant dix minut
 ## Limites actuelles
 
 Le serveur intègre maintenant `image_sources` et `search_images`. Openverse et Wikimedia fonctionnent sans clé ; Pexels et Unsplash demandent leurs secrets Netlify ; Google Images est accessible par URL externe ou par SerpApi lorsque `SERPAPI_API_KEY` est configurée. `place_image` remplace ou insère une image avec ses réglages sans recopier tout le document ; `generate_variants` enregistre trois directions graphiques. Pour des propositions originales issues du raisonnement de ChatGPT, continuer à utiliser `create_variants` avec des compositions HTML/CSS libres.
-La lecture d’animations au clic, la publication Google Slides directe et les animations exécutables restent à développer. L'éditeur graphique assure maintenant l'édition à la souris et la vérification périodique des révisions.
+La lecture d'animations au clic est développée et vérifiée en projection. Deux outils supplémentaires accélèrent les scénarios pédagogiques : `get_animation_plan` lit les clics et les étapes successives en réponse compacte ; `add_reveal_sequence` ajoute une série complète en un seul appel, en ciblant les objets par identifiant ou les éléments HTML libres par le préfixe `css:`. Le mode présentateur synchronise une fenêtre publique sans exposer les notes. La publication Google Slides directe et la conversion des animations en PPTX natif restent à développer. Voir `docs/ANIMATIONS.md`.
 Le protocole, la découverte OAuth, le DCR et l’émission du code d’autorisation ont été testés ; le cycle complet d’autorisation dans un plugin installé devra être validé par l’utilisateur après connexion.
 
 ## Tests
