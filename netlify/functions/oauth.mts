@@ -10,7 +10,7 @@ function escape(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function getClient(values: Record<string, string>) {
-  return { client: values.client_id, redirect: values.redirect_uri, challenge: values.code_challenge,
+  return { client: values.client_id ?? "", redirect: values.redirect_uri ?? "", challenge: values.code_challenge ?? "",
     state: values.state ?? "", scope: values.scope ?? SCOPES, resource: values.resource ?? RESOURCE };
 }
 async function validateClient(clientId: string, redirect: string): Promise<boolean> {
