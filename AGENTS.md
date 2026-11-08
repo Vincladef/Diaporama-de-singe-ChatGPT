@@ -22,4 +22,4 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 
 ## Phase du projet
 
-Étape 2 : moteur HTML/CSS libre et objets structurés, API privée Neon avec EDITOR_ACCESS_TOKEN, rendu sandboxé et éditeur de diapositives. Le serveur MCP, les exports, les animations exécutables et la manipulation avancée à la souris restent à développer.
+Étape 3 : moteur HTML/CSS libre, API Neon protégée, éditeur et exports PowerPoint en deux modes (visuel fidèle et objets modifiables). Google Slides fonctionne par import d'un PPTX. Le serveur MCP, l'OAuth Google direct, les animations exécutables et l'édition avancée à la souris restent à développer.
