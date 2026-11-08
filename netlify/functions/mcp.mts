@@ -23,7 +23,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.7.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.8.0",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -69,6 +69,55 @@ function createServer(request: Request): McpServer {
     {id:uuid,scope:z.enum(["outline","full"]).default("outline"),offset:z.number().int().min(0).default(0),
       limit:z.number().int().min(1).max(100).default(30)},false,
     async a=>getDeck(a.id,a.scope,a.offset,a.limit));
+
+  register("get_improvement_brief","Préparer l'amélioration d'une présentation",
+    "Summarize the COMPLETE slide deck for AI restyling in a single token-efficient call. Preserves important text, notes, source image origins and revision numbers without sending full HTML/CSS or embedded base64. Use before edit_slides and create_variants.",
+    {presentationId:uuid,maxCharsPerSlide:z.number().int().min(200).max(3000).default(900),
+      includeNotes:z.boolean().default(true)},false,
+    async a=>{
+      const deck=await getDeck(a.presentationId,"full",0,100);
+      if(deck.nextOffset!==null)throw new Error("brief_limit_100_slides");
+      const slides=deck.slides.map(s=>{
+        const html=s.document.freeform?.html??"";
+        const htmlText=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+          .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+          .replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+        const text=s.document.elements.filter(e=>e.type==="text").map(e=>e.text??"").join("\n").trim();
+        const images=s.document.elements.filter(e=>e.type==="image");
+        const domains=images.map(e=>{
+          try{return new URL(e.src??"").protocol==="data:"?"embedded":new URL(e.src??"").hostname;}
+          catch{return "unknown";}
+        });
+        return {id:s.id,revision:s.revision,position:s.position,
+          mode:s.document.mode,canvas:s.document.canvas,
+          text:(text+(htmlText?"\n"+htmlText:"")).slice(0,a.maxCharsPerSlide),
+          notes:a.includeNotes?s.notes.slice(0,700):undefined,
+          images:images.length,imageOrigins:[...new Set(domains)].slice(0,10),
+          editableElements:s.document.elements.length,
+          animations:s.document.animations.length};
+      });
+      return {presentation:{id:deck.presentation.id,title:deck.presentation.title},
+        slides,totalSlides:slides.length,
+        instruction:"Keep all intellectual content, numeric data, citations and notes unchanged; improve visual expression using HTML/CSS or structured layers, then apply with edit_slides and revision checks."};
+    });
+
+  register("make_visual_copy","Créer une copie graphique de toute la présentation",
+    "Create a NEW presentation from an existing deck using one of three deterministic graphic directions, preserving text, image URLs, HTML and notes. Source is never overwritten. For genuinely original AI design, use get_improvement_brief then edit_slides or create_variants.",
+    {presentationId:uuid,direction:z.enum(["immersive","editorial","typographic"]).default("editorial"),
+      title:z.string().min(1).max(180).optional()},true,
+    async a=>{
+      const source=await getDeck(a.presentationId,"full",0,100);
+      if(source.nextOffset!==null||source.slides.length>40)throw new Error("visual_copy_limit_40_slides");
+      const map={immersive:0,editorial:1,typographic:2} as const;
+      const styles=source.slides.map(s=>({
+        document:proposeGraphicVariants(s.document)[map[a.direction]]!.document,
+        notes:s.notes,
+      }));
+      const created=await createDeck(a.title??(source.presentation.title+" · "+a.direction).slice(0,180),
+        styles);
+      return {sourceId:a.presentationId,createdId:created.id,
+        slides:created.slides,direction:a.direction,originalPreserved:true};
+    });
 
   register("get_slide","Lire une diapositive",
     "Fetch a full slide, only its HTML/CSS, its structured elements, or a short summary to save tokens.",
