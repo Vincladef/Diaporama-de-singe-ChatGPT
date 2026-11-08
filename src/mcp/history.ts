@@ -28,11 +28,15 @@ export async function recordSlideHistory(items:SlideCheckpoint[]){
     "JOIN public.slides s ON s.id=x.slide_id::uuid RETURNING id",
     [JSON.stringify(payload)]);
   // Limit retained checkpoints to 60 per slide; named artistic variants are never removed.
-  await sql.query(
-    "DELETE FROM public.slide_variants WHERE id IN ("+
-    "SELECT id FROM (SELECT id,row_number() OVER (PARTITION BY slide_id ORDER BY created_at DESC,id DESC) AS rn "+
-    "FROM public.slide_variants WHERE slide_id=ANY($1::uuid[]) AND name LIKE 'Historique r%') x WHERE rn>60)",
-    [payload.map(x=>x.slide_id)]);
+  try{
+    await sql.query(
+      "DELETE FROM public.slide_variants WHERE id IN ("+
+      "SELECT id FROM (SELECT id,row_number() OVER (PARTITION BY slide_id ORDER BY created_at DESC,id DESC) AS rn "+
+      "FROM public.slide_variants WHERE slide_id=ANY($1::uuid[]) AND name LIKE 'Historique r%') x WHERE rn>60)",
+      [payload.map(x=>x.slide_id)]);
+  }catch(error){
+    console.warn("History pruning postponed:",error instanceof Error?error.message:String(error));
+  }
   return {saved:saved.length};
 }
 
