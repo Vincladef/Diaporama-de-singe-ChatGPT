@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptySlideDocument } from "../domain/slide.ts";
-import { compareOneVariant,fingerprint } from "./compare.ts";
+import { compareOneVariant } from "./compare.ts";
+import { fingerprint } from "../mcp/fingerprint.ts";
 test("variant report preserves source text, image urls and notes",()=>{
   const doc=createEmptySlideDocument();
   doc.elements=[{id:"headline",type:"text",text:"La connaissance",styles:{fontFamily:"Georgia",color:"#332A24"}},
