@@ -32,7 +32,7 @@ const asNumber=(x:unknown)=>typeof x==="number"&&Number.isFinite(x)?x:0;
 const asRecord=(x:unknown):Record<string,unknown>=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{};
 const asArray=(x:unknown):unknown[]=>Array.isArray(x)?x:[];
 
-async function retrieve(url:string, headers:Record<string,string>={},maxWait=6500):Promise<Record<string,unknown>>{
+async function retrieve(url:string, headers:Record<string,string>={},maxWait=12000):Promise<Record<string,unknown>>{
   const response=await fetch(url,{headers:{"Accept":"application/json","User-Agent":"DiaporamaDeSingeChatGPT/0.6 (personal presentation editor)",...headers},signal:AbortSignal.timeout(maxWait)});
   if(!response.ok)throw new Error("upstream_http_"+response.status);
   if(Number(response.headers.get("content-length")||0)>1_800_000)throw new Error("oversize_api_response");
