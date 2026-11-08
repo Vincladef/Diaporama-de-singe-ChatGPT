@@ -5,7 +5,8 @@
 export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation";
 export const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-const CLIENT_KEY = "diaporama-chatgpt-google-oauth-client-id";
+/** Public OAuth client ID associated with this application's authorized production origin. */
+const PUBLIC_GOOGLE_OAUTH_CLIENT_ID = "259896668724-htqe8i37ka5hnopjq3iqaiasuh47787o.apps.googleusercontent.com";
 
 type GoogleTokenResponse = { access_token?: string; error?: string; error_description?: string; scope?: string };
 type GoogleTokenClient = { requestAccessToken(options?: { prompt?: string }): void };
@@ -32,18 +33,12 @@ export function isValidGoogleClientId(value: string): boolean {
 }
 
 export function getGoogleClientId(): string {
-  const environment = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || "").trim();
-  if (typeof window === "undefined") return environment;
-  return window.localStorage.getItem(CLIENT_KEY)?.trim() || environment;
-}
-
-export function saveGoogleClientId(value: string): void {
-  if (!isValidGoogleClientId(value)) throw new Error("Identifiant client Google OAuth invalide.");
-  window.localStorage.setItem(CLIENT_KEY, value.trim());
+  // L'identifiant OAuth est public : configuré par l'éditeur, jamais saisi par l'utilisateur.
+  return (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || PUBLIC_GOOGLE_OAUTH_CLIENT_ID).trim();
 }
 
 export function requestGoogleDriveAccess(clientId: string): Promise<string> {
-  if (!isValidGoogleClientId(clientId)) throw new Error("Configurez un identifiant client OAuth Google valide.");
+  if (!isValidGoogleClientId(clientId)) throw new Error("La connexion Google n'est pas correctement configurée dans l'application.");
   const oauth = window.google?.accounts?.oauth2;
   if (!oauth) throw new Error("La connexion Google n'est pas encore chargée. Vérifiez les bloqueurs de scripts et réessayez.");
   return new Promise<string>((resolve, reject) => {
