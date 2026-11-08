@@ -46,7 +46,7 @@ function geometry(element: SlideElement, document: SlideDocument, slideW: number
 function canConvertToNative(element: SlideElement): boolean {
   if (!["text", "image", "shape"].includes(element.type)) return false;
   if (element.parentId) return false;
-  const effects = ["transform", "filter", "backdropFilter", "clipPath", "mask", "mixBlendMode", "backgroundImage", "boxShadow", "textShadow", "writingMode"];
+  const effects = ["transform", "filter", "backdropFilter", "clipPath", "mask", "mixBlendMode", "backgroundImage", "writingMode"];
   return !effects.some(key => element.styles[key] != null && element.styles[key] !== "");
 }
 
@@ -136,6 +136,9 @@ export async function exportPowerPoint(
       const image = await captureSlide(document);
       slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH, objectName: "Render " + number });
     } else {
+      if(document.elements.some(el=>el.styles.textShadow||el.styles.boxShadow)) {
+        warnings.push("Diapositive "+number+" : ombres CSS ignorées en mode objets modifiables, afin de conserver le texte éditable.");
+      }
       const unsupported = document.elements.some(element => !canConvertToNative(element));
       if (unsupported) {
         const image = await captureSlide(document);
