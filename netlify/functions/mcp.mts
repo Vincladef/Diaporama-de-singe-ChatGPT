@@ -16,6 +16,7 @@ import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from ".
 import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
+import { inspectExport } from "../../src/export/preflight";
 import { composeDocument, CompositionSchema, reviewDocument, repairDocument, type Composition } from "../../src/mcp/visual";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
@@ -639,11 +640,18 @@ function createServer(request: Request): McpServer {
     {presentationId:uuid,format:z.enum(["pptx","html","json"]).default("pptx"),
       mode:z.enum(["faithful","editable"]).default("faithful")},false,
     async a=>{
-      const deck=await getDeck(a.presentationId,"outline",0,1);
+      const deck=await getDeck(a.presentationId,"full",0,100);
+      if(deck.nextOffset!==null)throw new Error("export_limit_100_slides");
+      const exportPlan=inspectExport(deck.slides.filter((s):s is DbSlide=>"document" in s));
       const {sign}=await import("../../src/mcp/security");
       const editor=ORIGIN+"/?deck="+encodeURIComponent(a.presentationId)+"&export="+a.mode;
       if(a.format==="pptx") return {format:"pptx",mode:a.mode,presentation:deck.presentation,
-        editorUrl:editor,action:"Open the private editor, choose the export mode and click Télécharger PPTX. No server-side PPTX job has run."};
+        editorUrl:editor,preflight:{
+          slideCount:exportPlan.slideCount,fullyNative:exportPlan.fullyNative,
+          mixedEditable:exportPlan.mixedEditable,rasterOnly:exportPlan.rasterOnly,
+          totalRemoteImages:exportPlan.totalRemoteImages,animatedSlides:exportPlan.animatedSlides,
+          warnings:exportPlan.warnings,googleSlides:exportPlan.googleSlides
+        },action:"Open the private editor, choose the export mode and click Télécharger PPTX. No server-side PPTX job has run."};
       const expires=Date.now()+10*60*1000;
       const payload=[a.presentationId,a.format,expires].join(":");
       const ticket=Buffer.from(payload).toString("base64url")+"."+sign(payload);
