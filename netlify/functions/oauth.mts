@@ -145,7 +145,7 @@ export default async function handler(request: Request): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...common, "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "content-type,authorization" } });
     if (path.startsWith("/.well-known/oauth-protected-resource") && request.method === "GET")
       return json({ resource: RESOURCE, authorization_servers: [ORIGIN], scopes_supported: SCOPES.split(" "),
-        resource_documentation: ORIGIN + "/docs/mcp" });
+        resource_documentation: "https://github.com/Vincladef/Diaporama-de-singe-ChatGPT/blob/main/docs/MCP.md" });
     if (path === "/.well-known/oauth-authorization-server" && request.method === "GET")
       return json({ issuer: ORIGIN, authorization_endpoint: ORIGIN + "/oauth/authorize", token_endpoint: ORIGIN + "/oauth/token",
         registration_endpoint: ORIGIN + "/oauth/register", revocation_endpoint: ORIGIN + "/oauth/revoke",
