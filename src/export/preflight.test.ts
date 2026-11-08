@@ -30,3 +30,17 @@ test("flags CORS risks, non-native animation and aspect ratio changes",()=>{
  assert.ok(report.warnings.some(w=>w.includes("animations Web")));
  assert.ok(report.warnings.some(w=>w.includes("Format différent")));
 });
+
+test("freeform HTML is recognized as hybrid-editable and its photos counted",()=>{
+ const doc=createEmptySlideDocument();
+ doc.mode="freeform";
+ doc.freeform={
+  html:'<div><img src="https://example.org/beetle.jpg"><p>Un lucane</p></div>',
+  css:'div{background-image:url("https://example.org/forest.jpg")}',
+ };
+ const report=inspectExport([{document:doc}]);
+ assert.equal(report.rasterOnly,0);
+ assert.equal(report.mixedEditable,1);
+ assert.equal(report.totalRemoteImages,2);
+ assert.equal(report.slides[0]?.images,1);
+});
