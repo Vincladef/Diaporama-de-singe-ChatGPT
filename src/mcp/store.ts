@@ -214,7 +214,8 @@ export async function reviseVariant(
     [variantId,slideId,name,JSON.stringify(edited.document),edited.notes,
       JSON.stringify(current.document),current.notes,current.name]);
   if(!result[0])throw new Error("variant_conflict");
-  return {id:variantId,slideId,name,fingerprint:fingerprint({name,notes:edited.notes,document:edited.document}),
+  const saved=await getVariant(slideId,variantId);
+  return {id:variantId,slideId,name,fingerprint:saved.fingerprint,
     edited:true,activeSlideUnchanged:true};
 }
 
