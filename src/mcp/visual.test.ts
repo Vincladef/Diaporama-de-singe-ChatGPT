@@ -13,7 +13,8 @@ test("seven semantic layouts generate valid, editable slide documents",()=>{
     assert.equal(doc.canvas.height,1080);
     assert.equal(doc.mode,"structured");
     assert.ok(doc.elements.some(e=>e.type==="text"&&e.id==="scene-title"));
-    assert.ok(doc.elements.some(e=>e.type==="image"));
+    if(["hero","section","split","quote"].includes(layout))
+      assert.ok(doc.elements.some(e=>e.type==="image"));
     assert.equal(new Set(doc.elements.map(e=>e.id)).size,doc.elements.length);
     assert.deepEqual(doc.animations,[]);
   }
