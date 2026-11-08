@@ -3,6 +3,9 @@ import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./do
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
+import { ImageStudio } from "./editor/ImageStudio";
+import { VariantsStudio } from "./editor/VariantsStudio";
+import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
 import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
@@ -25,6 +28,8 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<InspectorTab>("design");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [imageStudioOpen,setImageStudioOpen]=useState(false);
+  const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [autoSave, setAutoSave] = useState(true);
@@ -208,6 +213,29 @@ export default function App() {
     };
     editDocument({ ...draft, mode: draft.mode === "freeform" ? "hybrid" : draft.mode, elements: [...draft.elements, element] });
     setTab("design");setSelectedIds([id]);
+  }
+  function chooseImage(photo:ImageCandidate) {
+    const doc=draftRef.current;
+    if(!doc||!current)return;
+    try{
+      if(new URL(photo.imageUrl).protocol!=="https:")throw Error("L'image doit utiliser une adresse HTTPS.");
+      const single=selectedIds.length===1?doc.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined;
+      const id=single?.id??crypto.randomUUID();
+      const next:SlideDocument=single?
+        {...doc,elements:doc.elements.map(e=>e.id===id?{...e,src:photo.imageUrl}:e)}:
+        {...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,
+          elements:[...doc.elements,{id,type:"image",src:photo.imageUrl,
+            styles:{left:"120px",top:"210px",width:"1000px",height:"600px",objectFit:"cover",objectPosition:"50% 50%"}}]};
+      editDocument(next,"photo");
+      setSelectedIds([id]);setTab("design");setImageStudioOpen(false);
+      void command(token,{action:"saveAssets",presentationId:current.presentation.id,assets:[{
+        url:photo.imageUrl,label:photo.title,source:photo.pageUrl,
+        rights:photo.attribution+" ; "+photo.license,
+      }]}).catch(()=>setError("Image insérée, mais sa référence n'a pas pu être ajoutée au catalogue."));
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+  }
+  function applyVariant(document:SlideDocument,variantNotes:string){
+    editDocument(document,"variant");setNotes(variantNotes);setSelectedIds([]);
   }
   function updateObject(id: string, patch: Partial<SlideElement>) {
     if (!draft) return;
