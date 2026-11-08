@@ -52,3 +52,12 @@ Les choix exacts du moteur d'animation, du rendu navigateur, du transport MCP di
 ## Limites de cette étape
 
 Pas encore de création de présentations dans l'interface, de moteur graphique complet, d'outil MCP, de recherche d'images, d'animations réelles ni d'export PPTX. L'étape 1 livre une application déployée, des contrats de domaine, une base prête et les contrôles techniques.
+
+## Étape 2 : moteur HTML/CSS et stockage
+
+- `src/engine/render.ts` produit le document HTML à partir du JSON versionné. Les modes structured, freeform et hybrid sont autorisés.
+- La prévisualisation est isolée dans une iframe `sandbox=""` avec une CSP interdisant les scripts, formulaires et connexions.
+- Les documents sont persistés dans `slides.document` ; la colonne `revision` assure le contrôle de concurrence (HTTP 409).
+- Toutes les opérations privées passent par `netlify/functions/workspace.mts` et vérifient le secret EDITOR_ACCESS_TOKEN.
+- Aucun utilisateur anonyme n'a accès à la lecture ou à l'écriture. Les images externes et polices Web nécessitent une connexion réseau.
+- L'éditeur manuel complet, les animations exécutables, le MCP et les exports restent des étapes ultérieures.
