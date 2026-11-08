@@ -22,4 +22,4 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 
 ## Phase du projet
 
-Étape 1 : architecture, deux tables minimales, application Web vide, endpoint de santé. Le moteur graphique, le MCP et les exports ne sont pas encore construits.
+Étape 2 : moteur HTML/CSS libre et objets structurés, API privée Neon avec EDITOR_ACCESS_TOKEN, rendu sandboxé et éditeur de diapositives. Le serveur MCP, les exports, les animations exécutables et la manipulation avancée à la souris restent à développer.
