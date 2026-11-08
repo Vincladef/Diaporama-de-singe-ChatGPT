@@ -100,8 +100,7 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
   function saveKeyframes(id:string){
     try{
       const json:unknown=JSON.parse(jsonText);
-      const steps=ordered.map(s=>s.id===id?{...s,effect:"custom" as const,keyframes:json}:s);
-      steps.forEach(s=>AnimationStepSchema.parse(s));
+      const steps=ordered.map(s=>s.id===id?AnimationStepSchema.parse({...s,effect:"custom",keyframes:json}):s);
       apply(steps);
       setEditingKeyframes(null);
     }catch{setError("Les keyframes doivent être un tableau JSON de 2 à 16 objets CSS.");}
