@@ -33,11 +33,15 @@ export interface PresentationDetail {
 }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, public readonly code: string) {
+  readonly status: number;
+  readonly code: string;
+  constructor(status: number, code: string) {
     super(code === "revision_conflict" ? "La diapositive a changé ailleurs. Actualisez pour éviter d'écraser la modification." :
       code === "unauthorized" ? "Code d’accès incorrect." :
       code === "access_not_configured" ? "L’accès privé n’est pas configuré sur Netlify." :
       "Erreur de l'application : " + code);
+    this.status = status;
+    this.code = code;
   }
 }
 const endpoint = "/.netlify/functions/workspace";
