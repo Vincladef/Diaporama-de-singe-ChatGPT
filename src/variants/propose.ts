@@ -51,7 +51,7 @@ function proposalFor(
   }
   return {name,description,document:doc};
 }
-export function proposeGraphicVariants(current:SlideDocument):ProposedVariant[]{
+export function proposeGraphicVariants(current:SlideDocument,count:3|4|5|6=3):ProposedVariant[]{
   const {width:W,height:H}=current.canvas;
   const hasFreeform=!!current.freeform?.html?.trim();
   const options:ProposedVariant[]=[];
@@ -111,7 +111,60 @@ export function proposeGraphicVariants(current:SlideDocument):ProposedVariant[]{
     "body{font-family:Arial,sans-serif !important}h1,h2{font-weight:800 !important;text-transform:uppercase;letter-spacing:-.04em;line-height:.96}img{object-fit:cover}",
     "#202A3B","#F8EBCB"));
 
+
+  options.push(proposalFor(current,"Atlas scientifique",
+    "Blanc de laboratoire, repères fins et hiérarchie analytique.",doc=>{
+      const title=firstText(doc.elements);
+      doc.elements=doc.elements.map(e=>{
+        if(title&&e.id===title.id)return style(e,{left:Math.round(W*.07)+"px",top:Math.round(H*.14)+"px",
+          width:Math.round(W*.82)+"px",fontSize:Math.round(H*.102)+"px",
+          color:"#152A35",fontFamily:"Arial, Helvetica, sans-serif",fontWeight:700});
+        if(e.type==="image"&&root(e))return style(e,{left:Math.round(W*.55)+"px",top:Math.round(H*.44)+"px",
+          width:Math.round(W*.38)+"px",height:Math.round(H*.43)+"px",objectFit:"cover"});
+        if(e.type==="text"&&root(e))return style(e,{color:"#2C444B",fontFamily:"Arial, Helvetica, sans-serif"});
+        return e;
+      });
+    },
+    "body{font-family:Arial,sans-serif !important}h1,h2{color:#152A35 !important;letter-spacing:-.025em}"+
+    "section,article{border-color:#BDCDD4}p{line-height:1.38}",
+    "#F3F7F7","#152A35"));
+
+  options.push(proposalFor(current,"Papier d'archives",
+    "Éditorial historique, ivoire et encre ; photographie sobre.",doc=>{
+      const title=firstText(doc.elements);
+      doc.elements=doc.elements.map(e=>{
+        if(title&&e.id===title.id)return style(e,{left:Math.round(W*.08)+"px",top:Math.round(H*.13)+"px",
+          width:Math.round(W*.76)+"px",fontSize:Math.round(H*.115)+"px",
+          fontFamily:"Georgia,serif",color:"#3D3027",fontWeight:600});
+        if(e.type==="image"&&root(e))return style(e,{left:Math.round(W*.59)+"px",
+          top:Math.round(H*.41)+"px",width:Math.round(W*.34)+"px",height:Math.round(H*.48)+"px",
+          objectFit:"cover",filter:"grayscale(70%) contrast(108%)"});
+        if(e.type==="text"&&root(e))return style(e,{color:"#514536",fontFamily:"Georgia,serif"});
+        return e;
+      });
+    },
+    "body{font-family:Georgia,serif !important}h1,h2{color:#3D3027 !important;line-height:1.08}"+
+    "p{line-height:1.5}img{filter:grayscale(.65)}",
+    "#EFE6D5","#3D3027"));
+
+  options.push(proposalFor(current,"Nocturne cinématographique",
+    "Contraste profond, photographie enveloppante et titres réservés.",doc=>{
+      const image=doc.elements.find(e=>root(e)&&e.type==="image");
+      doc.elements=doc.elements.map(e=>{
+        if(image&&e.id===image.id)return style(e,{left:"0px",top:"0px",width:W+"px",height:H+"px",
+          objectFit:"cover",filter:"brightness(58%) contrast(115%)"});
+        if(e.type==="text"&&root(e))return style(e,{left:Math.round(W*.09)+"px",
+          width:Math.round(W*.78)+"px",color:"#F2F0E9",
+          fontFamily:"Arial, Helvetica, sans-serif",fontWeight:600});
+        return e;
+      });
+      if(image)doc.elements=[doc.elements.find(e=>e.id===image.id)!,...doc.elements.filter(e=>e.id!==image.id)];
+    },
+    "body{font-family:Arial,sans-serif !important}h1,h2{color:#F2F0E9 !important;letter-spacing:-.03em}"+
+    "p{color:#D7DBE2;line-height:1.4}",
+    "#111A27","#F2F0E9"));
+
   // Do not rewrite raw HTML or invent text; where it exists all proposals remain freely editable.
   if(hasFreeform)for(const proposal of options)proposal.description+=" HTML original conservé.";
-  return options;
+  return options.slice(0,count);
 }
