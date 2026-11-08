@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { database } from "./security";
+import { fingerprint } from "../variants/compare";
 import { editSlide, initialSlide, summarizeSlide, type InitialSlide, type SlideOperation } from "./documents";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide";
 
@@ -168,6 +169,36 @@ export async function listVariants(slideId: string, full=false) {
   const cols=full?"id::text AS id,name,document,notes,created_at":"id::text AS id,name,created_at";
   return database().query("SELECT "+cols+" FROM public.slide_variants WHERE slide_id=$1::uuid ORDER BY created_at DESC LIMIT 50",[slideId]);
 }
+
+export async function getVariant(slideId:string,variantId:string){
+  uuid.parse(slideId);uuid.parse(variantId);
+  const rows=await database().query(
+    "SELECT id::text AS id,slide_id::text AS slide_id,name,document,notes,created_at FROM public.slide_variants WHERE slide_id=$1::uuid AND id=$2::uuid",
+    [slideId,variantId]);
+  const row=rows[0] as unknown as {id:string;slide_id:string;name:string;document:SlideDocument;notes:string;created_at:string}|undefined;
+  if(!row)throw new Error("variant_not_found");
+  const parsed={...row,document:SlideDocumentSchema.parse(row.document)};
+  return {...parsed,fingerprint:fingerprint(parsed)};
+}
+
+/** CAS update: the original JSON, name and notes must still match the previously inspected variant. */
+export async function reviseVariant(
+  slideId:string,variantId:string,expectedHash:string,operations:SlideOperation[],newName?:string
+){
+  if(!/^[0-9a-f]{64}$/.test(expectedHash))throw new Error("invalid_variant_fingerprint");
+  const current=await getVariant(slideId,variantId);
+  if(current.fingerprint!==expectedHash)throw new Error("variant_conflict");
+  const edited=editSlide(current.document,current.notes,operations);
+  const name=newName===undefined?current.name:short.min(1).parse(newName);
+  const result=await database().query(
+    "UPDATE public.slide_variants SET name=$3,document=$4::jsonb,notes=$5 WHERE id=$1::uuid AND slide_id=$2::uuid AND document=$6::jsonb AND notes=$7 AND name=$8 RETURNING id::text AS id",
+    [variantId,slideId,name,JSON.stringify(edited.document),edited.notes,
+      JSON.stringify(current.document),current.notes,current.name]);
+  if(!result[0])throw new Error("variant_conflict");
+  return {id:variantId,slideId,name,fingerprint:fingerprint({name,notes:edited.notes,document:edited.document}),
+    edited:true,activeSlideUnchanged:true};
+}
+
 export async function activateVariant(slideId: string, variantId: string, expectedRevision?: number) {
   uuid.parse(slideId);uuid.parse(variantId);
   const db=database();
