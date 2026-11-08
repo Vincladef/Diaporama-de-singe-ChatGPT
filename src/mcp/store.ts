@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { database } from "./security";
 import { fingerprint } from "./fingerprint";
-import { recordSlideHistory, listSlideHistory } from "./history";
+import { recordSlideHistory } from "./history";
 import { editSlide, initialSlide, summarizeSlide, type InitialSlide, type SlideOperation } from "./documents";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide";
 
@@ -244,7 +244,14 @@ export async function activateVariant(slideId: string, variantId: string, expect
     [slideId,JSON.stringify(doc),row.variant_notes,row.revision]);
   if(!updated[0])throw new Error("revision_conflict");
   // Archive the former slide, so the selection is reversible.
-  await db.query("INSERT INTO public.slide_variants(slide_id,name,document,notes) VALUES($1::uuid,$2,$3::jsonb,$4)",
-    [slideId,"Historique r"+row.revision+" · restauration",JSON.stringify(row.document),row.notes]);
-  return {slideId,revision:updated[0].revision,previousVersionSaved:true};
+  let checkpointSaved=true;
+  try{
+    await db.query("INSERT INTO public.slide_variants(slide_id,name,document,notes) VALUES($1::uuid,$2,$3::jsonb,$4)",
+      [slideId,"Historique r"+row.revision+" · restauration",JSON.stringify(row.document),row.notes]);
+  }catch(error){
+    console.error("Restore backup unavailable:",error instanceof Error?error.message:String(error));
+    checkpointSaved=false;
+  }
+  return {slideId,revision:updated[0].revision,previousVersionSaved:checkpointSaved,
+    ...(!checkpointSaved?{warning:"La version a été restaurée mais son état précédent n'a pas pu être archivé."}:{})};
 }
