@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { SlideDocument } from "../domain/slide.ts";
 import { reviewDocument } from "../mcp/visual.ts";
 
@@ -15,11 +14,6 @@ function texts(doc:SlideDocument):string[]{
 function images(doc:SlideDocument):string[]{
   return doc.elements.filter(e=>e.type==="image").map(e=>e.src??"").filter(Boolean).sort();
 }
-export function fingerprint(variant:VariantComparable):string{
-  return createHash("sha256").update(JSON.stringify({
-    name:variant.name,notes:variant.notes,document:variant.document
-  })).digest("hex");
-}
 export function compareOneVariant(baseline:VariantComparable,variant:VariantComparable){
   const doc=variant.document;
   const review=reviewDocument(doc);
@@ -30,7 +24,7 @@ export function compareOneVariant(baseline:VariantComparable,variant:VariantComp
   const colors=[...new Set(doc.elements.flatMap(e=>["color","background"].map(k=>String(e.styles[k]??"")))
     .filter(c=>/^#[0-9a-fA-F]{6}$/.test(c)))].slice(0,8);
   return {
-    id:variant.id,name:variant.name,fingerprint:fingerprint(variant),
+    id:variant.id,name:variant.name,
     preserves:{text:JSON.stringify(baseTexts)===JSON.stringify(otherTexts),
       imageUrls:JSON.stringify(baseImages)===JSON.stringify(otherImages),
       notes:baseline.notes===variant.notes},
