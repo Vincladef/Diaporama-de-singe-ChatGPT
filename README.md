@@ -14,7 +14,7 @@ Socle technique indépendant, développé exclusivement dans :
 - Neon PostgreSQL et migration initiale minimale à deux tables ;
 - fonction Netlify `GET /.netlify/functions/health` : vérifie réellement la connexion Neon et le schéma ;
 - configuration Netlify pour le déploiement depuis `main` ;
-- contrôles TypeScript et tests Vitest, GitHub Actions CI.
+- contrôles TypeScript et tests natifs Node.js, GitHub Actions CI.
 
 Les créations, exports, outils MCP et animations seront implémentés aux étapes ultérieures. **Aucune fonctionnalité fictive n'est affichée.**
 
