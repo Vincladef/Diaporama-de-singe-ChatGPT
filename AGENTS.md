@@ -27,3 +27,7 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 ## Étape 9
 
 Trois outils de haut niveau : `compose_slides`, `review_slides`, `repair_slides`. Utiliser l'aperçu signé et un navigateur pour juger la composition réelle avant toute retouche. `workspace_status` retourne `toolCount` et `toolNames` pour comparer le catalogue effectif au cache ChatGPT. Préserver les fonds plein cadre et HTML/CSS ; les corrections dangereuses nécessitent confirmation et révision. Les tests figurent dans `src/mcp/visual.test.ts`. Documentation : `docs/AI_STEP9.md`.
+
+## Étape 10
+
+Prioriser la variété éditoriale, les grandes images sourcées, les schémas explicatifs utiles et la préservation du contenu. Le MCP 0.10.0 ajoute `compose_diagrams`, `curate_images`, `apply_images`, `compare_variants`, `revise_variant` ; six directions visuelles sont disponibles. Les liens de prévisualisation signés peuvent viser les variantes enregistrées. Toujours contrôler les droits déclarés sur la page du fournisseur, et ne pas inventer de clés API. Voir `docs/CREATIVITY_STEP10.md`. Répertoire Codex strictement interdit.
