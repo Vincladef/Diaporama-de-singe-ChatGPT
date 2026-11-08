@@ -110,7 +110,7 @@ function createServer(request: Request): McpServer {
       if(source.nextOffset!==null||source.slides.length>40)throw new Error("visual_copy_limit_40_slides");
       const map={immersive:0,editorial:1,typographic:2} as const;
       const styles=source.slides.filter((s):s is DbSlide=>"document" in s).map(s=>({
-        document:proposeGraphicVariants(s.document)[map[a.direction]]!.document,
+        document:proposeGraphicVariants(s.document)[map[a.direction as keyof typeof map]]!.document,
         notes:s.notes,
       }));
       const created=await createDeck(a.title??(source.presentation.title+" · "+a.direction).slice(0,180),
