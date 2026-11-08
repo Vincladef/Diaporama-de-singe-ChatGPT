@@ -33,7 +33,7 @@ L'éditeur Web propose désormais le bouton **Exporter vers Google Slides**. Il 
 4. Import multipart/related `Drive API files.create` avec média PPTX et métadonnées `mimeType: application/vnd.google-apps.presentation`. Drive effectue la conversion native.
 5. Contrôle du MIME de réponse et affichage d'un lien vers la présentation Google Slides.
 
-Le premier usage requiert un **ID client OAuth Google de type Application Web**, une origine JavaScript autorisée (`https://diaporama-de-singe-chatgpt.netlify.app`) et l'activation de Google Drive API. L'utilisateur configure cet identifiant public dans l'éditeur ou via `VITE_GOOGLE_OAUTH_CLIENT_ID` lors du build Netlify. En mode test OAuth, son compte doit figurer parmi les utilisateurs de test.
+Le client OAuth Web de l'application est configuré par le développeur, dans le projet Google Cloud « Atelier Slides ChatGPT » (origine `https://diaporama-de-singe-chatgpt.netlify.app`, API Drive activée, audience externe en production). L'utilisateur final n'a **aucune configuration** à effectuer : il choisit son compte Google et autorise le droit minimal `drive.file`. Pour une installation distincte, définir `VITE_GOOGLE_OAUTH_CLIENT_ID` au build ou remplacer l'identifiant public par défaut. Aucun secret OAuth n'est distribué dans le JavaScript.
 
 Aucun jeton Google ou secret client n'est stocké dans Neon ni dans localStorage. L'application ne sollicite pas un accès général aux fichiers Drive. En cas d'incertitude réseau, elle ne répète pas l'import automatiquement, pour éviter les doublons.
 
