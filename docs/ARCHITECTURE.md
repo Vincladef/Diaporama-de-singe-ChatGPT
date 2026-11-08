@@ -79,3 +79,11 @@ Le domaine src/mcp/documents.ts applique des opérations ciblées sur les docume
 Le serveur fournit un catalogue de médias (liens seulement), des dossiers et des variantes de composition. Les téléchargements HTML/JSON utilisent des liens signés temporaires. Le téléchargement PowerPoint reste initié depuis l'éditeur navigateur, faute de capture HTML/CSS fiable côté serveur.
 
 Voir docs/MCP.md pour les outils, les limites et la procédure de connexion.
+
+## Étape 8 : import, amélioration et diagnostic
+
+`src/import/parse.ts` lit et valide les archives PPTX ainsi que les fichiers HTML/JSON ; `src/import/media.ts` adapte les images localement avant transfert ; `src/import/submit.ts` sérialise les diapositives en lots, avec retour arrière lorsque la sauvegarde échoue. Les nouvelles présentations sont créées dans Neon ChatGPT via l'API privée et peuvent ensuite être manipulées depuis l'éditeur ou le MCP sans conversion supplémentaire.
+
+`src/improve/ImprovementStudio.tsx` présente des variantes déterministes à l'échelle du diaporama. Le serveur MCP peut demander un brief compact et piloter une amélioration graphique libre. `src/quality/audit.ts` fournit le même diagnostic côté client et côté serveur ; aucun modèle opaque n'est impliqué dans cette vérification.
+
+Le format de référence demeure `SlideDocument` ; le HTML/CSS, les objets, les notes et les animations sont conservés dans les mêmes structures, sans ajouter de tables par copie du projet Codex. Voir `docs/INTEGRATION_IMPORT.md`.
