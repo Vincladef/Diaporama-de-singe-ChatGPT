@@ -91,6 +91,8 @@ Le réglage **« Étapes au clic »** (coché par défaut) garantit à présent 
 
 Une présentation de 4 diapositives contenant respectivement 2, 5, 9 et 11 clics produit ainsi 31 vues exportées. L'application d'origine demeure en 4 diapositives.
 
+Lorsque le fichier dépasse 5 Mo, la publication utilise désormais un **transfert Google Drive avec reprise** (création de session puis PUT binaire) au lieu du transfert multipart réservé aux petits fichiers. Le jeton OAuth reste en mémoire dans le navigateur et l'URL de session n'est jamais enregistrée ; aucun nouvel envoi automatique n'est effectué après un échec incertain.
+
 ## Étape 11 : vérification avant l'export
 
 Le modèle de prédiagnostic `src/export/preflight.ts` distingue les objets convertibles nativement, les compositions hybrides et les captures raster intégrales ; il repère les animations Web, images HTTPS externes et changements de proportions. L'éditeur vérifie les révisions distantes juste avant le PPTX. Le moteur d'export réutilise les images identiques durant une opération, avec bornes de téléchargement. Le MCP retourne les avertissements depuis `prepare_export`, sans prétendre créer le PowerPoint lui-même. L'import dans Google Slides reste celui d'un PPTX via Drive, sans publication automatique dans le compte Google.
