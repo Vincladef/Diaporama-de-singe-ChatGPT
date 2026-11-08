@@ -64,6 +64,14 @@ export async function listPresentations(token: string): Promise<DeckSummary[]> {
 export async function readPresentation(token: string, id: string): Promise<PresentationDetail> {
   return call<PresentationDetail>(token, { op: "presentation", id });
 }
+export interface DeckRevisions {
+  id: string;
+  title: string;
+  slides: { id:string;position:number;revision:number }[];
+}
+export async function readDeckRevisions(token:string,id:string):Promise<DeckRevisions>{
+  return call<DeckRevisions>(token,{op:"revisions",id});
+}
 export async function command<T>(token: string, action: Record<string, unknown>): Promise<T> {
   return call<T>(token, { action });
 }
