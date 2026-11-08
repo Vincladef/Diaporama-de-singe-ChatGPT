@@ -10,7 +10,7 @@ Projet indépendant de la version Codex.
 
 Ne jamais modifier le dépôt Codex, son site Netlify ni sa base Neon.
 
-## Étape 2 : moteur de présentation
+## Étapes 1 à 3 : moteur HTML/CSS et exports PowerPoint
 
 Fonctions disponibles : création, renommage et suppression de présentations ; ajout, duplication et suppression de diapositives ; édition HTML/CSS libre ; objets individuels texte, image et forme ; aperçu immédiat dans une iframe isolée ; notes ; sauvegarde et relecture dans Neon ; conflits de modification détectés par numéro de révision.
 
@@ -43,6 +43,10 @@ Tests automatiques : `npm run check`, `npm run test`, `npm run build` via GitHub
 
 ## Étapes suivantes
 
-Les exports PowerPoint/Google Slides, le MCP distant, la manipulation visuelle avancée, les galeries d'images et les animations au clic sont encore à développer. Le modèle conserve les animations mais leur exécution n'est pas implémentée.
+L'application exporte maintenant des fichiers PPTX en deux modes. Le mode « Visuel fidèle » insère une capture haute résolution de chaque diapositive ; le mode « Objets modifiables » préserve les éléments structurés natifs (textes, images et formes) et traite le HTML/CSS libre comme fond image. Les notes du présentateur sont conservées.
 
-Consulter `docs/ARCHITECTURE.md`.
+Pour Google Slides, téléchargez le PPTX puis importez-le dans Google Drive. La publication directe via OAuth n'est pas encore disponible.
+
+Le MCP distant, la manipulation visuelle avancée, les galeries d'images et les animations au clic restent à développer. Le modèle conserve les animations mais leur exécution n'est pas implémentée.
+
+Consulter `docs/ARCHITECTURE.md` et `docs/EXPORT.md` pour le détail des deux méthodes et de leurs limites.
