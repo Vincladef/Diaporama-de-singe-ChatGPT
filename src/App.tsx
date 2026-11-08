@@ -283,7 +283,7 @@ export default function App() {
         ) : (
           <div className="editing-area">
             <div className="editor-topline">
-              <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositives</span></div>
+              <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositive{current.slides.length > 1 ? "s" : ""}</span></div>
               <div className="save-row"><span className={dirty ? "dirty-indicator" : "saved-indicator"}>{statusText}</span><button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active}>Enregistrer</button></div>
             </div>
             <div className="editor-layout">
