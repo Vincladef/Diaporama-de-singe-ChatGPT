@@ -55,7 +55,7 @@ export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title,
     players.current[standby]?.dispose();
     players.current[standby] = null;
     setSlots(old => {
-      const next: [PlayableSlide | null, PlayableSlide | null] = [...old];
+      const next: [PlayableSlide | null, PlayableSlide | null] = [old[0], old[1]];
       next[standby] = slide;
       return next;
     });
