@@ -25,14 +25,19 @@ Le HTML/CSS libre reste un fond image ; les objets structurés sont superposés 
 
 ## Google Slides
 
-La voie mise en place est un fichier PPTX compatible avec l'import Google Slides.
+L'éditeur Web propose désormais le bouton **Exporter vers Google Slides**. Il suit ce parcours :
 
-1. Télécharger le PPTX dans Diaporama de singe.
-2. L'importer depuis Google Drive.
-3. Ouvrir le fichier avec Google Slides.
-4. Vérifier polices, images, recadrages et textes avant diffusion.
+1. Choix du mode PPTX fidèle/éditable et vérification des révisions Neon.
+2. Autorisation Google Identity Services (popup OAuth, scope minimal `drive.file`). Le jeton reste en mémoire.
+3. Génération du même PPTX validé par `buildPowerPoint`, sans téléchargement local.
+4. Import multipart/related `Drive API files.create` avec média PPTX et métadonnées `mimeType: application/vnd.google-apps.presentation`. Drive effectue la conversion native.
+5. Contrôle du MIME de réponse et affichage d'un lien vers la présentation Google Slides.
 
-La création directe dans le compte Google, l'OAuth et la synchronisation bidirectionnelle ne sont pas encore réalisés. Ils demandent les API Google Drive et Google Slides ainsi qu'une configuration d'authentification dédiée.
+Le premier usage requiert un **ID client OAuth Google de type Application Web**, une origine JavaScript autorisée (`https://diaporama-de-singe-chatgpt.netlify.app`) et l'activation de Google Drive API. L'utilisateur configure cet identifiant public dans l'éditeur ou via `VITE_GOOGLE_OAUTH_CLIENT_ID` lors du build Netlify. En mode test OAuth, son compte doit figurer parmi les utilisateurs de test.
+
+Aucun jeton Google ou secret client n'est stocké dans Neon ni dans localStorage. L'application ne sollicite pas un accès général aux fichiers Drive. En cas d'incertitude réseau, elle ne répète pas l'import automatiquement, pour éviter les doublons.
+
+Le MCP ne dispose pas encore d'un outil de publication Google Slides côté serveur. L'import manuel d'un PPTX reste disponible. Les contenus librement composés sont capturés en image et les animations Web ne sont pas exportées ; aucun aller-retour ni synchronisation bidirectionnelle n'est promis.
 
 ## Protection et fiabilité
 
