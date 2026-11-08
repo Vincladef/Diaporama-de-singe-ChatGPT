@@ -81,6 +81,18 @@ export function normalizePexels(json:Record<string,unknown>):ImageCandidate[]{
       attribution:(creator||"Photographe")+" · Pexels",width:asNumber(row.width),height:asNumber(row.height)}];
   });
 }
+export function normalizeGoogleImages(json:Record<string,unknown>):ImageCandidate[]{
+  return asArray(json.images_results).flatMap(value=>{
+    const row=asRecord(value),raw=allowedHttps(row.original),thumb=allowedHttps(row.thumbnail)||raw;
+    if(!raw||!thumb)return [];
+    const title=asString(row.title,160)||"Image Google",creator=asString(row.source,140);
+    return [{id:"google:"+asString(row.position,60)+":"+raw.slice(0,80),provider:"google" as const,
+      title,alt:title,previewUrl:thumb,imageUrl:raw,
+      pageUrl:allowedHttps(row.link)||"https://www.google.com/imghp",
+      creator,license:"Droits à vérifier sur le site source",attribution:creator||"Site source",
+      width:asNumber(row.original_width),height:asNumber(row.original_height)}];
+  });
+}
 export function normalizeUnsplash(json:Record<string,unknown>):ImageCandidate[]{
   return asArray(json.results).flatMap(value=>{
     const row=asRecord(value),urls=asRecord(row.urls),links=asRecord(row.links),user=asRecord(row.user);
@@ -95,6 +107,7 @@ export function normalizeUnsplash(json:Record<string,unknown>):ImageCandidate[]{
   });
 }
 const enabled=(s:ImageSource)=>s==="openverse"||s==="wikimedia"||
+  (s==="google"&&!!process.env.SERPAPI_API_KEY)||
   (s==="pexels"&&!!process.env.PEXELS_API_KEY)||
   (s==="unsplash"&&!!process.env.UNSPLASH_ACCESS_KEY);
 // Google Images does not offer a generally available REST image search for new API users in 2026.
@@ -104,7 +117,12 @@ export function getSourceStatuses(){
   }));
 }
 async function fromSource(source:ImageSource,req:ImageSearchRequest):Promise<ImageCandidate[]> {
-  if(source==="google")return []; // external link is always provided, no scraping.
+  if(source==="google"){
+    const key=process.env.SERPAPI_API_KEY;if(!key)return [];
+    const p=new URLSearchParams({engine:"google_images",q:query,ijn:String(page-1),api_key:key,hl:"fr",safe:"active"});
+    const images=normalizeGoogleImages(await retrieve("https://serpapi.com/search.json?"+p));
+    return images.slice(0,perSource);
+  }
   const {query,page,perSource,orientation}=req;
   if(source==="openverse"){
     const params=new URLSearchParams({q:query,page:String(page),page_size:String(perSource),mature:"false"});
@@ -137,7 +155,6 @@ export async function searchImages(input:ImageSearchRequest):Promise<ImageSearch
     .map(x=>[x,{enabled:enabled(x),status:"not_requested" as const,count:0}])) as ImageSearchResult["providers"];
   const sources=[...new Set(args.sources)];
   const found=await Promise.all(sources.map(async source=>{
-    if(source==="google"){statuses.google={enabled:false,status:"unavailable",count:0,reason:"Recherche Google Images externe : aucune API active."};return [];}
     if(!enabled(source)){statuses[source]={enabled:false,status:"unavailable",count:0,reason:"Clé API non configurée sur Netlify."};return [];}
     try{
       const images=await fromSource(source,args);
