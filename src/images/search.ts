@@ -117,13 +117,13 @@ export function getSourceStatuses(){
   }));
 }
 async function fromSource(source:ImageSource,req:ImageSearchRequest):Promise<ImageCandidate[]> {
+  const {query,page,perSource,orientation}=req;
   if(source==="google"){
     const key=process.env.SERPAPI_API_KEY;if(!key)return [];
     const p=new URLSearchParams({engine:"google_images",q:query,ijn:String(page-1),api_key:key,hl:"fr",safe:"active"});
     const images=normalizeGoogleImages(await retrieve("https://serpapi.com/search.json?"+p));
     return images.slice(0,perSource);
   }
-  const {query,page,perSource,orientation}=req;
   if(source==="openverse"){
     const params=new URLSearchParams({q:query,page:String(page),page_size:String(perSource),mature:"false"});
     if(orientation!=="any")params.set("aspect_ratio",orientation==="square"?"square":orientation==="landscape"?"wide":"tall");
