@@ -9,6 +9,7 @@ import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
+import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
@@ -37,6 +38,7 @@ export default function App() {
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
+  const [qualityOpen,setQualityOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
@@ -482,6 +484,7 @@ export default function App() {
                 <span className={dirty||externalChanges ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
                 <label className="auto-save-option"><input type="checkbox" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)}/> Auto</label>
                 <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
+                <button className="subtle-btn" onClick={()=>setQualityOpen(true)} disabled={!current.slides.length}>✓ Vérifier</button>
                 <button className="subtle-btn present-action" onClick={()=>setPresenting(true)} disabled={!current.slides.length}>▶ Présenter</button>
                 <label className="export-mode-label" htmlFor="export-mode">Export
                   <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
@@ -578,6 +581,16 @@ export default function App() {
           </div>
         )}
 
+        {qualityOpen&&current&&<QualityStudio
+          detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
+            {...s,document:draft,notes}:s)}}
+          onClose={()=>setQualityOpen(false)}
+          onFocus={index=>{
+            const next=current.slides[index];
+            if(!next)return;
+            if(next.id!==slideId){if(!confirmLeave())return;pickSlide(next);}
+            setQualityOpen(false);
+          }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
