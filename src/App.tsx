@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { renderSlideHtml } from "./engine/render";
+import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
 import { ApiError, command, listPresentations, readPresentation, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
 const SESSION_KEY = "diaporama-chatgpt-owner-token";
@@ -52,6 +53,10 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+  const [exportMode, setExportMode] = useState<PowerPointMode>("faithful");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
+  const [exportReport, setExportReport] = useState<ExportReport | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -223,6 +228,21 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function downloadPowerPoint() {
+    if (!current || exportBusy) return;
+    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
+    setExportBusy(true); setExportReport(null); setExportProgress("Préparation…"); setError("");
+    try {
+      const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
+        setExportProgress("Diapositive " + completed + "/" + total));
+      setExportReport(report);
+      setExportProgress("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
+      setExportProgress("");
+    } finally { setExportBusy(false); }
+  }
+
   const active = current?.slides.find(s => s.id === slideId);
   const chosen = draft?.elements.find(e => e.id === selected);
   const statusText = dirty ? "Modifications non enregistrées" : "Enregistré";
@@ -284,8 +304,29 @@ export default function App() {
           <div className="editing-area">
             <div className="editor-topline">
               <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositive{current.slides.length > 1 ? "s" : ""}</span></div>
-              <div className="save-row"><span className={dirty ? "dirty-indicator" : "saved-indicator"}>{statusText}</span><button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active}>Enregistrer</button></div>
+              <div className="save-row">
+                <span className={dirty ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
+                <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
+                <label className="export-mode-label" htmlFor="export-mode">Export
+                  <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
+                    onChange={e => setExportMode(e.target.value as PowerPointMode)}>
+                    <option value="faithful">Visuel fidèle</option>
+                    <option value="editable">Objets modifiables</option>
+                  </select>
+                </label>
+                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || dirty || !current.slides.length}>
+                  {exportBusy ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
+                </button>
+              </div>
             </div>
+            {exportReport && <div className="export-report" role="status">
+              <strong>PowerPoint prêt : {exportReport.fileName}</strong>
+              <span>{exportReport.slideCount} diapositive{exportReport.slideCount > 1 ? "s" : ""} · {exportReport.mode === "faithful" ? "Rendu en images" : "Éléments éditables lorsque compatibles"}.</span>
+              {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
+                <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+              </details>}
+              <span>Pour Google Slides, importez ce fichier PPTX dans <a target="_blank" rel="noopener noreferrer" href="https://drive.google.com/drive/u/0/my-drive">Google Drive</a>, puis ouvrez-le avec Google Slides. L'édition directe dans votre compte Google n'est pas encore connectée.</span>
+            </div>}
             <div className="editor-layout">
               <aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
