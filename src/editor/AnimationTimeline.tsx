@@ -172,6 +172,28 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
           <button aria-label={"Descendre étape "+(i+1)} disabled={i===ordered.length-1} onClick={()=>move(step.id,i+1)}>↓</button>
           <button aria-label={"Supprimer étape "+(i+1)} onClick={()=>apply(ordered.filter(x=>x.id!==step.id))}>×</button>
         </div>
+        <details className="timeline-cue-extra">
+          <summary>Options de cette étape</summary>
+          <div className="timeline-cue-extra-fields">
+            <label>Délai (ms)<input type="number" min={0} max={30000} step={50}
+              value={step.delayMs??0}
+              onChange={e=>patch(step.id,{delayMs:Math.min(30000,Math.max(0,Number(e.target.value)||0))})}/></label>
+            <label>Rythme<select value={step.easing??"ease-out"}
+              onChange={e=>patch(step.id,{easing:e.target.value as NonNullable<AnimationStep["easing"]>})}>
+              <option value="linear">Linéaire</option>
+              <option value="ease-out">Ralentir à la fin</option>
+              <option value="ease-in">Accélérer</option>
+              <option value="ease-in-out">Doux au début et à la fin</option>
+              <option value="ease">Standard</option>
+            </select></label>
+            {step.effect==="move"&&<>
+              <label>Déplacement horizontal (px)<input type="number" min={-4096} max={4096}
+                value={step.offsetX??0} onChange={e=>patch(step.id,{offsetX:Number(e.target.value)||0})}/></label>
+              <label>Déplacement vertical (px)<input type="number" min={-4096} max={4096}
+                value={step.offsetY??72} onChange={e=>patch(step.id,{offsetY:Number(e.target.value)||0})}/></label>
+            </>}
+          </div>
+        </details>
         {step.effect==="custom"&&<div className="timeline-keyframes">
           <button className="timeline-advanced-toggle" onClick={()=>{
             setEditingKeyframes(editingKeyframes===step.id?null:step.id);
