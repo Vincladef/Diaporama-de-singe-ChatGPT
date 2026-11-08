@@ -435,7 +435,8 @@ export default function App() {
             <div className="editor-topline">
               <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositive{current.slides.length > 1 ? "s" : ""}</span></div>
               <div className="save-row">
-                <span className={dirty ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
+                <span className={dirty||externalChanges ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
+                <label className="auto-save-option"><input type="checkbox" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)}/> Auto</label>
                 <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
                 <label className="export-mode-label" htmlFor="export-mode">Export
                   <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
@@ -449,6 +450,10 @@ export default function App() {
                 </button>
               </div>
             </div>
+            {externalChanges && <div className="external-banner" role="alert"><strong>Modifications détectées depuis le MCP ou un autre onglet.</strong>
+              <span>Enregistrez ailleurs les changements en cours avant de recharger.</span>
+              <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
+            </div>}
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
               <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
@@ -462,10 +467,14 @@ export default function App() {
               <aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
                 {current.slides.map((s, i) =>
-                  <button key={s.id} className={"slide-tile " + (s.id === slideId ? "selected" : "")} onClick={() => {
+                  <button key={s.id} draggable className={"slide-tile " + (s.id === slideId ? "selected" : "")}
+                    onDragStart={e=>{e.dataTransfer.setData("text/x-singe-slide",s.id);e.dataTransfer.effectAllowed="move";}}
+                    onDragOver={e=>e.preventDefault()}
+                    onDrop={e=>{e.preventDefault();const source=e.dataTransfer.getData("text/x-singe-slide");if(source)void reorderSlide(source,s.id);}}
+                    onClick={() => {
                     if (confirmLeave()) pickSlide(s);
                   }}>
-                    <div className="slide-mini">{String(i + 1).padStart(2, "0")}</div>
+                    <div className="slide-mini"><SlideThumbnail document={s.document} index={i+1}/></div>
                     <span>Diapositive {i + 1}</span>
                   </button>
                 )}
@@ -476,58 +485,45 @@ export default function App() {
               </aside>
               <section className="editor-main">
                 {draft ? <>
-                  <div className="section-caption"><span>APERÇU · {draft.canvas.width} × {draft.canvas.height}</span><span>HTML/CSS</span></div>
-                  <Canvas document={draft} />
-                  <div className="canvas-footer">Aperçu isolé : JavaScript désactivé. Les modifications s'affichent immédiatement.</div>
+                  <div className="visual-toolbar">
+                    <div className="visual-toolbar-group">
+                      <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
+                      <button onClick={()=>addObject("image")} title="Insérer une image">+ Image</button>
+                      <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
+                    </div>
+                    <div className="visual-toolbar-group">
+                      <button onClick={undo} disabled={historyRef.current.undo.length===0} title="Annuler (Ctrl+Z)">↶</button>
+                      <button onClick={redo} disabled={historyRef.current.redo.length===0} title="Rétablir (Ctrl+Y)">↷</button>
+                      <button onClick={copySelection} disabled={!selectedIds.length} title="Dupliquer (Ctrl+D)">⧉</button>
+                      <button onClick={removeSelection} disabled={!selectedIds.length} title="Supprimer (Suppr)">⌫</button>
+                    </div>
+                    <div className="visual-toolbar-group">
+                      <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
+                        onChange={e=>{if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
+                        <option value="">Aligner</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
+                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option>
+                      </select>
+                    </div>
+                    <div className="visual-toolbar-group visual-toolbar-zoom">
+                      <button aria-label="Réduire le zoom" onClick={()=>setZoom(z=>Math.max(.5,Math.round((z-.1)*10)/10))}>−</button>
+                      <span>{Math.round(zoom*100)} %</span>
+                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(2.5,Math.round((z+.1)*10)/10))}>+</button>
+                    </div>
+                  </div>
+                  <div className="section-caption"><span>DIAPOSITIVE · {draft.canvas.width} × {draft.canvas.height}</span>
+                    <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
+                  </div>
+                  <VisualCanvas document={draft} selectedIds={selectedIds} onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid}/>
+                  <div className="canvas-footer">Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments.</div>
                   <div className="notes-row">
                     <label htmlFor="slide-notes">Notes du présentateur</label>
-                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { setNotes(e.target.value); setDirty(true); }} placeholder="Notes facultatives…" />
+                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;setNotes(e.target.value); setDirty(true); }} placeholder="Notes facultatives…" />
                   </div>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft && <aside className="inspector">
-                <div className="inspector-heading">Composition</div>
-                <div className="editor-tabs">
-                  <button className={tab === "html" ? "current" : ""} onClick={() => setTab("html")}>HTML</button>
-                  <button className={tab === "css" ? "current" : ""} onClick={() => setTab("css")}>CSS</button>
-                  <button className={tab === "elements" ? "current" : ""} onClick={() => setTab("elements")}>Objets</button>
-                </div>
-                {tab === "html" && <div className="property-panel">
-                  <label htmlFor="html-editor">Code HTML de la diapositive</label>
-                  <textarea id="html-editor" className="code-editor" spellCheck={false}
-                    placeholder="<h1>Votre composition</h1>" value={draft.freeform?.html ?? ""}
-                    onChange={e => updateFreeform("html", e.target.value)} />
-                  <p className="field-help">Structure libre. Le HTML est rendu dans un cadre sécurisé.</p>
-                </div>}
-                {tab === "css" && <div className="property-panel">
-                  <label htmlFor="css-editor">Styles CSS libres</label>
-                  <textarea id="css-editor" className="code-editor" spellCheck={false}
-                    placeholder="h1 { font-size: 100px; }" value={draft.freeform?.css ?? ""}
-                    onChange={e => updateFreeform("css", e.target.value)} />
-                  <p className="field-help">Toutes les compositions CSS sont possibles ; les scripts restent désactivés.</p>
-                </div>}
-                {tab === "elements" && <div className="property-panel">
-                  <div className="object-buttons">
-                    <button onClick={() => addObject("text")}>+ Texte</button>
-                    <button onClick={() => addObject("image")}>+ Image</button>
-                    <button onClick={() => addObject("shape")}>+ Forme</button>
-                  </div>
-                  <div className="object-list">
-                    {draft.elements.map(item => <button key={item.id} className={selected === item.id ? "selected" : ""}
-                      onClick={() => setSelected(item.id)}>{item.type === "text" ? "Texte" : item.type === "image" ? "Image" : item.type === "shape" ? "Forme" : item.type} · {item.id.slice(0, 8)}</button>)}
-                  </div>
-                  {chosen && <>
-                    {chosen.type === "text" && <label>Texte <textarea rows={3} value={chosen.text ?? ""} onChange={e => updateObject(chosen.id, { text: e.target.value })} /></label>}
-                    {chosen.type === "image" && <label>Adresse de l'image <input type="url" value={chosen.src ?? ""} onChange={e => updateObject(chosen.id, { src: e.target.value })} /></label>}
-                    {(["left", "top", "width", "height", "fontSize", "color", "backgroundColor"] as const).map(prop =>
-                      <label key={prop}>{({ left: "Gauche", top: "Haut", width: "Largeur", height: "Hauteur", fontSize: "Taille du texte", color: "Couleur", backgroundColor: "Fond" })[prop]}
-                        <input value={String(chosen.styles[prop] ?? "")} placeholder="Ex. 120px" onChange={e => updateObject(chosen.id, { styles: { ...chosen.styles, [prop]: e.target.value } })} /></label>
-                    )}
-                    <button className="subtle-btn danger-text" onClick={() => deleteObject(chosen.id)}>Supprimer cet objet</button>
-                  </>}
-                  {draft.elements.length === 0 && <p className="field-help">Ajoutez un objet pour le modifier individuellement ; HTML/CSS reste entièrement libre.</p>}
-                </div>}
-              </aside>}
+              {draft && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
+                onChange={editDocument} tab={tab} onTabChange={setTab}
+                onAdd={addObject} onDelete={removeSelection} onArrange={arrangeSelection}/>}
             </div>
           </div>
         )}
