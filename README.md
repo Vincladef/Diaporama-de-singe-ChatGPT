@@ -45,9 +45,9 @@ Tests automatiques : `npm run check`, `npm run test`, `npm run build` via GitHub
 
 L'application exporte maintenant des fichiers PPTX en deux modes. Le mode « Visuel fidèle » insère une capture haute résolution de chaque diapositive ; le mode « Objets modifiables » préserve les éléments structurés natifs (textes, images et formes) et traite le HTML/CSS libre comme fond image. Les notes du présentateur sont conservées.
 
-Pour Google Slides, téléchargez le PPTX puis importez-le dans Google Drive. La publication directe via OAuth n'est pas encore disponible.
+Pour Google Slides, l'éditeur dispose d'un bouton « Exporter vers Google Slides » qui utilise un client OAuth Google et l'API Drive. Un identifiant client public doit être configuré avant le premier usage ; le MCP ne publie pas encore directement.
 
-Le MCP distant propose plus de vingt outils, OAuth PKCE et opérations groupées atomiques. L'authentification finale dans ChatGPT nécessite une connexion approuvée par l'utilisateur. L'éditeur visuel (étape 5) offre le déplacement, le redimensionnement, les calques, le clavier et la synchronisation par révisions. L'étape 6 ajoute la galerie d'images Openverse et Wikimedia, les réglages photo et les variantes comparables. Google Images est accessible par lien externe, ou via SerpApi avec une clé. Pexels et Unsplash nécessitent également leurs clés. L'étape 7 ajoute une chronologie sans code, les apparitions progressives au clic, les séquences automatiques, les animations CSS ciblées et une console de projection avec notes et fenêtre publique synchronisée. La conversion de ces animations en PowerPoint natif, le mode entièrement hors ligne avec médias externes et la création directe Google Slides restent à développer.
+Le MCP distant propose plus de vingt outils, OAuth PKCE et opérations groupées atomiques. L'authentification finale dans ChatGPT nécessite une connexion approuvée par l'utilisateur. L'éditeur visuel (étape 5) offre le déplacement, le redimensionnement, les calques, le clavier et la synchronisation par révisions. L'étape 6 ajoute la galerie d'images Openverse et Wikimedia, les réglages photo et les variantes comparables. Google Images est accessible par lien externe, ou via SerpApi avec une clé. Pexels et Unsplash nécessitent également leurs clés. L'étape 7 ajoute une chronologie sans code, les apparitions progressives au clic, les séquences automatiques, les animations CSS ciblées et une console de projection avec notes et fenêtre publique synchronisée. La conversion des animations en PowerPoint natif et le mode entièrement hors ligne restent à développer ; l'export Google Slides via l'éditeur nécessite un identifiant OAuth Google.
 
 Consulter `docs/ARCHITECTURE.md`, `docs/EXPORT.md` et `docs/MCP.md` pour le détail des deux méthodes et de leurs limites.
 
@@ -82,3 +82,16 @@ Moteur de diagrammes et cartes mentales (`compose_diagrams`), six directions gra
 ## Étape 11 : finalisation et restauration
 
 L'éditeur et le serveur MCP conservent désormais des points de restauration des diapositives dans Neon ; le bouton **Historique** permet de les parcourir, les prévisualiser et restaurer une version, avec contrôle des révisions. L'éditeur HTML/CSS peut s'agrandir ; les changements distants sont détectés régulièrement et un brouillon en conflit peut être exporté sous forme de JSON directement réimportable. L'export PowerPoint vérifie l'état distant et présente une analyse de compatibilité des modes visuel et éditable ; la projection dispose d'un écran noir synchronisé (B), d'un saut de diapositive (G) et d'un chronomètre contrôlable. La photothèque accepte le collage direct des images Google Images sans prétendre en extraire les résultats sans API. Le serveur publie **39 outils MCP** en version 0.11.0. Voir [l'audit final et les limites](docs/FINALISATION_STEP11.md).
+
+## Publication Google Slides depuis l'éditeur
+
+Après avoir enregistré le diaporama, choisir « Visuel fidèle » ou « Objets modifiables », puis cliquer sur « Exporter vers Google Slides ». Le bouton génère un PPTX validé **sans le télécharger**, propose de choisir un compte Google, le transmet à l'API Drive et convertit directement le fichier en présentation Google Slides. Un lien « Ouvrir la présentation Google Slides » apparaît en cas de succès.
+
+**Première configuration** (une seule fois sur ce navigateur) :
+
+1. Dans [Google Cloud, Google Auth platform](https://console.cloud.google.com/auth/clients), configurer l'écran de consentement OAuth et créer un **ID client de type Application Web**.
+2. Activer l'[API Google Drive](https://console.cloud.google.com/apis/library/drive.googleapis.com).
+3. Ajouter `https://diaporama-de-singe-chatgpt.netlify.app` comme **origine JavaScript autorisée** ; en mode test, ajouter son compte Gmail comme utilisateur de test.
+4. Coller **uniquement l'identifiant client public** (`…apps.googleusercontent.com`) dans la fenêtre du bouton. L'éditeur l'enregistre localement ; aucun secret ni jeton d'accès n'est conservé. Une autre possibilité consiste à définir `VITE_GOOGLE_OAUTH_CLIENT_ID` (variable de **build**, non secrète) sur Netlify, puis redéployer.
+
+Le droit OAuth demandé est seulement `https://www.googleapis.com/auth/drive.file`. Une nouvelle présentation est créée à chaque export ; aucune présentation existante n'est écrasée. L'authentification Google se produit dans le navigateur de l'utilisateur. Le résultat utilise les limites du moteur PPTX : HTML/CSS rasterisé en mode fidèle, animations Web non transposées. Cette fonctionnalité **ne remplace pas** une publication MCP sans navigateur.
