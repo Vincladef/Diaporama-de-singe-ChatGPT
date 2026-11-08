@@ -73,7 +73,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
       el.style.height=box.h+"px";
     }
   }
-  function begin(e: PointerEvent<HTMLDivElement>, id: string, mode: TransformMode) {
+  function begin(e: PointerEvent<HTMLElement>, id: string, mode: TransformMode) {
     if (readOnly || editId) return;
     e.preventDefault();
     e.stopPropagation();
@@ -95,7 +95,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     gesture.current={pointerId:e.pointerId,x:e.clientX,y:e.clientY,mode,initial,latest:initial,moved:false};
     e.currentTarget.setPointerCapture(e.pointerId);
   }
-  function move(e: PointerEvent<HTMLDivElement>) {
+  function move(e: PointerEvent<HTMLElement>) {
     const g=gesture.current;
     if (!g || e.pointerId!==g.pointerId) return;
     e.preventDefault();
@@ -109,7 +109,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     updateIframePreview(next);
     setLive(next);
   }
-  function end(e:PointerEvent<HTMLDivElement>) {
+  function end(e:PointerEvent<HTMLElement>) {
     const g=gesture.current;
     if (!g || e.pointerId!==g.pointerId) return;
     e.stopPropagation();
@@ -194,6 +194,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
               color:String(chosen.styles.color??"#203127"),
               textAlign:(["left","center","right"].includes(String(chosen.styles.textAlign)) ? String(chosen.styles.textAlign) : "left") as "left" | "center" | "right",
             }}
+            onPointerDown={e=>e.stopPropagation()}
             value={editValue} onChange={e=>setEditValue(e.target.value)}
             onBlur={commitInlineEdit}
             onKeyDown={e=>{e.stopPropagation();if(e.key==="Escape"){setEditId(null);}if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commitInlineEdit();}}}
