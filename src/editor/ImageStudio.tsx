@@ -1,5 +1,5 @@
 import { useEffect,useState } from "react";
-import { searchImages, type ImageCandidate, type ImageSearchResult, type ImageSource } from "../images/search";
+import type { ImageCandidate, ImageSearchResult, ImageSource } from "../images/search";
 import type { SlideElement } from "../domain/slide";
 
 type Props={
@@ -66,9 +66,9 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
           <button type="submit" className="primary" disabled={loading||query.trim().length<2}>{loading?"Recherche…":"Rechercher"}</button>
         </form>
         <div className="studio-sources">
-          {ALL.filter(s=>s!=="google").map(s=><label key={s} className="studio-source">
+          {ALL.map(s=><label key={s} className="studio-source">
             <input type="checkbox" checked={sources.includes(s)} onChange={()=>toggle(s)}/>
-            {titles[s]}
+            {s==="google"?"Google Images (API facultative)":titles[s]}
           </label>)}
           <a target="_blank" rel="noopener noreferrer" href={googleLink} className="studio-google-link">Google Images ↗</a>
         </div>
@@ -76,7 +76,7 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
           {error&&<div role="alert" className="error-line">{error}</div>}
           {result&&<div className="studio-notes">
             <span>{result.images.length} images sur cette page</span>
-            {Object.entries(result.providers).filter(([s])=>s!=="google"&&sources.includes(s as ImageSource)).map(([name,s])=>
+            {Object.entries(result.providers).filter(([s])=>sources.includes(s as ImageSource)).map(([name,s])=>
               <span key={name} className={s.status==="ok"?"source-ok":"source-warning"}>{titles[name as ImageSource]} : {s.status==="ok"?s.count:s.reason??s.status}</span>)}
           </div>}
           {result?.images.length ? <div className="image-gallery">
