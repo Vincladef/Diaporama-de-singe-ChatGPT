@@ -255,3 +255,11 @@
  .presenter-controls span{display:none}
  .presenter-controls{height:50px}
 }
+
+
+.timeline-cue-extra{margin:0 0 0 35px;padding-top:2px;font-size:11px;color:#6d856f}
+.timeline-cue-extra summary{cursor:pointer;list-style:disclosure-closed;color:#55745e}
+.timeline-cue-extra[open] summary{margin-bottom:8px}
+.timeline-cue-extra-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 13px;border:1px solid #e7efe7;background:#fafcf9;border-radius:6px;padding:11px}
+.timeline-cue-extra-fields label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:#657a68}
+.timeline-cue-extra-fields input,.timeline-cue-extra-fields select{border:1px solid #d7e4d7;border-radius:5px;font-size:12px;padding:7px;background:white;min-width:0}
