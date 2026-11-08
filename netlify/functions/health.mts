@@ -13,13 +13,15 @@ export default async function health(request: Request): Promise<Response> {
   try {
     const sql = neon(url);
     const [row] = await sql`
-      SELECT to_regclass('public.presentations') IS NOT NULL AS presentations,
+      SELECT current_database() = 'diaporama_singe_chatgpt' AS isolated,
+             to_regclass('public.presentations') IS NOT NULL AS presentations,
              to_regclass('public.slides') IS NOT NULL AS slides
     `;
     return Response.json({
       ok: true,
       database: "connected",
       schema: row?.presentations && row?.slides ? "ready" : "incomplete",
+      isolated: row?.isolated === true,
       service: "diaporama-de-singe-chatgpt",
     }, { headers });
   } catch {
