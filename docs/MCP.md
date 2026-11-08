@@ -83,3 +83,7 @@ Le serveur 0.9.0 publie **32 outils**. `workspace_status` retourne le nombre et 
 ## Étape 10 : composition graphique
 
 Le serveur 0.10.0 publie **37 outils**, dont `compose_diagrams`, `curate_images`, `apply_images`, `compare_variants`, `revise_variant`. `generate_variants` accepte maintenant `count` (3 à 6 ; défaut 6). Les diagrammes génèrent des textes éditables et des liaisons SVG ; les variantes peuvent être comparées par métriques et aperçus signés, puis modifiées sans activer la nouvelle version. Les trois sources commerciales demandent toujours leurs clés Netlify ; Openverse et Wikimedia restent accessibles sans clé. Référence complète : [CREATIVITY_STEP10.md](CREATIVITY_STEP10.md).
+
+## Étape 11 : historique et export fiable
+
+Le serveur 0.11.0 expose 39 outils dont `list_slide_history` et `restore_slide_revision`. L'historique conserve l'état précédent des modifications déjà enregistrées (jusqu'à 60 entrées par diapositive). La restauration exige une révision récente, protège les changements concurrents et archive normalement la version remplacée. `prepare_export` fournit désormais un diagnostic succinct de compatibilité PPTX/Google Slides. L'éditeur et le MCP partagent les points de restauration conservés dans la base Neon ChatGPT. Une modification SQL transactionnelle plus forte exigerait une migration distincte ; l'état de cette limite figure dans [FINALISATION_STEP11.md](FINALISATION_STEP11.md).

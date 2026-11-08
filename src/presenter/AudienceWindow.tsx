@@ -10,7 +10,8 @@ type Message={
   title?:string;
   slides?:Show["slides"];
   position?:PlaybackPosition;
-  command?:"next"|"previous";
+  blackout?:boolean;
+  command?:"next"|"previous"|"toggleBlackout";
 };
 /** Public display receives a transient slide snapshot from its same-origin presenter tab.
  * It never receives the editor key, personal notes, or direct Neon access.
@@ -23,6 +24,7 @@ export function AudienceWindow(){
   const channel=useRef<BroadcastChannel|null>(null);
   const loaded=useRef(false);
   const [busy,setBusy]=useState(false);
+  const [blackout,setBlackout]=useState(false);
   const busyRef=useRef(busy);busyRef.current=busy;
   useEffect(()=>{
     if(!/^[a-f0-9-]{36}$/i.test(sessionId))return;
@@ -37,9 +39,11 @@ export function AudienceWindow(){
         loaded.current=true;
         setShow({title:message.title??"Présentation",slides:content});
         if(message.position)setPosition(message.position);
+        setBlackout(Boolean(message.blackout));
         setEnded(false);
       }else if(message.type==="state"&&message.position){
         setPosition(message.position);
+        setBlackout(Boolean(message.blackout));
       }else if(message.type==="close"){
         loaded.current=false;setShow(null);setEnded(true);
       }
@@ -51,7 +55,7 @@ export function AudienceWindow(){
     const timer=window.setInterval(hello,1200);
     return()=>{window.clearInterval(timer);ch.close();channel.current=null;};
   },[sessionId]);
-  function command(action:"next"|"previous"){
+  function command(action:"next"|"previous"|"toggleBlackout"){
     if(busyRef.current)return;
     channel.current?.postMessage({type:"command",sessionId,command:action} satisfies Message);
   }
@@ -61,6 +65,8 @@ export function AudienceWindow(){
         event.preventDefault();command("next");
       }else if(["ArrowLeft","PageUp","Backspace"].includes(event.key)){
         event.preventDefault();command("previous");
+      }else if(event.key.toLowerCase()==="b"&&!event.ctrlKey){
+        event.preventDefault();command("toggleBlackout");
       }else if(event.key.toLowerCase()==="f"&&!event.ctrlKey){
         event.preventDefault();if(!document.fullscreenElement)void document.documentElement.requestFullscreen().catch(()=>{});
       }
@@ -74,6 +80,8 @@ export function AudienceWindow(){
       <ProjectionStage key={active.id} slide={active} reveal={position.reveal}
         onAdvance={()=>command("next")} onBusyChange={setBusy}
         title={show.title+" · diapositive "+(position.slide+1)}/>
+      {blackout&&<div role="status" aria-label="Écran noir" onClick={()=>command("toggleBlackout")}
+        style={{position:"fixed",inset:0,background:"#000",zIndex:20,cursor:"pointer"}}/>}
       <div className="audience-bottom">
         <button onClick={()=>command("previous")} aria-label="Précédent">←</button>
         <span>{position.slide+1} / {show.slides.length}</span>

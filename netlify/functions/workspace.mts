@@ -2,7 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { z, ZodError } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/slide";
-import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets } from "../../src/mcp/store";
+import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets, activateVariant } from "../../src/mcp/store";
+import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -41,6 +42,11 @@ export default async function workspace(request: Request): Promise<Response> {
         ]);
         if (!p[0]) return result({ ok: false, error: "not_found" }, 404);
         return result({ ok: true, presentation: p[0], slides });
+      }
+      if (operation === "history") {
+        const id=idSchema.parse(query.searchParams.get("id"));
+        const limit=z.coerce.number().int().min(1).max(30).parse(query.searchParams.get("limit")??"20");
+        return result({ok:true,...await listSlideHistory(id,limit,true)});
       }
       if (operation === "revisions") {
         const id=idSchema.parse(query.searchParams.get("id"));
@@ -116,10 +122,38 @@ export default async function workspace(request: Request): Promise<Response> {
         const revision = z.number().int().min(1).parse(data.revision);
         const doc = SlideDocumentSchema.parse(data.document);
         const notes = notesSchema.parse(data.notes ?? "");
+        const before=await db.query(
+          "SELECT document,notes,revision FROM public.slides WHERE id=$1::uuid AND revision=$2",
+          [id,revision]);
+        if(!before[0])return result({ok:false,error:"revision_conflict"},409);
         const rows = await db.query(
           "UPDATE public.slides SET document=$2::jsonb, notes=$3, revision=revision+1, updated_at=now() WHERE id=$1::uuid AND revision=$4 RETURNING id::text AS id, revision, updated_at",
           [id, JSON.stringify(doc), notes, revision]);
-        return rows[0] ? result({ ok: true, slide: rows[0] }) : result({ ok: false, error: "revision_conflict" }, 409);
+        if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+        let historyWarning:string|undefined;
+        try{
+          await recordSlideHistory([{slideId:id,revision,document:SlideDocumentSchema.parse(before[0].document),
+            notes:String(before[0].notes??""),origin:"éditeur"}]);
+        }catch(e){
+          console.error("History snapshot failed:",e instanceof Error?e.message:String(e));
+          historyWarning="Enregistré, mais l'instantané précédent n'a pas été conservé.";
+        }
+        return result({ok:true,slide:rows[0],...(historyWarning?{historyWarning}:{})});
+      }
+      case "restoreSlideHistory": {
+        const slideId=idSchema.parse(data.slideId),checkpointId=idSchema.parse(data.checkpointId);
+        const revision=z.number().int().min(1).parse(data.revision);
+        const exists=await listSlideHistory(slideId,60,false);
+        if(!exists.items.some(r=>r.id===checkpointId))
+          return result({ok:false,error:"history_not_found"},404);
+        try{
+          const restored=await activateVariant(slideId,checkpointId,revision);
+          return result({ok:true,...restored});
+        }catch(e){
+          if(e instanceof Error&&e.message.includes("revision_conflict"))
+            return result({ok:false,error:"revision_conflict"},409);
+          throw e;
+        }
       }
       case "reorderSlides": {
         const id=idSchema.parse(data.presentationId);

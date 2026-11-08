@@ -2,6 +2,7 @@ import pptxgen from "pptxgenjs";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import type { PresentationDetail } from "../lib/api";
 import { captureSlide } from "./capture";
+import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 
 export type PowerPointMode = "faithful" | "editable";
@@ -13,20 +14,36 @@ function getNumber(style: SlideElement["styles"], key: string, reference: number
 }
 function safeNotes(value: string): string { return value.slice(0, 30000); }
 
-async function imageToDataUrl(src: string): Promise<string> {
+async function fetchImageData(src: string): Promise<string> {
   if (/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src)) return src;
   if (!/^https:\/\//i.test(src)) throw new Error("Seules les images HTTPS ou intégrées en data URL sont prises en charge.");
-  const response = await fetch(src, { mode: "cors", credentials: "omit" });
+  const response = await fetch(src, { mode: "cors", credentials: "omit",
+    signal:AbortSignal.timeout(18000) });
   if (!response.ok) throw new Error("Impossible de récupérer l'image : HTTP " + response.status);
+  if(Number(response.headers.get("content-length")??0)>18_000_000)
+    throw new Error("Cette image dépasse 18 Mo ; réduisez-la avant l'export.");
   const type = response.headers.get("content-type")?.split(";")[0] ?? "";
   if (!/^image\/(?:png|jpe?g|gif|webp)$/i.test(type)) throw new Error("Format d'image non compatible avec PowerPoint : " + type);
   const blob = await response.blob();
+  if(blob.size>18_000_000)throw new Error("Cette image dépasse 18 Mo ; réduisez-la avant l'export.");
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Image non lisible"));
     reader.onerror = () => reject(new Error("Image non lisible"));
     reader.readAsDataURL(blob);
   });
+}
+
+async function imageToDataUrl(src:string,cache:Map<string,Promise<string>>):Promise<string>{
+  const known=cache.get(src);
+  if(known)return known;
+  const job=fetchImageData(src);
+  cache.set(src,job);
+  if(cache.size>20){
+    const oldest=cache.keys().next().value;
+    if(oldest&&oldest!==src)cache.delete(oldest);
+  }
+  try{return await job;}catch(error){cache.delete(src);throw error;}
 }
 
 function geometry(element: SlideElement, document: SlideDocument, slideW: number, slideH: number) {
@@ -43,20 +60,13 @@ function geometry(element: SlideElement, document: SlideDocument, slideW: number
     h: pptxInches(Math.max(hPx, 1), document.canvas.height, slideH),
   };
 }
-function canConvertToNative(element: SlideElement): boolean {
-  if (!["text", "image", "shape"].includes(element.type)) return false;
-  if (element.parentId) return false;
-  const effects = ["transform", "filter", "backdropFilter", "clipPath", "mask", "mixBlendMode", "backgroundImage", "writingMode"];
-  return !effects.some(key => element.styles[key] != null && element.styles[key] !== "");
-}
-
 /**
  * Editable conversion of documented structured objects.
  * Arbitrary HTML/CSS remains a screenshot. This is a deliberate compatibility boundary.
  */
 async function appendNativeObjects(
   pptx: pptxgen, slide: ReturnType<pptxgen["addSlide"]>, document: SlideDocument,
-  slideW: number, slideH: number,
+  slideW: number, slideH: number,cache:Map<string,Promise<string>>,
 ): Promise<void> {
   for (const element of document.elements) {
     const box = geometry(element, document, slideW, slideH);
@@ -83,7 +93,7 @@ async function appendNativeObjects(
       });
     } else if (element.type === "image") {
       if (!element.src) continue;
-      const data = await imageToDataUrl(element.src);
+      const data = await imageToDataUrl(element.src,cache);
       const fit = element.styles.objectFit;
       if (fit === "cover" || fit === "contain") {
         slide.addImage({ data, ...box, objectName: element.id, sizing: { type: fit, w: box.w, h: box.h } });
@@ -119,6 +129,12 @@ export async function exportPowerPoint(
   pptx.title = deck.presentation.title;
   pptx.company = "Diaporama de singe";
   const warnings: string[] = [];
+  const preflight=inspectExport(deck.slides);
+  const imageCache=new Map<string,Promise<string>>();
+  if(preflight.animatedSlides)warnings.push(preflight.animatedSlides+
+    " diapositive(s) comportent des animations Web ; leur chronologie n'est pas exportée vers PowerPoint.");
+  if(preflight.totalRemoteImages)warnings.push(
+    "Les photos externes dépendent de la politique CORS de leurs hébergeurs. En cas de blocage, utilisez un média librement téléchargeable.");
 
   for (let index = 0; index < deck.slides.length; index++) {
     const source = deck.slides[index]!;
@@ -139,7 +155,7 @@ export async function exportPowerPoint(
       if(document.elements.some(el=>el.styles.textShadow||el.styles.boxShadow)) {
         warnings.push("Diapositive "+number+" : ombres CSS ignorées en mode objets modifiables, afin de conserver le texte éditable.");
       }
-      const unsupported = document.elements.some(element => !canConvertToNative(element));
+      const unsupported = document.elements.some(element => !isNativePptxObject(element));
       if (unsupported) {
         const image = await captureSlide(document);
         slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH });
@@ -152,7 +168,7 @@ export async function exportPowerPoint(
           slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH });
           warnings.push("Diapositive " + number + " : HTML/CSS libre conservé comme fond image. Les objets structurés restent modifiables.");
         }
-        await appendNativeObjects(pptx, slide, document, slideW, slideH);
+        await appendNativeObjects(pptx, slide, document, slideW, slideH,imageCache);
       }
     }
     onProgress?.({ completed: number, total: deck.slides.length });

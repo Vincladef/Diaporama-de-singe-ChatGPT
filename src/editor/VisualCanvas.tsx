@@ -58,7 +58,18 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     setEditId(null);
   },[doc.canvas.width,doc.canvas.height]);
   const fit = Math.max(0.02, (width / doc.canvas.width) * zoom);
-  const srcDoc=useMemo(()=>renderSlideHtml(doc),[doc]);
+  const [previewDoc,setPreviewDoc]=useState(doc);
+  useEffect(()=>{
+    // Code typing changes only freeform markup; defer iframe rebuilding while
+    // the user types. Structured dragging and image edits remain immediate.
+    const codeOnly=doc.elements===previewDoc.elements&&doc.animations===previewDoc.animations
+      &&doc.canvas===previewDoc.canvas&&doc.mode===previewDoc.mode
+      &&doc.freeform!==previewDoc.freeform;
+    if(!codeOnly){setPreviewDoc(doc);return;}
+    const timer=window.setTimeout(()=>setPreviewDoc(doc),220);
+    return()=>window.clearTimeout(timer);
+  },[doc]);
+  const srcDoc=useMemo(()=>renderSlideHtml(previewDoc),[previewDoc]);
   const canvasHeight = doc.canvas.height * fit;
 
   function updateIframePreview(boxes: Record<string,Box>) {

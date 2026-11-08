@@ -76,6 +76,24 @@ export interface DeckRevisions {
 export async function readDeckRevisions(token:string,id:string):Promise<DeckRevisions>{
   return call<DeckRevisions>(token,{op:"revisions",id});
 }
+export interface HistoryCheckpoint {
+  id:string;name:string;created_at:string;notes:string;document:SlideDocument;
+}
+export async function readSlideHistory(token:string,slideId:string,limit=20):
+  Promise<{ok:true;slideId:string;items:HistoryCheckpoint[];count:number}> {
+  const url=new URL(endpoint,window.location.origin);
+  url.searchParams.set("op","history");
+  url.searchParams.set("id",slideId);
+  url.searchParams.set("limit",String(Math.min(Math.max(limit,1),30)));
+  const response=await fetch(url,{cache:"no-store",headers:{Authorization:"Bearer "+token}});
+  const data:unknown=await response.json();
+  if(!response.ok){
+    const error=typeof data==="object"&&data&&"error" in data?String(data.error):"unknown";
+    throw new ApiError(response.status,error);
+  }
+  return data as {ok:true;slideId:string;items:HistoryCheckpoint[];count:number};
+}
+
 export async function command<T>(token: string, action: Record<string, unknown>): Promise<T> {
   return call<T>(token, { action });
 }

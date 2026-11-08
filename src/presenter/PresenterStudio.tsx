@@ -7,9 +7,9 @@ import { SlideThumbnail } from "../editor/SlideThumbnail";
 type Props={detail:PresentationDetail;initialSlideId?:string|null;onClose:()=>void};
 type Message=
   |{type:"hello";sessionId:string}
-  |{type:"init";sessionId:string;title:string;slides:{id:string;document:PresentationDetail["slides"][number]["document"]}[];position:PlaybackPosition}
-  |{type:"state";sessionId:string;position:PlaybackPosition}
-  |{type:"command";sessionId:string;command:"next"|"previous"}
+  |{type:"init";sessionId:string;title:string;slides:{id:string;document:PresentationDetail["slides"][number]["document"]}[];position:PlaybackPosition;blackout:boolean}
+  |{type:"state";sessionId:string;position:PlaybackPosition;blackout:boolean}
+  |{type:"command";sessionId:string;command:"next"|"previous"|"toggleBlackout"}
   |{type:"close";sessionId:string};
 function formatSeconds(value:number):string{
   const s=Math.max(0,value);
@@ -27,6 +27,10 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
   const busyRef=useRef(false);
   busyRef.current=busy;
   const [seconds,setSeconds]=useState(0);
+  const [timerPaused,setTimerPaused]=useState(false);
+  const [blackout,setBlackout]=useState(false);
+  const blackoutRef=useRef(false);
+  blackoutRef.current=blackout;
   const [popupOpen,setPopupOpen]=useState(false);
   const [error,setError]=useState("");
   const popup=useRef<Window|null>(null);
@@ -58,21 +62,23 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
       if(data.type==="hello"){
         ch.postMessage({type:"init",sessionId:sid,title:snapshot.title,
           slides:snapshot.slides.map(s=>({id:s.id,document:s.document})),
-          position:posRef.current} satisfies Message);
+          position:posRef.current,blackout:blackoutRef.current} satisfies Message);
       }else if(data.type==="command"){
         if(data.command==="next")next();
         if(data.command==="previous")previous();
+        if(data.command==="toggleBlackout")setBlackout(value=>!value);
       }
     };
     return()=>{ch.close();channel.current=null;};
   },[sid,snapshot,next,previous]);
   useEffect(()=>{
-    channel.current?.postMessage({type:"state",sessionId:sid,position} satisfies Message);
-  },[position,sid]);
+    channel.current?.postMessage({type:"state",sessionId:sid,position,blackout} satisfies Message);
+  },[position,blackout,sid]);
   useEffect(()=>{
+    if(timerPaused)return;
     const clock=window.setInterval(()=>setSeconds(v=>v+1),1000);
     return()=>window.clearInterval(clock);
-  },[]);
+  },[timerPaused]);
   useEffect(()=>{
     const handle=(event:KeyboardEvent)=>{
       const target=event.target;
@@ -88,6 +94,16 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
           reveal:buildPlaybackPlan(docs[snapshot.slides.length-1]!.animations).clicks.length}));
       }else if(event.key.toLowerCase()==="f"&&!event.ctrlKey&&!event.metaKey){
         event.preventDefault();if(!document.fullscreenElement)void modal.current?.requestFullscreen().catch(()=>{});
+      }else if(event.key.toLowerCase()==="b"&&!event.ctrlKey&&!event.metaKey){
+        event.preventDefault();setBlackout(value=>!value);
+      }else if(event.key.toLowerCase()==="g"&&!event.ctrlKey&&!event.metaKey){
+        event.preventDefault();
+        const requested=window.prompt("Aller à la diapositive (1 à "+snapshot.slides.length+")",String(posRef.current.slide+1));
+        if(requested!==null){
+          const index=Number(requested)-1;
+          if(Number.isInteger(index)&&index>=0&&index<snapshot.slides.length)
+            setPosition({slide:index,reveal:0});
+        }
       }else if(event.key==="Escape"&&!document.fullscreenElement){
         event.preventDefault();close();
       }
@@ -111,6 +127,10 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
         <span>Diapositive {position.slide+1} / {snapshot.slides.length} · apparition {position.reveal} / {groupCount}</span></div>
       <div className="presenter-top-actions">
         <span className="presenter-clock" aria-label="Durée de présentation">{formatSeconds(seconds)}</span>
+        <button className="subtle-btn" onClick={()=>setTimerPaused(value=>!value)}>{timerPaused?"Reprendre":"Pause"}</button>
+        <button className="subtle-btn" onClick={()=>setSeconds(0)} title="Remettre le chronomètre à zéro">↺</button>
+        <button className="subtle-btn" onClick={()=>setBlackout(value=>!value)}
+          aria-pressed={blackout}>{blackout?"Rallumer l'écran":"Écran noir (B)"}</button>
         <button className="subtle-btn" onClick={openProjection}>{popupOpen?"Réouvrir l'écran public":"Ouvrir l'écran public"}</button>
         <button className="subtle-btn" onClick={()=>void modal.current?.requestFullscreen().catch(()=>{})}>Plein écran</button>
         <button className="subtle-btn" onClick={close} aria-label="Quitter la présentation">Quitter</button>
@@ -120,6 +140,8 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
       <div className="presenter-main-stage">
         <ProjectionStage key={active.id} slide={active} reveal={position.reveal} onAdvance={next}
           onBusyChange={setBusy} title={"Diapositive "+(position.slide+1)}/>
+        {blackout&&<div aria-label="Écran public noir" style={{position:"absolute",inset:"0 0 52px",background:"#000",
+          pointerEvents:"none",zIndex:3}}/>}
         <div className="presenter-controls">
           <button aria-label="Étape précédente" onClick={previous} disabled={busy||(position.slide===0&&position.reveal===0)}>← Précédent</button>
           <span>{busy?"Animation en cours…":position.reveal<groupCount?"Cliquez pour révéler l'idée suivante":"Avancer vers la diapositive suivante"}</span>
@@ -139,7 +161,7 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
         </section>
         <section className="presenter-shortcuts">
           <span className="presenter-overline">RACCOURCIS</span>
-          <p>→ ou Espace : révéler / avancer<br/>← : revenir<br/>F : plein écran<br/>Échap : quitter</p>
+          <p>→ ou Espace : révéler / avancer<br/>← : revenir<br/>G : aller à une diapositive<br/>B : écran noir<br/>F : plein écran<br/>Échap : quitter</p>
           {popupOpen&&<p>La fenêtre publique affiche uniquement les diapositives. Les notes restent ici.</p>}
           {error&&<p role="alert" className="presenter-error">{error}</p>}
         </section>

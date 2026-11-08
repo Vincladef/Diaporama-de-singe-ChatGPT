@@ -31,3 +31,7 @@ Trois outils de haut niveau : `compose_slides`, `review_slides`, `repair_slides`
 ## Étape 10
 
 Prioriser la variété éditoriale, les grandes images sourcées, les schémas explicatifs utiles et la préservation du contenu. Le MCP 0.10.0 ajoute `compose_diagrams`, `curate_images`, `apply_images`, `compare_variants`, `revise_variant` ; six directions visuelles sont disponibles. Les liens de prévisualisation signés peuvent viser les variantes enregistrées. Toujours contrôler les droits déclarés sur la page du fournisseur, et ne pas inventer de clés API. Voir `docs/CREATIVITY_STEP10.md`. Répertoire Codex strictement interdit.
+
+## Étape 11
+
+Le projet ChatGPT possède désormais un historique persistant, un éditeur HTML/CSS agrandi, un export PPTX soumis à contrôle des révisions et une synchronisation renforcée, ainsi qu'un mode de projection B/G et une photothèque Google Images sans clé via URL manuelle. Le serveur MCP 0.11.0 publie 39 outils. Un checkpoint d'historique est conservé après chaque sauvegarde réussie, avec avertissement possible en cas d'échec indépendant. Les éditions HTML/CSS et les médias restent des créations libres ; ne pas promettre une conversion parfaite en Google Slides, une publication directe Google ni une extraction automatique d'images Google. Référence : docs/FINALISATION_STEP11.md. Codex strictement hors périmètre.
