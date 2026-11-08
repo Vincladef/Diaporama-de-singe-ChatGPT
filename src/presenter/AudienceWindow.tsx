@@ -77,7 +77,7 @@ export function AudienceWindow(){
   const active=show?.slides[position.slide];
   return <main className="audience-root">
     {show&&active?<>
-      <ProjectionStage key={active.id} slide={active} reveal={position.reveal}
+      <ProjectionStage slide={active} reveal={position.reveal}
         onAdvance={()=>command("next")} onBusyChange={setBusy}
         title={show.title+" · diapositive "+(position.slide+1)}/>
       {blackout&&<div role="status" aria-label="Écran noir" onClick={()=>command("toggleBlackout")}
