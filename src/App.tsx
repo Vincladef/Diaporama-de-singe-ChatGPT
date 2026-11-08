@@ -218,26 +218,89 @@ export default function App() {
     editDocument({ ...draft, elements: draft.elements.filter(item => item.id !== id && item.parentId !== id) });
     setSelectedIds([]);
   }
+  function removeSelection() {
+    const doc=draftRef.current;
+    if(!doc||!selectedIds.length)return;
+    const removed=new Set(selectedIds);
+    let changed=true;
+    while(changed){
+      changed=false;
+      for(const e of doc.elements)if(e.parentId&&removed.has(e.parentId)&&!removed.has(e.id)){removed.add(e.id);changed=true;}
+    }
+    editDocument({...doc,elements:doc.elements.filter(e=>!removed.has(e.id)),animations:doc.animations.filter(a=>!removed.has(a.targetElementId))},"delete");
+    setSelectedIds([]);
+  }
+  function copySelection() {
+    const doc=draftRef.current;if(!doc||!selectedIds.length)return;
+    const {document:next,created}=duplicateElements(doc,selectedIds,()=>crypto.randomUUID());
+    editDocument(next,"duplicate");setSelectedIds(created);
+  }
+  function arrangeSelection(direction:"front"|"back"|"forward"|"backward") {
+    const doc=draftRef.current;if(!doc||!selectedIds.length)return;
+    const list=[...doc.elements],members=new Set(selectedIds);
+    let elements:typeof list;
+    if(direction==="front"||direction==="back"){
+      const selected=list.filter(e=>members.has(e.id)),remaining=list.filter(e=>!members.has(e.id));
+      elements=direction==="front"?[...remaining,...selected]:[...selected,...remaining];
+    }else{
+      elements=[...list];
+      const order=direction==="forward"?[...Array(elements.length).keys()].reverse():[...Array(elements.length).keys()];
+      for(const i of order){
+        const next=i+(direction==="forward"?1:-1);
+        if(next<0||next>=elements.length)continue;
+        if(members.has(elements[i]!.id)&&!members.has(elements[next]!.id)){
+          const temp=elements[i]!;elements[i]=elements[next]!;elements[next]=temp;
+        }
+      }
+    }
+    editDocument({...doc,elements},"layers");
+  }
+  function alignSelection(kind:"left"|"right"|"center"|"top"|"middle"|"bottom") {
+    const doc=draftRef.current;
+    if(doc)editDocument(alignElements(doc,selectedIds,kind),"align");
+  }
+  function nudgeSelection(dx:number,dy:number){
+    const doc=draftRef.current;if(!doc||!selectedIds.length)return;
+    const changes:Record<string,Box>={};
+    for(const id of selectedIds){
+      const element=doc.elements.find(e=>e.id===id);
+      if(element){const box=worldBox(element,doc);changes[id]=transformBox(box,dx,dy,"move",0);}
+    }
+    if(Object.keys(changes).length)editDocument(withElementBoxes(doc,changes),"nudge");
+  }
+  async function reorderSlide(fromId:string,toId:string) {
+    if (!current||fromId===toId||!confirmLeave())return;
+    const ids=current.slides.map(s=>s.id),from=ids.indexOf(fromId),to=ids.indexOf(toId);
+    if(from<0||to<0)return;
+    const [moved]=ids.splice(from,1);ids.splice(to,0,moved!);
+    setBusy(true);setError("");
+    try {
+      await command(token,{action:"reorderSlides",presentationId:current.presentation.id,orderedIds:ids});
+      await loadDeck(current.presentation.id,slideId??undefined);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
   async function save() {
     if (!draft || !slideId || !current) return;
     const check = SlideDocumentSchema.safeParse(draft);
     if (!check.success) { setError("Document invalide : " + check.error.issues[0]?.message); return; }
     const old = current.slides.find(s => s.id === slideId);
     if (!old) return;
-    setBusy(true); setError("");
+    if(busy||externalChanges)return;
+    const started=versionRef.current, savedNotes=notes, savedSlideId=slideId;
+    setBusy(true);setError("");
     try {
-      const result = await command<{ slide: { revision: number; updated_at: string } }>(token, {
-        action: "saveSlide", id: slideId, revision: old.revision, document: check.data, notes,
+      const result=await command<{slide:{revision:number;updated_at:string}}>(token,{
+        action:"saveSlide",id:savedSlideId,revision:old.revision,document:check.data,notes:savedNotes,
       });
-      setCurrent({
-        ...current,
-        slides: current.slides.map(s => s.id === slideId
-          ? { ...s, document: check.data, notes, revision: result.slide.revision, updated_at: result.slide.updated_at }
-          : s),
-      });
-      setDirty(false);
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+      setCurrent(previous=>previous?{...previous,slides:previous.slides.map(s=>s.id===savedSlideId?
+        {...s,document:check.data,notes:savedNotes,revision:result.slide.revision,updated_at:result.slide.updated_at}:s)}:previous);
+      if(versionRef.current===started)setDirty(false);
+      setExternalChanges(false);
+    }catch(e){
+      if(e instanceof ApiError&&e.status===409)setExternalChanges(true);
+      setError(e instanceof Error?e.message:String(e));
+    }finally{setBusy(false);}
   }
 
   async function downloadPowerPoint() {
