@@ -61,3 +61,45 @@ test("rejects non-converted results, invalid file IDs and access errors", async 
   await assert.rejects(
     uploadPowerPointToGoogleSlides("token", pptx, "Titre", blocked), /API Google Drive/);
 });
+
+
+test("large PowerPoint converts with Drive resumable upload rather than multipart", async () => {
+  const pptx = new Blob([new Uint8Array(5_000_100)]);
+  let requests = 0;
+  const session = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=example";
+  const mock: typeof fetch = async (url, init) => {
+    requests++;
+    if (requests === 1) {
+      assert.ok(String(url).includes("uploadType=resumable"));
+      assert.equal(init?.method, "POST");
+      assert.equal(new Headers(init?.headers).get("x-upload-content-type"), PPTX_MIME);
+      assert.equal(new Headers(init?.headers).get("x-upload-content-length"), String(pptx.size));
+      assert.match(String(init?.body), /application\\/vnd\\.google-apps\\.presentation/);
+      return new Response(null, { status: 200, headers: { location: session } });
+    }
+    assert.equal(requests, 2);
+    assert.equal(url, session);
+    assert.equal(init?.method, "PUT");
+    assert.equal(init?.body, pptx);
+    assert.equal(new Headers(init?.headers).get("content-range"), "bytes 0-" + (pptx.size - 1) + "/" + pptx.size);
+    return new Response(JSON.stringify({ id: "1GoogleSlideIdABCXYZ", name: "Grand diaporama",
+      mimeType: GOOGLE_SLIDES_MIME }), {
+      status: 201, headers: { "content-type": "application/json" },
+    });
+  };
+  const result = await uploadPowerPointToGoogleSlides("token", pptx, "Grand diaporama", mock);
+  assert.equal(requests, 2);
+  assert.match(result.url, /1GoogleSlideIdABCXYZ/);
+});
+
+test("resumable upload rejects missing session URL or a non-Google session origin", async () => {
+  const pptx = new Blob([new Uint8Array(5_000_100)]);
+  let calls = 0;
+  const missing: typeof fetch = async () => { calls++; return new Response(null, { status: 200 }); };
+  await assert.rejects(uploadPowerPointToGoogleSlides("token", pptx, "Test", missing), /adresse de transfert/);
+  assert.equal(calls, 1);
+
+  const malicious: typeof fetch = async () =>
+    new Response(null, { status: 200, headers: { location: "https://drive.evil.example/steal" } });
+  await assert.rejects(uploadPowerPointToGoogleSlides("token", pptx, "Test", malicious), /transfert Google invalide/);
+});
