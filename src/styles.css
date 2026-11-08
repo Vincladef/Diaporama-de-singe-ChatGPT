@@ -90,3 +90,9 @@
  .property-panel{display:flex}
  .editor-tabs button{padding:10px}
 }
+
+
+.freeform-selection{outline:3px dashed #df8937;outline-offset:0;cursor:move;touch-action:none;background:#eeb16708}
+.freeform-selection:hover{background:#eeb16712}
+.freeform-selection>.visual-selection-name{background:#c16f25}
+.freeform-selection>.visual-resize-handle{border-color:#c16f25}
