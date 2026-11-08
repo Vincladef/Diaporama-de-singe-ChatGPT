@@ -1,5 +1,5 @@
 import type { ImportedDeck,ImportedSlide } from "./parse";
-import { command } from "../lib/api";
+import { command } from "../lib/api.ts";
 
 /** Netlify and MCP share the same SlideDocument contract; never mutate the source deck. */
 const MAX_BATCH_BYTES=1_400_000;
