@@ -228,6 +228,12 @@ export default function App() {
             styles:{left:"120px",top:"210px",width:"1000px",height:"600px",objectFit:"cover",objectPosition:"50% 50%"}}]};
       editDocument(next,"photo");
       setSelectedIds([id]);setTab("design");setImageStudioOpen(false);
+      if(photo.provider==="unsplash"&&photo.downloadLocation){
+        void fetch("/.netlify/functions/image-search",{method:"POST",cache:"no-store",
+          headers:{authorization:"Bearer "+token,"Content-Type":"application/json"},
+          body:JSON.stringify({action:"trackUnsplash",downloadLocation:photo.downloadLocation})
+        }).catch(()=>{});
+      }
       void command(token,{action:"saveAssets",presentationId:current.presentation.id,assets:[{
         url:photo.imageUrl,label:photo.title,source:photo.pageUrl,
         rights:photo.attribution+" ; "+photo.license,
