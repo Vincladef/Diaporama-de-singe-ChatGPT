@@ -121,8 +121,11 @@ export default function App() {
   function confirmLeave() { return !dirty || window.confirm("Quitter sans enregistrer les modifications ?"); }
   function backupDraft(){
     if(!draft||!slideId||!current)return;
-    const data=JSON.stringify({kind:"diaporama-singe-local-backup",slideId,
-      presentationId:current.presentation.id,revision:active?.revision??0,document:draft,notes},null,2);
+    // The backup is deliberately a native importable presentation, not an opaque dump.
+    const data=JSON.stringify({presentation:{title:current.presentation.title+" · brouillon local"},
+      slides:[{document:draft,notes}],
+      backup:{sourceSlideId:slideId,sourceDeckId:current.presentation.id,
+        sourceRevision:active?.revision??0}},null,2);
     const url=URL.createObjectURL(new Blob([data],{type:"application/json;charset=utf-8"}));
     const link=window.document.createElement("a");
     link.href=url;link.download="brouillon-diapositive-"+slideId.slice(0,8)+".json";
