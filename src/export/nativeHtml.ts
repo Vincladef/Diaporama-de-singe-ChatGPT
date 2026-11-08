@@ -30,10 +30,10 @@ function extractText(doc: Document, width: number, height: number): { texts: Nat
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const candidates: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (!(node instanceof Text) || !node.textContent?.trim()) continue;
+    if (node.nodeType !== 3 || !node.textContent?.trim()) continue;
     const parent = node.parentElement;
     if (!parent || parent.closest("script,style,svg,defs,template,noscript")) continue;
-    candidates.push(node);
+    candidates.push(node as Text);
     if (candidates.length >= 500) break;
   }
   const texts: NativeTextRun[] = [];
@@ -124,8 +124,6 @@ export async function captureNativeHtml(document: SlideDocument, revealClickCoun
     }
     if (revealClickCount !== undefined) {
       player = new SlideAnimationPlayer(doc, document);
-      const missing = player.missingTargets();
-      if (missing.length) throw new Error("Cible d'animation introuvable : " + missing.slice(0, 3).join(", "));
       await player.seek(revealClickCount, { animate: false });
     }
     const extracted = extractText(doc, width, height);
