@@ -13,6 +13,7 @@ export type ImportedDeck = {
 export type MediaAdapter = (data: Uint8Array, mime:string, filename:string)=>Promise<string>;
 const parser = new XMLParser({ignoreAttributes:false,attributeNamePrefix:"@_",textNodeName:"#text",trimValues:false,
   parseTagValue:false,parseAttributeValue:false});
+const orderParser=new XMLParser({preserveOrder:true,ignoreAttributes:false,parseTagValue:false,parseAttributeValue:false});
 type Rec = Record<string, unknown>;
 function rec(value:unknown):Rec{return value&&typeof value==="object"&&!Array.isArray(value)?value as Rec:{};}
 function arr(value:unknown):unknown[]{return value===undefined||value===null?[]:Array.isArray(value)?value:[value];}
@@ -117,6 +118,35 @@ function extractNotes(xml:unknown):string{
     return kind==="body"||kind===""?[paragraphText(shape["p:txBody"])]:[];
   }).filter(Boolean).join("\n\n").slice(0,30000);
 }
+/** Preserve p:spTree's original interleaved Z-order; normal XML parsing groups sibling tags by type. */
+function orderedShapes(xml:string,tree:Rec):[string,unknown][]{
+  const findTree=(node:unknown):unknown[]|undefined=>{
+    if(Array.isArray(node)){
+      for(const value of node){const found=findTree(value);if(found)return found;}
+      return undefined;
+    }
+    if(!node||typeof node!=="object")return undefined;
+    const o=rec(node);
+    if(Array.isArray(o["p:spTree"]))return o["p:spTree"] as unknown[];
+    for(const value of Object.values(o)){
+      const found=findTree(value);if(found)return found;
+    }
+    return undefined;
+  };
+  const order=findTree(orderParser.parse(xml));
+  if(!order)return Object.entries(tree).filter(([tag])=>["p:sp","p:pic","p:graphicFrame"].includes(tag))
+    .flatMap(([tag,v])=>arr(v).map(x=>[tag,x] as [string,unknown]));
+  const counters=new Map<string,number>();
+  const shapes:[string,unknown][]=[];
+  for(const value of order){
+    const tag=Object.keys(rec(value)).find(key=>["p:sp","p:pic","p:graphicFrame"].includes(key));
+    if(!tag)continue;
+    const index=counters.get(tag)??0;
+    const item=arr(tree[tag])[index];
+    if(item){shapes.push([tag,item]);counters.set(tag,index+1);}
+  }
+  return shapes;
+}
 function shapeTitle(shape:Rec):string{
   return name(rec(rec(shape["p:nvSpPr"])["p:cNvPr"])["@_name"]);
 }
@@ -192,9 +222,8 @@ export async function importPowerPoint(bytes:ArrayBuffer,filename:string,mediaAd
     const relXml=await zip.file(relName)?.async("string");
     const rels=relXml?relationships(parser.parse(relXml),part):new Map<string,{part:string;type:string}>();
     const elements:SlideElement[]=[];
-    const shapes=Object.entries(tree).filter(([key])=>["p:sp","p:pic","p:graphicFrame"].includes(key));
-    // XML parsers group siblings by name, so order across mixed shape types may not always match the original Z-order.
-    for(const [tag,value] of shapes)for(const item of arr(value)){
+    const shapes=orderedShapes(slideXml,tree);
+    for(const [tag,item] of shapes){
       const node=rec(item);
       if(tag==="p:sp"){
         const text=paragraphText(node["p:txBody"]);
