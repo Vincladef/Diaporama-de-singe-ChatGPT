@@ -113,7 +113,7 @@ export async function editSlides(deckId: string, changes: SlideChange[], dryRun 
     const applied=editSlide(SlideDocumentSchema.parse(row.document),row.notes,c.operations);
     return {id:c.id,revision:row.revision,document:applied.document,notes:applied.notes};
   });
-  if(dryRun)return { dryRun:true,changes:prepared.map((c,i)=>({id:c.id,
+  if(dryRun)return { dryRun:true,changes:prepared.map((c,i)=>({
     ...summarizeSlide({id:c.id,position:byId.get(c.id)!.position,revision:c.revision+1,document:c.document,notes:c.notes}),
     operations:changes[i]?.operations.length})) };
   const result=await database().query(
