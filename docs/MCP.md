@@ -75,3 +75,7 @@ Le serveur MCP publié expose **29 outils** dans son catalogue à l'étape 8. Si
 ## Contrôles de dépendances
 
 Le workflow GitHub Actions exécute désormais `npm audit --audit-level=moderate` après l'installation ; les mises à jour de l'outillage Netlify et de la bibliothèque indirecte `image-size` éliminent les alertes modérées et élevées signalées lors de l'étape 8. Une alerte de faible gravité subsiste dans les dépendances de développement ; elle ne bloque pas le build.
+
+## Étape 9 : efficacité visuelle et réconciliation du catalogue
+
+Le serveur 0.9.0 publie **32 outils**. `workspace_status` retourne le nombre et les noms exacts des outils enregistrés ; les nouvelles commandes `compose_slides`, `review_slides` et `repair_slides` permettent la composition de 40 diapositives par appel, les liens de prévisualisation éphémères et les corrections atomiques avec révisions. Le client ChatGPT peut conserver son ancien catalogue en cache ; **actualiser les outils** du plugin si seulement 29 commandes apparaissent. Une actualisation du serveur ne suffit pas à imposer une réindexation côté client. Les captures d'écran réelles supposent un navigateur ; le diagnostic MCP reste heuristique. Voir [AI_STEP9.md](AI_STEP9.md).
