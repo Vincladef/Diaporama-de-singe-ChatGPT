@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
 import { elementBox, transformBox, withElementBoxes, worldBox, type Box, type TransformMode } from "./geometry";
+import { FreeformOverlay, type FreeformHandle } from "./FreeformOverlay";
 
 type Gesture = {
   pointerId: number;
@@ -30,6 +31,8 @@ type Props = {
 export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zoom, grid, readOnly}: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const freeRef = useRef<FreeformHandle>(null);
+  const [editingHtml,setEditingHtml]=useState(false);
   const [width, setWidth] = useState(840);
   const [live, setLive] = useState<Record<string, Box>>({});
   const gesture = useRef<Gesture | null>(null);
@@ -77,6 +80,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     if (readOnly || editId) return;
     e.preventDefault();
     e.stopPropagation();
+    freeRef.current?.clear();
     const selected = selectionRef.current;
     let ids: string[];
     if (e.shiftKey && mode === "move") {
@@ -149,9 +153,16 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
           sandbox="allow-same-origin"
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}
-          style={{position:"absolute",inset:0,border:0,width:doc.canvas.width,height:doc.canvas.height,pointerEvents:"none"}}
+          onLoad={()=>freeRef.current?.refresh()}
+          style={{position:"absolute",inset:0,border:0,width:doc.canvas.width,height:doc.canvas.height,pointerEvents:editingHtml?"auto":"none"}}
         />
-        <div className="visual-hit-layer" onPointerDown={()=>{if(!readOnly){onSelect([]);setEditId(null);}}}>
+        <div className="visual-hit-layer" style={{pointerEvents:editingHtml?"none":"auto"}}
+          onPointerDown={e=>{
+            if(readOnly)return;
+            onSelect([]);setEditId(null);
+            const rect=e.currentTarget.getBoundingClientRect();
+            freeRef.current?.selectAt((e.clientX-rect.left)/fit,(e.clientY-rect.top)/fit);
+          }}>
           {!readOnly && doc.elements.filter(el=>!el.parentId).concat(doc.elements.filter(el=>!!el.parentId)).map(element=>{
             const box=live[element.id]??worldBox(element,doc);
             const picked=selectedIds.includes(element.id);
@@ -182,6 +193,8 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
               </div>
             );
           })}
+          {!readOnly && <FreeformOverlay ref={freeRef} document={doc} frameRef={frameRef} scale={fit} grid={grid}
+            onChange={onChange} onSelectStructured={onSelect} onEditingChange={setEditingHtml}/>}
           {!readOnly && editId && editBox && chosen && <textarea
             autoFocus
             data-testid="canvas-inline-text"
