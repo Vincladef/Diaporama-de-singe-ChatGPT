@@ -24,21 +24,24 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
   for(let i=0;i<slides.length;i++){
     const {document,notes}=slides[i]!;
     const media=document.elements.filter(x=>x.type==="image");
-    const remote=media.filter(x=>x.src?.startsWith("https://")).length;
+    const embeddedImages=(document.freeform?.html??"").match(/<img\b[^>]*\bsrc\s*=\s*["']https:\/\/[^"']+["']/gi)??[];
+    const cssUrls=(document.freeform?.css??"").match(/url\(\s*["']?https:\/\/[^)]+\)/gi)??[];
+    const remote=media.filter(x=>x.src?.startsWith("https://")).length+
+      embeddedImages.length+cssUrls.length;
     const hasFree=!!(document.freeform?.html?.trim()||document.freeform?.css?.trim());
     const hasUnsupported=document.elements.some(x=>!isNativePptxObject(x));
-    const mode:ExportModeHint=document.mode==="freeform"||hasUnsupported?"raster":
+    const mode:ExportModeHint=hasUnsupported?"raster":
       document.mode!=="structured"&&hasFree?"mixed":"native";
     const issues:string[]=[];
     const ratio=document.canvas.width/document.canvas.height;
     if(Math.abs(ratio-expectedRatio)>.002)issues.push("Format différent du premier écran ; adaptation nécessaire.");
     if(mode==="raster")issues.push("Mode objets éditables : conversion de la page en image.");
-    if(mode==="mixed")issues.push("HTML/CSS libre converti en fond ; calques structurés modifiables.");
+    if(mode==="mixed")issues.push("Mode modifiable : textes HTML et objets simples convertis ; photographies, SVG et effets CSS complexes conservés dans le décor.");
     if(document.animations.length)issues.push("Les animations Web ne sont pas exportées en animations PowerPoint natives.");
     if(media.some(x=>!x.src))issues.push("Image sans source.");
     if(remote)issues.push("Les images distantes nécessitent un accès CORS pour la capture/export dans ce navigateur.");
     if(document.elements.length>950)issues.push("Plus de 950 éléments ; risque de surcharge mémoire.");
-    risks.push({position:i+1,mode,images:media.length,remoteImages:remote,
+    risks.push({position:i+1,mode,images:media.length+embeddedImages.length,remoteImages:remote,
       animations:document.animations.length,notesPresent:Boolean(notes?.trim()),warnings:issues});
   }
   const allWarnings=[...new Set(risks.flatMap(r=>r.warnings))];
