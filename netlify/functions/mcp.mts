@@ -162,9 +162,9 @@ function createServer(request: Request): McpServer {
     "One-call shortcut to insert a freely positioned, editable photo, or replace an existing image layer. Optionally track its source, attribution and rights. Supports crop, object fit and optional image filters.",
     {presentationId:uuid,slideId:uuid,elementId:z.string().min(1).max(128).optional(),
       url:z.url().refine(u=>u.startsWith("https:"),"An HTTPS URL is required"),
-      x:z.number().min(-20000).max(20000).default(0),y:z.number().min(-20000).max(20000).default(0),
-      width:z.number().min(10).max(20000).default(960),height:z.number().min(10).max(20000).default(540),
-      fit:z.enum(["cover","contain","fill"]).default("cover"),
+      x:z.number().min(-20000).max(20000).optional(),y:z.number().min(-20000).max(20000).optional(),
+      width:z.number().min(10).max(20000).optional(),height:z.number().min(10).max(20000).optional(),
+      fit:z.enum(["cover","contain","fill"]).optional(),
       filter:z.string().max(300).optional(),revision:z.number().int().min(1).optional(),
       label:z.string().max(140).optional(),source:z.string().max(140).optional(),rights:z.string().max(400).optional()},true,
     async a=>{
@@ -174,8 +174,12 @@ function createServer(request: Request): McpServer {
       const id=a.elementId??randomUUID();
       const exists=previous.document.elements.find(e=>e.id===id);
       if(exists&&exists.type!=="image")throw new Error("element_is_not_an_image");
-      const styles={...(exists?.styles??{}),left:a.x+"px",top:a.y+"px",width:a.width+"px",height:a.height+"px",
-        objectFit:a.fit,...(a.filter?{filter:a.filter}:{})};
+      const styles={...(exists?.styles??{}),
+        left:a.x!==undefined?a.x+"px":String(exists?.styles.left??"0px"),
+        top:a.y!==undefined?a.y+"px":String(exists?.styles.top??"0px"),
+        width:a.width!==undefined?a.width+"px":String(exists?.styles.width??"960px"),
+        height:a.height!==undefined?a.height+"px":String(exists?.styles.height??"540px"),
+        objectFit:a.fit??exists?.styles.objectFit??"cover",...(a.filter?{filter:a.filter}:{})};
       const edited=await editSlides(a.presentationId,[{id:a.slideId,revision:a.revision,
         operations:[{op:"upsert_element",element:{id,type:"image",src:a.url,styles}}]}]);
       let assetNote:string|undefined;
