@@ -87,11 +87,8 @@ L'éditeur et le serveur MCP conservent désormais des points de restauration de
 
 Après avoir enregistré le diaporama, choisir « Visuel fidèle » ou « Objets modifiables », puis cliquer sur « Exporter vers Google Slides ». Le bouton génère un PPTX validé **sans le télécharger**, propose de choisir un compte Google, le transmet à l'API Drive et convertit directement le fichier en présentation Google Slides. Un lien « Ouvrir la présentation Google Slides » apparaît en cas de succès.
 
-**Première configuration** (une seule fois sur ce navigateur) :
+**Connexion Google sans configuration utilisateur.** Le client OAuth public de Diaporama de singe a été enregistré par l'administrateur dans le projet Google Cloud « Atelier Slides ChatGPT » et son origine officielle est autorisée. L'API Google Drive est activée. Le bouton ouvre directement Google Identity Services pour que l'utilisateur choisisse son compte et accorde l'autorisation d'ajouter un fichier dans Drive.
 
-1. Dans [Google Cloud, Google Auth platform](https://console.cloud.google.com/auth/clients), configurer l'écran de consentement OAuth et créer un **ID client de type Application Web**.
-2. Activer l'[API Google Drive](https://console.cloud.google.com/apis/library/drive.googleapis.com).
-3. Ajouter `https://diaporama-de-singe-chatgpt.netlify.app` comme **origine JavaScript autorisée** ; en mode test, ajouter son compte Gmail comme utilisateur de test.
-4. Coller **uniquement l'identifiant client public** (`…apps.googleusercontent.com`) dans la fenêtre du bouton. L'éditeur l'enregistre localement ; aucun secret ni jeton d'accès n'est conservé. Une autre possibilité consiste à définir `VITE_GOOGLE_OAUTH_CLIENT_ID` (variable de **build**, non secrète) sur Netlify, puis redéployer.
+Les clients OAuth sont des identifiants **publics** ; le code gère l'identifiant de l'application sans demander à l'utilisateur d'ouvrir Google Cloud Console. Une variable `VITE_GOOGLE_OAUTH_CLIENT_ID` peut le remplacer lors du build pour une autre installation. Ne jamais intégrer de **secret client** dans le navigateur.
 
 Le droit OAuth demandé est seulement `https://www.googleapis.com/auth/drive.file`. Une nouvelle présentation est créée à chaque export ; aucune présentation existante n'est écrasée. L'authentification Google se produit dans le navigateur de l'utilisateur. Le résultat utilise les limites du moteur PPTX : HTML/CSS rasterisé en mode fidèle, animations Web non transposées. Cette fonctionnalité **ne remplace pas** une publication MCP sans navigateur.
