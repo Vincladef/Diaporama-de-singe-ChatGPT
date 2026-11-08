@@ -1,6 +1,7 @@
 import { useEffect,useState } from "react";
 import type { ImageCandidate, ImageSearchResult, ImageSource } from "../images/search";
 import type { SlideElement } from "../domain/slide";
+import { directImageUrl } from "../images/direct";
 
 type Props={
   token:string;
@@ -19,6 +20,7 @@ function queryUrl(query:string,sources:ImageSource[],page:number,orientation:"an
 export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Props){
   const [query,setQuery]=useState(searchTerm??"");
   const [sources,setSources]=useState<ImageSource[]>(["openverse","wikimedia"]);
+  const [available,setAvailable]=useState<ImageSource[]>(["openverse","wikimedia"]);
   const [page,setPage]=useState(1);
   const [orientation,setOrientation]=useState<"any"|"landscape"|"portrait"|"square">("landscape");
   const [result,setResult]=useState<ImageSearchResult|null>(null);
@@ -27,6 +29,20 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
   const [manual,setManual]=useState("");
   const [chosen,setChosen]=useState<ImageCandidate|null>(null);
 
+  useEffect(()=>{
+    let active=true;
+    const url=new URL("/.netlify/functions/image-search",window.location.origin);
+    url.searchParams.set("op","sources");
+    void fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store"})
+      .then(async response=>response.ok?await response.json():null)
+      .then((data:{sources?:Array<{source:ImageSource;enabled:boolean}>}|null)=>{
+        if(!active||!data?.sources)return;
+        const usable=data.sources.filter(x=>x.enabled).map(x=>x.source);
+        setAvailable(usable);
+        setSources(usable.filter(x=>x!=="google"&&x!=="pexels").slice(0,3));
+      }).catch(()=>{});
+    return()=>{active=false;};
+  },[token]);
   useEffect(()=>{
     const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
     window.addEventListener("keydown",close);
@@ -48,12 +64,18 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
   }
   function useManual(){
     try{
-      const url=new URL(manual.trim());
-      if(url.protocol!=="https:")throw Error("L'image doit utiliser HTTPS.");
-      onPick({id:"manual:"+url.toString().slice(0,120),provider:"google",title:"Image externe",alt:"Image externe",
-        imageUrl:url.toString(),previewUrl:url.toString(),pageUrl:url.toString(),creator:"",license:"Droits non vérifiés",
+      const direct=directImageUrl(manual);
+      onPick({id:"manual:"+direct.slice(0,120),provider:"google",title:"Image externe",alt:"Image externe",
+        imageUrl:direct,previewUrl:direct,pageUrl:direct,creator:"",license:"Droits non vérifiés",
         attribution:"Adresse fournie par l'utilisateur",width:0,height:0});
     }catch(e){setError(e instanceof Error?e.message:"Adresse invalide");}
+  }
+  async function pasteImageAddress(){
+    try{
+      const copied=await navigator.clipboard.readText();
+      const direct=directImageUrl(copied);
+      setManual(direct);setError("");
+    }catch(e){setError(e instanceof Error?e.message:"Impossible de lire le presse-papiers. Collez directement l'URL.");}
   }
   const googleLink="https://www.google.com/search?tbm=isch&q="+encodeURIComponent(query);
   return (
@@ -67,7 +89,7 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
           <button type="submit" className="primary" disabled={loading||query.trim().length<2}>{loading?"Recherche…":"Rechercher"}</button>
         </form>
         <div className="studio-sources">
-          {ALL.map(s=><label key={s} className="studio-source">
+          {ALL.filter(source=>available.includes(source)).map(s=><label key={s} className="studio-source">
             <input type="checkbox" checked={sources.includes(s)} onChange={()=>toggle(s)}/>
             {s==="google"?"Google Images (API facultative)":titles[s]}
           </label>)}
@@ -103,11 +125,13 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
           </div>
         </div>
         <footer className="studio-footer">
-          <label>Insérer depuis une adresse HTTPS
-            <input type="url" placeholder="https://..." value={manual} onChange={e=>setManual(e.target.value)}/>
+          <label>Coller l'adresse directe d'une image Google ou d'un autre site
+            <input type="url" placeholder="https://..." value={manual} onChange={e=>setManual(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();useManual();}}}/>
           </label>
-          <button onClick={useManual} disabled={!manual.trim()}>Insérer l'URL</button>
-          <small>Les droits restent à vérifier sur le site source. Pour une recherche Google intégrée, configure SerpApi ; sinon, utilise le lien Google Images. Pexels et Unsplash nécessitent leurs clés API.</small>
+          <button type="button" onClick={()=>void pasteImageAddress()}>Coller depuis le presse-papiers</button>
+          <button type="button" onClick={useManual} disabled={!manual.trim()}>Insérer l'image</button>
+          <small>Google Images ne nécessite pas de clé pour la recherche externe : ouvrez Google, copiez l'adresse directe de la photographie, puis collez-la ici. Les résultats Google ne sont pas automatiquement importés et les droits doivent être vérifiés. Unsplash apparaît ici si sa clé est active.</small>
         </footer>
       </section>
     </div>
