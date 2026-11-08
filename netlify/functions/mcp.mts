@@ -579,6 +579,39 @@ function createServer(request: Request): McpServer {
     {slideId:uuid,full:z.boolean().default(false)},false,
     async a=>({variants:await listVariants(a.slideId,a.full)}));
 
+
+  register("compare_variants","Comparer les variantes et leurs aperçus graphiques",
+    "Compare active slide with up to eight saved variations in one compact call: text/image/notes preservation, distinct fonts and palettes, heuristic layout warnings and 10-minute signed preview URLs for side-by-side visual inspection. These indicators are not a subjective quality score. Returns a hash usable with revise_variant.",
+    {slideId:uuid,limit:z.number().int().min(1).max(8).default(8),
+      includePreviews:z.boolean().default(true)},false,
+    async a=>{
+      const current=await getSlide(a.slideId,"full");
+      if(!("document" in current))throw new Error("slide_not_found");
+      const stored=(await listVariants(a.slideId,true)).slice(0,a.limit) as Array<{
+        id:string;name:string;notes:string;document:SlideDocument;created_at:string
+      }>;
+      const baseline={name:"Version actuelle",document:current.document,notes:current.notes};
+      const {sign}=await import("../../src/mcp/security");
+      const expires=Date.now()+10*60*1000;
+      const token=(payload:string)=>ORIGIN+"/previews/slide?ticket="+encodeURIComponent(
+        Buffer.from(payload).toString("base64url")+"."+sign(payload));
+      return {slideId:a.slideId,revision:current.revision,
+        current:{...compareOneVariant(baseline,baseline),
+          ...(a.includePreviews?{previewUrl:token(a.slideId+":preview:"+expires)}:{})},
+        variants:stored.map(v=>({...compareOneVariant(baseline,v),
+          ...(a.includePreviews?{previewUrl:token(a.slideId+":"+v.id+":variant-preview:"+expires)}:{})})),
+        previewExpiresAt:a.includePreviews?new Date(expires).toISOString():undefined,
+        comparisonMethod:"Static hints and preservation flags; open the signed preview URLs in a browser to inspect rendering, typography and images."};
+    });
+
+  register("revise_variant","Modifier une variante sans écraser la diapositive",
+    "Edit a SAVED variant in place with up to 80 targeted slide operations (HTML/CSS, text, image layers, notes, animations), while leaving the active slide unchanged. Requires the exact fingerprint returned by compare_variants to avoid concurrent overwrites.",
+    {slideId:uuid,variantId:uuid,
+      expectedFingerprint:z.string().regex(/^[0-9a-f]{64}$/),
+      name:z.string().trim().min(1).max(120).optional(),
+      operations:z.array(SlideOperationSchema).min(1).max(80)},true,
+    async a=>reviseVariant(a.slideId,a.variantId,a.expectedFingerprint,a.operations,a.name));
+
   register("activate_variant","Choisir une variante",
     "Make a saved design the active slide. Current design is stored as a backup variant.",
     {slideId:uuid,variantId:uuid,revision:z.number().int().min(1).optional()},true,
