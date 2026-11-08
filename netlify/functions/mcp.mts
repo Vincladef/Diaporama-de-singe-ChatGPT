@@ -11,7 +11,7 @@ import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
-  saveAssets, updateDeck
+  saveAssets, updateDeck, type DbSlide
 } from "../../src/mcp/store";
 
 type JsonObject = Record<string, unknown>;
@@ -77,7 +77,7 @@ function createServer(request: Request): McpServer {
     async a=>{
       const deck=await getDeck(a.presentationId,"full",0,100);
       if(deck.nextOffset!==null)throw new Error("brief_limit_100_slides");
-      const slides=deck.slides.map(s=>{
+      const slides=deck.slides.filter((s):s is DbSlide=>"document" in s).map(s=>{
         const html=s.document.freeform?.html??"";
         const htmlText=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
           .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
@@ -109,7 +109,7 @@ function createServer(request: Request): McpServer {
       const source=await getDeck(a.presentationId,"full",0,100);
       if(source.nextOffset!==null||source.slides.length>40)throw new Error("visual_copy_limit_40_slides");
       const map={immersive:0,editorial:1,typographic:2} as const;
-      const styles=source.slides.map(s=>({
+      const styles=source.slides.filter((s):s is DbSlide=>"document" in s).map(s=>({
         document:proposeGraphicVariants(s.document)[map[a.direction]]!.document,
         notes:s.notes,
       }));
