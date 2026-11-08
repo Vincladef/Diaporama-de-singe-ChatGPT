@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { z, ZodError } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/slide";
+import { createVariants, listVariants, saveAssets, listAssets } from "../../src/mcp/store";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -110,6 +111,30 @@ export default async function workspace(request: Request): Promise<Response> {
         const ids=z.array(idSchema).max(500).parse(data.orderedIds);
         const rows=await db.query("SELECT public.mcp_reorder_slides($1::uuid,$2::uuid[]) AS reordered",[id,ids]);
         return result({ok:true,reordered:rows[0]?.reordered??0});
+      }
+      case "createVariants": {
+        const slideId=idSchema.parse(data.slideId);
+        const variants=z.array(z.object({
+          name:z.string().min(1).max(120),
+          slide:z.object({ document:SlideDocumentSchema,notes:notesSchema.optional() }),
+        })).min(1).max(8).parse(data.variants);
+        const resultData=await createVariants(slideId,variants);
+        return result({ok:true,...resultData},201);
+      }
+      case "listVariants": {
+        const slideId=idSchema.parse(data.slideId);
+        const variants=await listVariants(slideId,true);
+        return result({ok:true,variants});
+      }
+      case "saveAssets": {
+        const id=idSchema.parse(data.presentationId);
+        const assets=z.array(z.object({url:z.url(),label:z.string().max(140).optional(),
+          source:z.string().max(140).optional(),rights:z.string().max(400).optional()})).min(1).max(20).parse(data.assets);
+        return result({ok:true,...await saveAssets(id,assets)},201);
+      }
+      case "listAssets": {
+        const id=idSchema.parse(data.presentationId);
+        return result({ok:true,assets:await listAssets(id,150)});
       }
       case "deleteSlide": {
         const id = idSchema.parse(data.id);
