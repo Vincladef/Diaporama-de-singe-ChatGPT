@@ -53,7 +53,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
-  const [exportMode, setExportMode] = useState<PowerPointMode>("faithful");
+  const [exportMode, setExportMode] = useState<PowerPointMode>(() =>
+    new URLSearchParams(window.location.search).get("export") === "editable" ? "editable" : "faithful");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
@@ -64,7 +65,7 @@ export default function App() {
     listPresentations(token).then(items => {
       if (cancelled) return;
       setDecks(items);
-      const remembered = sessionStorage.getItem(DECK_KEY);
+      const remembered = new URLSearchParams(window.location.search).get("deck") ?? sessionStorage.getItem(DECK_KEY);
       if (remembered && items.some(item => item.id === remembered)) {
         void readPresentation(token, remembered).then(data => {
           if (!cancelled) {
