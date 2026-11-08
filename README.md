@@ -83,6 +83,10 @@ Moteur de diagrammes et cartes mentales (`compose_diagrams`), six directions gra
 
 L'éditeur et le serveur MCP conservent désormais des points de restauration des diapositives dans Neon ; le bouton **Historique** permet de les parcourir, les prévisualiser et restaurer une version, avec contrôle des révisions. L'éditeur HTML/CSS peut s'agrandir ; les changements distants sont détectés régulièrement et un brouillon en conflit peut être exporté sous forme de JSON directement réimportable. L'export PowerPoint vérifie l'état distant et présente une analyse de compatibilité des modes visuel et éditable ; la projection dispose d'un écran noir synchronisé (B), d'un saut de diapositive (G) et d'un chronomètre contrôlable. La photothèque accepte le collage direct des images Google Images sans prétendre en extraire les résultats sans API. Le serveur publie **39 outils MCP** en version 0.11.0. Voir [l'audit final et les limites](docs/FINALISATION_STEP11.md).
 
+## Exportation des apparitions au clic
+
+Le réglage **« Étapes au clic »**, activé par défaut, crée une vue par étape de révélation. Ainsi, les cartes mentales et chaînes causales restent progressives lors d'une présentation PowerPoint ou Google Slides. Chaque clic fait avancer à une diapositive successive, qui contient les éléments dévoilés jusqu'à cette étape ; les effets de mouvement ou fondu ne sont pas reconstruits sous forme d'animations natives. Décocher le réglage pour obtenir une seule diapositive statique par écran original. Les pages progressives sont des captures visuelles, pas des objets entièrement éditables.
+
 ## Publication Google Slides depuis l'éditeur
 
 Après avoir enregistré le diaporama, choisir « Visuel fidèle » ou « Objets modifiables », puis cliquer sur « Exporter vers Google Slides ». Le bouton génère un PPTX validé **sans le télécharger**, propose de choisir un compte Google, le transmet à l'API Drive et convertit directement le fichier en présentation Google Slides. Un lien « Ouvrir la présentation Google Slides » apparaît en cas de succès.
