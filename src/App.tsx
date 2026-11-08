@@ -476,6 +476,7 @@ export default function App() {
                 <span className={dirty||externalChanges ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
                 <label className="auto-save-option"><input type="checkbox" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)}/> Auto</label>
                 <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
+                <button className="subtle-btn present-action" onClick={()=>setPresenting(true)} disabled={!current.slides.length}>▶ Présenter</button>
                 <label className="export-mode-label" htmlFor="export-mode">Export
                   <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
                     onChange={e => setExportMode(e.target.value as PowerPointMode)}>
@@ -528,6 +529,7 @@ export default function App() {
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
                       <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
                       <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
+                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} title="Configurer les animations au clic">Animations</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
