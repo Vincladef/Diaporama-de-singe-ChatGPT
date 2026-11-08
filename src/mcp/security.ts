@@ -8,6 +8,8 @@ export const SCOPES = "presentations.read presentations.write";
 export function database() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not configured");
+  if (decodeURIComponent(new URL(url).pathname.slice(1)) !== "diaporama_singe_chatgpt")
+    throw new Error("MCP_DATABASE_MISMATCH: expected the independent ChatGPT database");
   return neon(url);
 }
 export function digest(text: string): string {
