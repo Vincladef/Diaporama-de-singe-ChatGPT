@@ -2,31 +2,63 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/diagrams";
+import { compareOneVariant } from "../../src/variants/compare";
+import { fingerprint } from "../../src/mcp/fingerprint";
+import { curateCandidates } from "../../src/images/curate";
+import { editImageStyles } from "../../src/images/edit";
+import { trackUnsplashDownload } from "../../src/images/track";
 import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/images/search";
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
-import { AnimationStepSchema, type AnimationStep, type SlideDocument } from "../../src/domain/slide";
+import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
 import { composeDocument, CompositionSchema, reviewDocument, repairDocument, type Composition } from "../../src/mcp/visual";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
-  saveAssets, updateDeck, type DbSlide
+  saveAssets, saveAssetsIfMissing, getVariant, reviseVariant, updateDeck, type DbSlide
 } from "../../src/mcp/store";
 
 type JsonObject = Record<string, unknown>;
 type ToolSchema = Record<string,z.ZodTypeAny>;
 const uuid = z.uuid();
 const uuidArray = z.array(uuid);
+
+const ImagePlacementSchema=z.object({
+  slideId:uuid,revision:z.number().int().min(1),
+  elementId:z.string().min(1).max(128).optional(),
+  url:z.url().refine(u=>u.startsWith("https://")).optional(),
+  frame:z.object({
+    x:z.number().min(-20000).max(20000).optional(),
+    y:z.number().min(-20000).max(20000).optional(),
+    width:z.number().min(10).max(20000).optional(),
+    height:z.number().min(10).max(20000).optional(),
+    opacity:z.number().min(0).max(1).optional(),
+  }).strict().optional(),
+  adjustments:z.object({
+    brightness:z.number().min(0).max(300).optional(),contrast:z.number().min(0).max(300).optional(),
+    saturate:z.number().min(0).max(300).optional(),grayscale:z.number().min(0).max(100).optional(),
+    blur:z.number().min(0).max(40).optional(),cropX:z.number().min(0).max(100).optional(),
+    cropY:z.number().min(0).max(100).optional(),rotation:z.number().min(-180).max(180).optional(),
+    fit:z.enum(["cover","contain","fill"]).optional(),
+  }).strict().optional(),
+  credit:z.object({
+    label:z.string().max(140).optional(),source:z.string().max(140).optional(),
+    rights:z.string().max(400).optional(),downloadLocation:z.url().optional(),
+  }).strict().optional(),
+}).strict();
+type ImagePlacement=z.infer<typeof ImagePlacementSchema>;
+
 const slim = (value: unknown): JsonObject => value && typeof value === "object" && !Array.isArray(value)
   ? value as JsonObject : { result: value };
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.9.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.10.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -58,11 +90,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.9.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.9.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.10.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.10.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -276,6 +308,43 @@ function createServer(request: Request): McpServer {
         layouts:prepared.map(s=>s.composition.layout)};
     });
 
+
+  register("compose_diagrams","Créer des diagrammes et cartes mentales",
+    "Create or replace up to 20 visual teaching diagrams in ONE call. Supported: mind maps, processes, cycles, hierarchical trees, causal chains, and matrices. AI supplies semantic nodes and relationships; editable text cards and vector connectors are generated automatically. Existing HTML/CSS freedom remains available in edit_slides. For replacement use exact slide revisions and confirmReplace=true.",
+    {presentationId:uuid,action:z.enum(["append","replace"]).default("append"),
+      slides:z.array(z.object({slideId:uuid.optional(),revision:z.number().int().min(1).optional(),
+        diagram:DiagramSchema})).min(1).max(20),
+      confirmReplace:z.boolean().default(false),dryRun:z.boolean().default(false)},true,
+    async a=>{
+      const specs=(a.slides as Array<{slideId?:string;revision?:number;diagram:Diagram}>)
+        .map(s=>({...s,document:composeDiagram(s.diagram)}));
+      if(a.action==="append"){
+        if(specs.some(s=>s.slideId||s.revision))throw new Error("invalid_append_targets");
+        if(a.dryRun){
+          await getDeck(a.presentationId,"outline",0,1);
+          return {dryRun:true,action:"append",previews:specs.map(s=>({
+            kind:s.diagram.kind,nodes:s.diagram.nodes.length,
+            relationships:s.diagram.edges.length,
+            elements:s.document.elements.length}))};
+        }
+        const outcome=await addSlides(a.presentationId,specs.map(s=>({
+          document:s.document,notes:s.diagram.notes??""
+        })));
+        return {action:"append",created:outcome.created,slides:outcome.slides,
+          kinds:specs.map(s=>s.diagram.kind)};
+      }
+      if(!a.confirmReplace)throw new Error("invalid_replace_requires_confirmation");
+      if(specs.some(s=>!s.slideId||!s.revision))throw new Error("invalid_replace_requires_ids_and_revisions");
+      const outcome=await editSlides(a.presentationId,specs.map(s=>({
+        id:s.slideId!,revision:s.revision!,operations:[
+          {op:"replace_document" as const,document:s.document},
+          ...(s.diagram.notes!==undefined?[{op:"set_notes" as const,notes:s.diagram.notes}]:[])
+        ]
+      })),a.dryRun);
+      return {action:"replace",dryRun:a.dryRun,slides:outcome.slides??outcome.changes,
+        kinds:specs.map(s=>s.diagram.kind)};
+    });
+
   register("get_animation_plan","Lire la chronologie des animations",
     "Compact click-by-click sequence of a slide, grouping automatic after-previous cues. No HTML/CSS payload. Use this to understand the projected teaching order with minimal tokens.",
     {slideId:uuid},false,
@@ -358,13 +427,102 @@ function createServer(request: Request): McpServer {
     "List usable providers, missing API keys without revealing secrets, and the external Google Images option.",{},false,
     async()=>({sources:getSourceStatuses()}));
 
-  register("generate_variants","Proposer trois variantes graphiques",
-    "Generate and SAVE three optional graphic directions for an existing slide with a single call. Keeps the original text, source HTML and image URLs; never overwrites the current design. AI can additionally author fully custom proposals using create_variants.",
-    {slideId:uuid},true,
+
+  register("curate_images","Rechercher et sélectionner des photographies multisources",
+    "Search up to four queries in parallel across Openverse, Wikimedia, Pexels, Unsplash and Google Images (SerpApi when configured). Return a compact deduplicated shortlist ranked by topic, dimensions, orientation and provider diversity, with license and source links. Ranking does not imply copyright clearance.",
+    {queries:z.array(z.string().trim().min(2).max(160)).min(1).max(4),
+      sources:z.array(ImageSourceSchema).min(1).max(5).default(["openverse","wikimedia"]),
+      orientation:z.enum(["any","landscape","portrait","square"]).default("landscape"),
+      perSource:z.number().int().min(2).max(15).default(8),
+      limit:z.number().int().min(2).max(30).default(16),
+      minWidth:z.number().int().min(0).max(10000).default(1200),
+      minHeight:z.number().int().min(0).max(10000).default(650)},false,
+    async a=>{
+      const queries=[...new Set(a.queries as string[])];
+      const results=await Promise.all(queries.map(query=>searchImages({
+        query,sources:a.sources,page:1,perSource:a.perSource,orientation:a.orientation
+      })));
+      const best=curateCandidates(results.map((r,i)=>({query:queries[i]!,images:r.images})),{
+        orientation:a.orientation,preferLarge:true,minWidth:a.minWidth,minHeight:a.minHeight
+      },a.limit);
+      return {queries,sources:getSourceStatuses(),shortlist:best.map(image=>({
+        id:image.id,provider:image.provider,query:image.matchedQuery,
+        url:image.imageUrl,preview:image.previewUrl,title:image.title,
+        credit:image.attribution,license:image.license,sourcePage:image.pageUrl,
+        dimensions:{width:image.width,height:image.height},relevanceScore:Number(image.score.toFixed(2)),
+        ...(image.downloadLocation?{downloadLocation:image.downloadLocation}:{})
+      })),providerResults:results.map(r=>({query:r.query,providers:r.providers,
+        googleSearchUrl:r.googleSearchUrl})),
+        note:"Confirm usage rights on the source page. Keys for Pexels, Unsplash or SerpApi must be configured on Netlify for integrated search."};
+    });
+
+  register("apply_images","Sélectionner, enregistrer et retoucher des images en lot",
+    "Insert, replace or transform up to 40 photos across 40 slides atomically using checked revisions. Crop, filters, rotation, opacity and framing remain editable structured properties; preserve unrelated image styles. Record source metadata without duplicating known asset URLs. No image download. If present, Unsplash tracking attempted after save.",
+    {presentationId:uuid,images:z.array(ImagePlacementSchema).min(1).max(40),
+      dryRun:z.boolean().default(false)},true,
+    async a=>{
+      const photos=a.images as ImagePlacement[];
+      const slideIds=[...new Set(photos.map(p=>p.slideId))];
+      if(slideIds.length>40)throw new Error("too_many_slides");
+      const group=await Promise.all(slideIds.map(async slideId=>{
+        const items=photos.filter(p=>p.slideId===slideId);
+        if(new Set(items.map(p=>p.revision)).size>1)throw new Error("revision_conflict:"+slideId);
+        const current=await getSlide(slideId,"full");
+        if(!("document" in current))throw new Error("slide_not_found");
+        if(current.presentation_id!==a.presentationId)throw new Error("invalid_presentation_scope");
+        if(current.revision!==items[0]!.revision)throw new Error("revision_conflict:"+slideId);
+        const ids=new Set<string>();
+        const ops:SlideOperation[]=[];
+        const saved:{id:string;url:string}[]=[];
+        for(const photo of items){
+          const id=photo.elementId??randomUUID();
+          if(ids.has(id))throw new Error("duplicate_image_target");ids.add(id);
+          const original=current.document.elements.find(e=>e.id===id);
+          if(original&&original.type!=="image")throw new Error("invalid_image_target");
+          const src=photo.url??original?.src;
+          if(!src||!src.startsWith("https://"))throw new Error("invalid_image_source");
+          const frame=photo.frame;
+          const styles:SlideElement["styles"]={left:"150px",top:"150px",width:"1200px",height:"675px",
+            objectFit:"cover",objectPosition:"50% 50%",...(original?.styles??{})};
+          if(frame){
+            if(frame.x!==undefined)styles.left=frame.x+"px";
+            if(frame.y!==undefined)styles.top=frame.y+"px";
+            if(frame.width!==undefined)styles.width=frame.width+"px";
+            if(frame.height!==undefined)styles.height=frame.height+"px";
+            if(frame.opacity!==undefined)styles.opacity=frame.opacity;
+          }
+          const element=editImageStyles({id,type:"image",src,styles},photo.adjustments??{});
+          ops.push({op:"upsert_element",element});
+          saved.push({id,url:src});
+        }
+        return {id:slideId,revision:items[0]!.revision,operations:ops,images:saved};
+      }));
+      const outcome=await editSlides(a.presentationId,group.map(({id,revision,operations})=>({
+        id,revision,operations
+      })),a.dryRun);
+      if(a.dryRun)return {dryRun:true,slides:group.map(g=>({id:g.id,images:g.images}))};
+      const credits=photos.filter(p=>p.url).map(p=>({
+        url:p.url!,label:p.credit?.label??"",
+        source:p.credit?.source??"Source non renseignée",
+        rights:p.credit?.rights??"Droits non vérifiés"
+      }));
+      let assets:{added:number;existing:number}|undefined,metadataWarning:string|undefined;
+      try{assets=await saveAssetsIfMissing(a.presentationId,credits);}
+      catch{metadataWarning="Image changes saved, but asset credits could not be indexed.";}
+      const tracking=await Promise.all(photos.filter(p=>p.credit?.downloadLocation)
+        .map(async p=>({slideId:p.slideId,...await trackUnsplashDownload(p.credit!.downloadLocation!)})));
+      return {dryRun:false,updated:outcome.updated,slides:outcome.slides,
+        assets,tracking,...(metadataWarning?{warning:metadataWarning}:{}),
+        rightsNotice:"Image usage permissions must still be verified on each publisher's source page."};
+    });
+
+  register("generate_variants","Proposer jusqu’à six variantes graphiques",
+    "Generate and SAVE 3 to 6 optional directions: immersive, editorial, manifesto, scientific atlas, archive paper and cinematic. Preserves source text, notes and image links; current slide stays unchanged. For original HTML/CSS art, use create_variants.",
+    {slideId:uuid,count:z.number().int().min(3).max(6).default(6)},true,
     async a=>{
       const slide=await getSlide(a.slideId,"full");
       if(!("document" in slide))throw new Error("slide_not_found");
-      const proposed=proposeGraphicVariants(slide.document);
+      const proposed=proposeGraphicVariants(slide.document,a.count as 3|4|5|6);
       return {slideId:a.slideId,...await createVariants(a.slideId,
         proposed.map(v=>({name:v.name,slide:{document:v.document,notes:slide.notes}})))};
     });
@@ -421,6 +579,39 @@ function createServer(request: Request): McpServer {
     "Return named alternative designs for a slide. full=false avoids transferring all HTML/CSS.",
     {slideId:uuid,full:z.boolean().default(false)},false,
     async a=>({variants:await listVariants(a.slideId,a.full)}));
+
+
+  register("compare_variants","Comparer les variantes et leurs aperçus graphiques",
+    "Compare active slide with up to eight saved variations in one compact call: text/image/notes preservation, distinct fonts and palettes, heuristic layout warnings and 10-minute signed preview URLs for side-by-side visual inspection. These indicators are not a subjective quality score. Returns a hash usable with revise_variant.",
+    {slideId:uuid,limit:z.number().int().min(1).max(8).default(8),
+      includePreviews:z.boolean().default(true)},false,
+    async a=>{
+      const current=await getSlide(a.slideId,"full");
+      if(!("document" in current))throw new Error("slide_not_found");
+      const stored=(await listVariants(a.slideId,true)).slice(0,a.limit) as Array<{
+        id:string;name:string;notes:string;document:SlideDocument;created_at:string
+      }>;
+      const baseline={name:"Version actuelle",document:current.document,notes:current.notes};
+      const {sign}=await import("../../src/mcp/security");
+      const expires=Date.now()+10*60*1000;
+      const token=(payload:string)=>ORIGIN+"/previews/slide?ticket="+encodeURIComponent(
+        Buffer.from(payload).toString("base64url")+"."+sign(payload));
+      return {slideId:a.slideId,revision:current.revision,
+        current:{...compareOneVariant(baseline,baseline),
+          ...(a.includePreviews?{previewUrl:token(a.slideId+":preview:"+expires)}:{})},
+        variants:stored.map(v=>({...compareOneVariant(baseline,v),fingerprint:fingerprint(v),
+          ...(a.includePreviews?{previewUrl:token(a.slideId+":"+v.id+":variant-preview:"+expires)}:{})})),
+        previewExpiresAt:a.includePreviews?new Date(expires).toISOString():undefined,
+        comparisonMethod:"Static hints and preservation flags; open the signed preview URLs in a browser to inspect rendering, typography and images."};
+    });
+
+  register("revise_variant","Modifier une variante sans écraser la diapositive",
+    "Edit a SAVED variant in place with up to 80 targeted slide operations (HTML/CSS, text, image layers, notes, animations), while leaving the active slide unchanged. Requires the exact fingerprint returned by compare_variants to avoid concurrent overwrites.",
+    {slideId:uuid,variantId:uuid,
+      expectedFingerprint:z.string().regex(/^[0-9a-f]{64}$/),
+      name:z.string().trim().min(1).max(120).optional(),
+      operations:z.array(SlideOperationSchema).min(1).max(80)},true,
+    async a=>reviseVariant(a.slideId,a.variantId,a.expectedFingerprint,a.operations,a.name));
 
   register("activate_variant","Choisir une variante",
     "Make a saved design the active slide. Current design is stored as a backup variant.",

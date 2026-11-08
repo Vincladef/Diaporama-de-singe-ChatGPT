@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSlide } from "../../src/mcp/store";
+import { getSlide, getVariant } from "../../src/mcp/store";
 import { ORIGIN, safeEqual, sign } from "../../src/mcp/security";
 import { renderSlideHtml } from "../../src/engine/render";
 
@@ -15,17 +15,21 @@ export default async function handler(request:Request):Promise<Response>{
   let payload="";
   try{payload=Buffer.from(parts[0]!,"base64url").toString("utf8");}
   catch{return Response.json({error:"invalid_ticket"},{status:403});}
-  const [id,kind,expires]=payload.split(":");
+  const values=payload.split(":");
+  const variantPreview=values.length===4&&values[2]==="variant-preview";
+  const slidePreview=values.length===3&&values[1]==="preview";
+  const expires=Number(values[variantPreview?3:2]);
   const now=Date.now();
-  if(!id||kind!=="preview"||!expires||!Number.isFinite(Number(expires))||
-    now>Number(expires)||Number(expires)-now>610000||
+  if(!(variantPreview||slidePreview)||!Number.isFinite(expires)||
+    now>expires||expires-now>610000||
     !safeEqual(sign(payload),parts[1]??""))
     return Response.json({error:"invalid_or_expired_ticket"},{status:403});
   try{
-    const slide=await getSlide(id,"full");
-    if(!("document" in slide))return Response.json({error:"not_found"},{status:404});
-    const width=slide.document.canvas.width,height=slide.document.canvas.height;
-    const doc=renderSlideHtml(slide.document);
+    const document=variantPreview
+      ? (await getVariant(values[0]!,values[1]!)).document
+      : (await getSlide(values[0]!,"full") as Awaited<ReturnType<typeof getSlide>> & {document:import("../../src/domain/slide").SlideDocument}).document;
+    const width=document.canvas.width,height=document.canvas.height;
+    const doc=renderSlideHtml(document);
     const nonce=randomUUID().replace(/-/g,"");
     const body='<!doctype html><html lang="fr"><head><meta charset="utf-8">'+
       '<meta name="viewport" content="width=device-width, initial-scale=1">'+

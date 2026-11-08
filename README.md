@@ -74,3 +74,7 @@ Les effets avancés PowerPoint, les masters, les diagrammes complexes et la sync
 ## Étape 9 : autonomie de ChatGPT
 
 Le serveur MCP publie 32 outils, dont `compose_slides` pour produire jusqu'à 40 mises en page éditables dans un appel, `review_slides` pour obtenir un diagnostic et des aperçus navigateur signés, et `repair_slides` pour corriger en lot les défauts géométriques simples avec contrôle de révision. Le catalogue réel est exposé dans `workspace_status` pour diagnostiquer les caches d'outils ChatGPT. Les prévisualisations HTML/CSS sont isolées ; elles servent à l'inspection visuelle par navigateur, sans prétendre produire une capture raster dans le MCP. Voir [docs/AI_STEP9.md](docs/AI_STEP9.md).
+
+## Étape 10 : créativité visuelle
+
+Moteur de diagrammes et cartes mentales (`compose_diagrams`), six directions graphiques, comparaison et modification ciblée des variantes (`compare_variants`, `revise_variant`), recherche photographique multisource condensée (`curate_images`) et application de traitements d'images en lot (`apply_images`). L'ensemble demeure compatible avec les documents HTML/CSS libres et le modèle de révision Neon. Catalogue serveur : 37 outils en version 0.10.0 ; actualiser les outils dans ChatGPT si le client voit un ancien catalogue. Pexels, Unsplash et Google Images intégré requièrent les clés API indiquées dans [la documentation étape 10](docs/CREATIVITY_STEP10.md).

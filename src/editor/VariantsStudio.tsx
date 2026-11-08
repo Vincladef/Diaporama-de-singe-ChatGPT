@@ -1,6 +1,7 @@
 import { useCallback,useEffect,useState } from "react";
 import type { SlideDocument } from "../domain/slide";
 import { proposeGraphicVariants,type ProposedVariant } from "../variants/propose";
+import { compareOneVariant } from "../variants/compare";
 import { SlideThumbnail } from "./SlideThumbnail";
 import { command } from "../lib/api";
 
@@ -34,7 +35,7 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
     return()=>{cancelled=true;window.clearInterval(timer);window.removeEventListener("keydown",escape);};
   },[refresh,onClose]);
   function generate(){
-    setProposals(proposeGraphicVariants(document));
+    setProposals(proposeGraphicVariants(document,6));
     setSelected(null);
   }
   async function persist(){
@@ -67,9 +68,9 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
           <button onClick={onClose} aria-label="Fermer les variantes" className="studio-close">×</button>
         </header>
         <div className="studio-variant-toolbar">
-          <button className="primary" disabled={loading} onClick={generate}>Proposer trois compositions</button>
+          <button className="primary" disabled={loading} onClick={generate}>Proposer six directions</button>
           {proposals.length>0&&<button disabled={loading||dirty} onClick={()=>void persist()}>
-            {loading?"Enregistrement…":"Conserver les 3 variantes dans Neon"}
+            {loading?"Enregistrement…":"Conserver les variantes dans Neon"}
           </button>}
           <span>Les variantes créées par ChatGPT via MCP apparaissent également ici.</span>
         </div>
@@ -83,10 +84,10 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
             onClick={()=>setSelected(candidate.id)}>
               <div className="variant-preview"><SlideThumbnail document={candidate.document} index={i+1}/></div>
               <div className="variant-description"><strong>{candidate.name}</strong><p>{candidate.description}</p>
-                <span>{candidate.stored?"Enregistrée":"Proposition locale"}</span>
+                <span>{candidate.stored?"Enregistrée":"Proposition locale"} · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.imageCount} image(s) · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.warnings} alerte(s)</span>
               </div>
             </button>)}
-          {candidates.length===0&&<div className="studio-empty">Crée trois directions graphiques pour cette diapositive, puis compare-les côte à côte. Les contenus restent modifiables.</div>}
+          {candidates.length===0&&<div className="studio-empty">Crée six directions graphiques pour cette diapositive, puis compare-les côte à côte. Les contenus restent modifiables.</div>}
         </div>
         <footer className="studio-variant-footer">
           <span>{candidates.length} proposition{candidates.length>1?"s":""} disponibles</span>

@@ -11,15 +11,16 @@ type Props={
 };
 const ALL:ImageSource[]=["openverse","wikimedia","pexels","unsplash","google"];
 const titles:Record<ImageSource,string>={openverse:"Openverse",wikimedia:"Wikimedia",pexels:"Pexels",unsplash:"Unsplash",google:"Google Images"};
-function queryUrl(query:string,sources:ImageSource[],page:number){
+function queryUrl(query:string,sources:ImageSource[],page:number,orientation:"any"|"landscape"|"portrait"|"square"){
   const u=new URL("/.netlify/functions/image-search",window.location.origin);
-  u.searchParams.set("q",query);u.searchParams.set("sources",sources.join(","));u.searchParams.set("perSource","20");u.searchParams.set("page",String(page));
+  u.searchParams.set("q",query);u.searchParams.set("sources",sources.join(","));u.searchParams.set("perSource","20");u.searchParams.set("page",String(page));u.searchParams.set("orientation",orientation);
   return u.toString();
 }
 export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Props){
   const [query,setQuery]=useState(searchTerm??"");
   const [sources,setSources]=useState<ImageSource[]>(["openverse","wikimedia"]);
   const [page,setPage]=useState(1);
+  const [orientation,setOrientation]=useState<"any"|"landscape"|"portrait"|"square">("landscape");
   const [result,setResult]=useState<ImageSearchResult|null>(null);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
@@ -35,7 +36,7 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
     if(query.trim().length<2)return;
     setLoading(true);setError("");setChosen(null);setPage(nextPage);
     try{
-      const response=await fetch(queryUrl(query.trim(),sources,nextPage),{headers:{authorization:"Bearer "+token},cache:"no-store"});
+      const response=await fetch(queryUrl(query.trim(),sources,nextPage,orientation),{headers:{authorization:"Bearer "+token},cache:"no-store"});
       const json:unknown=await response.json();
       if(!response.ok)throw new Error("Recherche indisponible : HTTP "+response.status);
       setResult(json as ImageSearchResult);
@@ -70,6 +71,7 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
             <input type="checkbox" checked={sources.includes(s)} onChange={()=>toggle(s)}/>
             {s==="google"?"Google Images (API facultative)":titles[s]}
           </label>)}
+          <label>Format <select aria-label="Orientation des photographies" value={orientation} onChange={e=>setOrientation(e.target.value as typeof orientation)}><option value="landscape">Paysage</option><option value="portrait">Portrait</option><option value="square">Carré</option><option value="any">Indifférent</option></select></label>
           <a target="_blank" rel="noopener noreferrer" href={googleLink} className="studio-google-link">Google Images ↗</a>
         </div>
         <div className="studio-content">
@@ -105,7 +107,7 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
             <input type="url" placeholder="https://..." value={manual} onChange={e=>setManual(e.target.value)}/>
           </label>
           <button onClick={useManual} disabled={!manual.trim()}>Insérer l'URL</button>
-          <small>Les licences varient selon la source. Google Images s'ouvre dans un autre onglet ; copie ensuite l'adresse d'une image autorisée.</small>
+          <small>Les droits restent à vérifier sur le site source. Pour une recherche Google intégrée, configure SerpApi ; sinon, utilise le lien Google Images. Pexels et Unsplash nécessitent leurs clés API.</small>
         </footer>
       </section>
     </div>
