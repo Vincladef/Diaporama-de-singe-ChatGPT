@@ -4,11 +4,12 @@ import type { PresentationDetail } from "../lib/api";
 import { captureSlide } from "./capture";
 import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
+import { buildExportFrames, type RevealExportMode } from "./reveals";
 
 export type PowerPointMode = "faithful" | "editable";
 export interface ExportProgress { completed: number; total: number; }
 export interface ExportReport { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; downloadUrl: string; }
-export interface PowerPointArtifact { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; blob: Blob; }
+export interface PowerPointArtifact { fileName: string; slideCount: number; sourceSlideCount: number; warnings: string[]; mode: PowerPointMode; blob: Blob; }
 
 function getNumber(style: SlideElement["styles"], key: string, reference: number, fallback: number): number {
   return cssLength(style[key], reference, fallback);
@@ -116,6 +117,7 @@ function emptyFreeform(document: SlideDocument): boolean {
 export async function buildPowerPoint(
   deck: PresentationDetail, mode: PowerPointMode,
   onProgress?: (progress: ExportProgress) => void,
+  revealMode: RevealExportMode = "steps",
 ): Promise<PowerPointArtifact> {
   if (!deck.slides.length) throw new Error("La présentation ne contient aucune diapositive.");
   const first = deck.slides[0]!;
@@ -130,26 +132,36 @@ export async function buildPowerPoint(
   pptx.title = deck.presentation.title;
   pptx.company = "Diaporama de singe";
   const warnings: string[] = [];
+  const frames = buildExportFrames(deck.slides.map(s => s.document), revealMode);
   const preflight=inspectExport(deck.slides);
   const imageCache=new Map<string,Promise<string>>();
-  if(preflight.animatedSlides)warnings.push(preflight.animatedSlides+
-    " diapositive(s) comportent des animations Web ; leur chronologie n'est pas exportée vers PowerPoint.");
+  if(preflight.animatedSlides)warnings.push(revealMode === "steps"
+    ? preflight.animatedSlides + " diapositive(s) animées développées en " + frames.length +
+      " écrans successifs au total. Les clics dévoilent le contenu en avançant d'une diapositive ; les fondus et déplacements Web ne sont pas des animations natives Google Slides/PowerPoint."
+    : preflight.animatedSlides + " diapositive(s) comportent des animations Web ; l'export statique ne conserve pas leurs apparitions au clic.");
   if(preflight.totalRemoteImages)warnings.push(
     "Les photos externes dépendent de la politique CORS de leurs hébergeurs. En cas de blocage, utilisez un média librement téléchargeable.");
 
-  for (let index = 0; index < deck.slides.length; index++) {
-    const source = deck.slides[index]!;
+  for (let index = 0; index < frames.length; index++) {
+    const frame = frames[index]!;
+    const source = deck.slides[frame.sourceIndex]!;
     const document = source.document;
     const slide = pptx.addSlide();
     slide.background = { color: "FFFFFF" };
     if (source.notes?.trim()) slide.addNotes(safeNotes(source.notes));
-    const number = index + 1;
+    const number = frame.sourceIndex + 1;
     const ratio = document.canvas.width / document.canvas.height;
     if (Math.abs(ratio - aspect) > 0.001) {
       warnings.push("Diapositive " + number + " : format différent ; les éléments seront adaptés au format du premier écran.");
     }
 
-    if (mode === "faithful") {
+    if (frame.revealClickCount !== null) {
+      // One rendered page per click boundary. This is more robust than hoping that
+      // imported PowerPoint animation XML survives the Google Slides conversion.
+      const image = await captureSlide(document, { revealClickCount: frame.revealClickCount });
+      slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH,
+        objectName: "Reveal " + number + "." + frame.revealClickCount });
+    } else if (mode === "faithful") {
       const image = await captureSlide(document);
       slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH, objectName: "Render " + number });
     } else {
@@ -172,7 +184,7 @@ export async function buildPowerPoint(
         await appendNativeObjects(pptx, slide, document, slideW, slideH,imageCache);
       }
     }
-    onProgress?.({ completed: number, total: deck.slides.length });
+    onProgress?.({ completed: index + 1, total: frames.length });
   }
 
   const fileName = safeDownloadName(deck.presentation.title);
@@ -188,20 +200,21 @@ export async function buildPowerPoint(
   }
   // Inspect ZIP's central-directory filenames at the end of the generated archive.
   const tail = new TextDecoder("utf-8").decode(await blob.slice(Math.max(0, blob.size - 750_000)).arrayBuffer());
-  for (let i = 1; i <= deck.slides.length; i++) {
+  for (let i = 1; i <= frames.length; i++) {
     if (!tail.includes("ppt/slides/slide" + i + ".xml")) {
       throw new Error("Le PowerPoint généré ne contient pas la diapositive " + i + ".");
     }
   }
-  return { fileName, slideCount: deck.slides.length, warnings, mode, blob };
+  return { fileName, slideCount: frames.length, sourceSlideCount: deck.slides.length, warnings, mode, blob };
 }
 
 /** The file download and Google Slides conversion reuse the exact same PPTX builder. */
 export async function exportPowerPoint(
   deck: PresentationDetail, mode: PowerPointMode,
   onProgress?: (progress: ExportProgress) => void,
+  revealMode: RevealExportMode = "steps",
 ): Promise<ExportReport> {
-  const artifact = await buildPowerPoint(deck, mode, onProgress);
+  const artifact = await buildPowerPoint(deck, mode, onProgress, revealMode);
   const href = URL.createObjectURL(artifact.blob);
   const anchor = document.createElement("a");
   anchor.download = artifact.fileName;
