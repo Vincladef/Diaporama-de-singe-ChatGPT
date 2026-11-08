@@ -138,7 +138,7 @@ export function PresenterStudio({detail,initialSlideId,onClose}:Props){
     </header>
     <div className="presenter-content">
       <div className="presenter-main-stage">
-        <ProjectionStage key={active.id} slide={active} reveal={position.reveal} onAdvance={next}
+        <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
           onBusyChange={setBusy} title={"Diapositive "+(position.slide+1)}/>
         {blackout&&<div aria-label="Écran public noir" style={{position:"absolute",inset:"0 0 52px",background:"#000",
           pointerEvents:"none",zIndex:3}}/>}
