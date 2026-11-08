@@ -9,7 +9,7 @@ export type ExportPreflight={
   slideCount:number;fullyNative:number;mixedEditable:number;rasterOnly:number;
   totalRemoteImages:number;animatedSlides:number;warnings:string[];
   slides:SlideExportRisk[];
-  googleSlides:{directPublish:false;workflow:string};
+  googleSlides:{directPublish:false;webEditorPublish:true;requiresOAuth:true;workflow:string};
 };
 export function isNativePptxObject(e:SlideElement):boolean{
   if(!["text","image","shape"].includes(e.type)||e.parentId)return false;
@@ -49,7 +49,7 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
     totalRemoteImages:risks.reduce((sum,r)=>sum+r.remoteImages,0),
     animatedSlides:risks.filter(r=>r.animations>0).length,warnings:allWarnings,
     slides:risks,
-    googleSlides:{directPublish:false,
-      workflow:"Télécharger le PPTX puis importer le fichier dans Google Drive et l'ouvrir avec Google Slides. La publication directe nécessite une intégration OAuth Google."},
+    googleSlides:{directPublish:false,webEditorPublish:true,requiresOAuth:true,
+      workflow:"L'éditeur Web propose « Exporter vers Google Slides » après autorisation Google OAuth. Le MCP ne publie pas directement : en l'absence d'OAuth, téléchargez le PPTX et importez-le via Google Drive."},
   };
 }
