@@ -76,7 +76,7 @@ export function normalizePexels(json:Record<string,unknown>):ImageCandidate[]{
     const raw=allowedHttps(src.large2x)||allowedHttps(src.original),thumb=allowedHttps(src.medium)||raw;
     if(!raw||!thumb)return [];
     const creator=asString(row.photographer,140),title=asString(row.alt,160)||"Photo Pexels";
-    return [{id:"pexels:"+asString(row.id,80),provider:"pexels" as const,title,alt:title,imageUrl:raw,previewUrl:thumb,
+    return [{id:"pexels:"+String(row.id??"").slice(0,80),provider:"pexels" as const,title,alt:title,imageUrl:raw,previewUrl:thumb,
       pageUrl:allowedHttps(row.url)||"https://www.pexels.com/",creator,license:"Licence Pexels",
       attribution:(creator||"Photographe")+" · Pexels",width:asNumber(row.width),height:asNumber(row.height)}];
   });
@@ -86,7 +86,7 @@ export function normalizeGoogleImages(json:Record<string,unknown>):ImageCandidat
     const row=asRecord(value),raw=allowedHttps(row.original),thumb=allowedHttps(row.thumbnail)||raw;
     if(!raw||!thumb)return [];
     const title=asString(row.title,160)||"Image Google",creator=asString(row.source,140);
-    return [{id:"google:"+asString(row.position,60)+":"+raw.slice(0,80),provider:"google" as const,
+    return [{id:"google:"+String(row.position??"").slice(0,60)+":"+raw.slice(0,80),provider:"google" as const,
       title,alt:title,previewUrl:thumb,imageUrl:raw,
       pageUrl:allowedHttps(row.link)||"https://www.google.com/imghp",
       creator,license:"Droits à vérifier sur le site source",attribution:creator||"Site source",
@@ -113,7 +113,7 @@ const enabled=(s:ImageSource)=>s==="openverse"||s==="wikimedia"||
 // Google Images does not offer a generally available REST image search for new API users in 2026.
 export function getSourceStatuses(){
   return (["openverse","wikimedia","pexels","unsplash","google"] as ImageSource[]).map(s=>({
-    source:s,enabled:enabled(s),mode:s==="google"?"external":enabled(s)?"integrated":"requires_api_key",
+    source:s,enabled:enabled(s),mode:s==="google"?(enabled(s)?"integrated_via_serpapi":"external"):enabled(s)?"integrated":"requires_api_key",
   }));
 }
 async function fromSource(source:ImageSource,req:ImageSearchRequest):Promise<ImageCandidate[]> {
