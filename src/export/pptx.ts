@@ -84,7 +84,12 @@ async function appendNativeObjects(
     } else if (element.type === "image") {
       if (!element.src) continue;
       const data = await imageToDataUrl(element.src);
-      slide.addImage({ data, ...box, objectName: element.id });
+      const fit = element.styles.objectFit;
+      if (fit === "cover" || fit === "contain") {
+        slide.addImage({ data, ...box, objectName: element.id, sizing: { type: fit, w: box.w, h: box.h } });
+      } else {
+        slide.addImage({ data, ...box, objectName: element.id });
+      }
     }
   }
 }
