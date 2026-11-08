@@ -7,6 +7,7 @@ import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
+import { ImportStudio } from "./import/ImportStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
@@ -33,6 +34,7 @@ export default function App() {
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
   const [presenting,setPresenting]=useState(false);
+  const [importOpen,setImportOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
@@ -455,6 +457,7 @@ export default function App() {
       <main className="workspace">
         <header className="topbar">
           <div className="breadcrumb">{current ? current.presentation.title : "Mes présentations"}</div>
+          <button className="subtle-btn import-top-button" onClick={()=>setImportOpen(true)} disabled={busy}>⇧ Importer</button>
           {current && <div className="header-actions">
             <button className="subtle-btn" onClick={() => void renameDeck()} disabled={busy}>Renommer</button>
             <button className="subtle-btn danger-text" onClick={() => void deleteDeck()} disabled={busy}>Supprimer</button>
@@ -572,6 +575,8 @@ export default function App() {
           </div>
         )}
 
+        {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
+          onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
           selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
           onPick={chooseImage}/>}
