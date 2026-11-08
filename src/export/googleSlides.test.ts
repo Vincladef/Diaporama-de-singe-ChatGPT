@@ -74,7 +74,7 @@ test("large PowerPoint converts with Drive resumable upload rather than multipar
       assert.equal(init?.method, "POST");
       assert.equal(new Headers(init?.headers).get("x-upload-content-type"), PPTX_MIME);
       assert.equal(new Headers(init?.headers).get("x-upload-content-length"), String(pptx.size));
-      assert.match(String(init?.body), /application\\/vnd\\.google-apps\\.presentation/);
+      assert.ok(String(init?.body).includes(GOOGLE_SLIDES_MIME));
       return new Response(null, { status: 200, headers: { location: session } });
     }
     assert.equal(requests, 2);
