@@ -12,7 +12,9 @@ export type ExportPreflight={
   googleSlides:{directPublish:false;webEditorPublish:true;requiresOAuth:true;workflow:string};
 };
 export function isNativePptxObject(e:SlideElement):boolean{
-  if(!["text","image","shape"].includes(e.type)||e.parentId)return false;
+  if(!["text","image","shape","svg"].includes(e.type)||e.parentId)return false;
+  if(e.type==="svg"&&(!e.text?.trim().startsWith("<svg")||
+      /<script|<foreignObject|\\bon[a-z]+\\s*=|\\bhref\\s*=\\s*["']https?:/i.test(e.text)))return false;
   const excluded=["transform","filter","backdropFilter","clipPath","mask",
     "mixBlendMode","backgroundImage","writingMode"];
   return !excluded.some(name=>e.styles[name]!==undefined&&e.styles[name]!=="");
@@ -36,7 +38,9 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
     const ratio=document.canvas.width/document.canvas.height;
     if(Math.abs(ratio-expectedRatio)>.002)issues.push("Format différent du premier écran ; adaptation nécessaire.");
     if(mode==="raster")issues.push("Mode objets éditables : conversion de la page en image.");
-    if(mode==="mixed")issues.push("Mode modifiable : textes HTML et objets simples convertis ; photographies, SVG et effets CSS complexes conservés dans le décor.");
+    if(mode==="mixed")issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
+    if(document.elements.some(x=>x.type==="svg")&&!hasUnsupported)
+      issues.push("Les tracés SVG sont conservés en image vectorielle indépendante, sans édition des points.");
     if(document.animations.length)issues.push("Les animations Web ne sont pas exportées en animations PowerPoint natives.");
     if(media.some(x=>!x.src))issues.push("Image sans source.");
     if(remote)issues.push("Les images distantes nécessitent un accès CORS pour la capture/export dans ce navigateur.");
