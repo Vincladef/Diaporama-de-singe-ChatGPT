@@ -29,7 +29,8 @@ export function nextPosition(documents:Pick<SlideDocument,"animations">[],pos:Pl
   const slide=Math.min(Math.max(0,pos.slide),documents.length-1);
   const count=buildPlaybackPlan(documents[slide]!.animations).clicks.length;
   if(pos.reveal<count)return {slide,reveal:pos.reveal+1};
-  return {slide:Math.min(documents.length-1,slide+1),reveal:0};
+  if(slide===documents.length-1)return {slide,reveal:Math.min(pos.reveal,count)};
+  return {slide:slide+1,reveal:0};
 }
 export function previousPosition(documents:Pick<SlideDocument,"animations">[],pos:PlaybackPosition):PlaybackPosition {
   if(!documents.length)return {slide:0,reveal:0};
