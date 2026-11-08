@@ -11,7 +11,7 @@ Créer un moteur de diapositives Web qui soit plus facile à piloter par ChatGPT
 - Stockage relationnel : Neon PostgreSQL, base `diaporama_singe_chatgpt`, projet `soft-lake-83106970`.
 - Schéma minimal : `presentations` et `slides`. Ne pas introduire d'autres tables tant qu'elles n'apportent pas une fonction réelle.
 - Contrats applicatifs : Zod et types TypeScript, documents de diapositives versionnés.
-- Tests : Vitest et vérification TypeScript dans GitHub Actions.
+- Tests : exécution native Node.js et vérification TypeScript dans GitHub Actions.
 - API publique actuelle : `GET /.netlify/functions/health` uniquement. Aucune route publique de lecture/écriture des présentations.
 
 ## Représentation des diapositives
