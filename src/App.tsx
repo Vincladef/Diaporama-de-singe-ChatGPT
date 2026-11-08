@@ -7,6 +7,7 @@ import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
+import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { QualityStudio } from "./quality/QualityStudio";
@@ -35,6 +36,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
+  const [historyStudioOpen,setHistoryStudioOpen]=useState(false);
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
@@ -73,10 +75,7 @@ export default function App() {
           if (!cancelled) {
             setCurrent(data);
             const first = data.slides[0];
-            setSlideId(first?.id ?? null);
-            setDraft(first?.document ?? null);
-            setNotes(first?.notes ?? "");
-            setDirty(false);
+            pickSlide(first);
           }
         }).catch(e => { if (!cancelled) setError(String(e.message ?? e)); });
       }
@@ -120,6 +119,16 @@ export default function App() {
     setHistoryTick(v=>v+1);
   }
   function confirmLeave() { return !dirty || window.confirm("Quitter sans enregistrer les modifications ?"); }
+  function backupDraft(){
+    if(!draft||!slideId||!current)return;
+    const data=JSON.stringify({kind:"diaporama-singe-local-backup",slideId,
+      presentationId:current.presentation.id,revision:active?.revision??0,document:draft,notes},null,2);
+    const url=URL.createObjectURL(new Blob([data],{type:"application/json;charset=utf-8"}));
+    const link=window.document.createElement("a");
+    link.href=url;link.download="brouillon-diapositive-"+slideId.slice(0,8)+".json";
+    window.document.body.appendChild(link);link.click();link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
   async function refreshList() { setDecks(await listPresentations(token)); }
   async function loadDeck(id: string, preferred?: string) {
     const detail = await readPresentation(token, id);
@@ -352,6 +361,15 @@ export default function App() {
     if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
     setExportBusy(true); setExportReport(null); setExportProgress("Préparation…"); setError("");
     try {
+      const fresh=await readDeckRevisions(token,current.presentation.id);
+      const changed=fresh.title!==current.presentation.title||
+        fresh.slides.length!==current.slides.length||
+        fresh.slides.some((remote,i)=>remote.id!==current.slides[i]?.id||
+          remote.revision!==current.slides[i]?.revision||remote.position!==current.slides[i]?.position);
+      if(changed){
+        setExternalChanges(true);
+        throw new Error("La présentation a changé depuis ChatGPT ou un autre onglet. Actualisez-la avant l'export pour obtenir la bonne version.");
+      }
       const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
         setExportProgress("Diapositive " + completed + "/" + total));
       setExportReport(report);
@@ -363,7 +381,7 @@ export default function App() {
   }
 
   const active = current?.slides.find(s=>s.id===slideId);
-  const statusText = externalChanges ? "Modifié depuis ChatGPT" : dirty ? "Modifications non enregistrées" : "Enregistré";
+  const statusText = externalChanges ? "Nouvelle version distante" : dirty ? "Modifications non enregistrées" : "Enregistré";
 
   useEffect(()=>{
     if(!token||!current?.presentation.id)return;
@@ -388,10 +406,13 @@ export default function App() {
         void refreshList().catch(()=>{});
       }catch{/* Transient network issues do not discard local work. */}
     };
-    const timer=window.setInterval(()=>void check(),16000);
+    const timer=window.setInterval(()=>void check(),9000);
     const onFocus=()=>void check();
     window.addEventListener("focus",onFocus);
-    return()=>{cancelled=true;window.clearInterval(timer);window.removeEventListener("focus",onFocus);};
+    const onVisibility=()=>{if(document.visibilityState==="visible")void check();};
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{cancelled=true;window.clearInterval(timer);window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onVisibility);};
   },[token,current?.presentation.id,slideId,busy,exportBusy]);
 
   useEffect(()=>{
@@ -499,7 +520,8 @@ export default function App() {
               </div>
             </div>
             {externalChanges && <div className="external-banner" role="alert"><strong>Modifications détectées depuis le MCP ou un autre onglet.</strong>
-              <span>Enregistrez ailleurs les changements en cours avant de recharger.</span>
+              <span>Conservez votre brouillon local avant de charger la version distante.</span>
+              {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
             {exportReport && <div className="export-report" role="status">
@@ -538,6 +560,7 @@ export default function App() {
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
                       <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
                       <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
+                      <button onClick={()=>setHistoryStudioOpen(true)} title="Afficher l'historique des sauvegardes">Historique</button>
                       <button onClick={()=>setAnimationPanelOpen(v=>!v)} title="Configurer les animations au clic">Animations</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
@@ -598,6 +621,9 @@ export default function App() {
         {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
           selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
           onPick={chooseImage}/>}
+        {historyStudioOpen&&token&&slideId&&current&&active&&<HistoryStudio key={slideId} token={token}
+          slideId={slideId} revision={active.revision} dirty={dirty} onClose={()=>setHistoryStudioOpen(false)}
+          onRestored={async()=>{await loadDeck(current.presentation.id,slideId);await refreshList();}}/>}
         {variantsStudioOpen&&token&&slideId&&draft&&<VariantsStudio key={slideId} token={token}
           slideId={slideId} document={draft} notes={notes} dirty={dirty} onApply={applyVariant}
           onClose={()=>setVariantsStudioOpen(false)}/>}
