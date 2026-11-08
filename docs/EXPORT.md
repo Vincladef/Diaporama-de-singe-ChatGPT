@@ -67,3 +67,7 @@ Le rendu a été validé structurellement et par les aperçus Web. Il reste à c
 L'éditeur propose désormais `Importer`, qui peut relire les PPTX générés par son propre export. Le mode **Objets modifiables** conserve la structure native des zones de texte, photographies et formes compatibles ; des ombres purement décoratives peuvent être omises afin de préserver la modifiabilité du texte. Les transformations CSS complexes et le HTML libre restent potentiellement rasterisés.
 
 Un test en navigateur sur deux diapositives importées, dont une avec image et notes, a confirmé la création de copie graphique, l'export en PPTX modifiable, puis le réimport des textes, photographies et notes. Ce test ne constitue pas une comparaison des pixels dans PowerPoint ou Google Slides. Voir `docs/INTEGRATION_IMPORT.md`.
+
+## Étape 11 : vérification avant l'export
+
+Le modèle de prédiagnostic `src/export/preflight.ts` distingue les objets convertibles nativement, les compositions hybrides et les captures raster intégrales ; il repère les animations Web, images HTTPS externes et changements de proportions. L'éditeur vérifie les révisions distantes juste avant le PPTX. Le moteur d'export réutilise les images identiques durant une opération, avec bornes de téléchargement. Le MCP retourne les avertissements depuis `prepare_export`, sans prétendre créer le PowerPoint lui-même. L'import dans Google Slides reste celui d'un PPTX via Drive, sans publication automatique dans le compte Google.
