@@ -73,13 +73,14 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
       const doc=frameRef.current?.contentDocument;
       if(!doc||!slideRef.current.freeform){clear();return false;}
       const element=doc.elementFromPoint(x,y);
-      if(!(element instanceof HTMLElement)||!safeTag(element)){
+      if(!element||element.nodeType!==1||!safeTag(element as HTMLElement)){
         clear();return false;
       }
-      const id=element.dataset.singeId||"visual-"+crypto.randomUUID();
-      element.dataset.singeId=id;
-      activeElement.current=element;
-      setSelected({id,box:rectBox(element),tag:element.tagName.toLowerCase()});
+      const node=element as HTMLElement;
+      const id=node.dataset.singeId||"visual-"+crypto.randomUUID();
+      node.dataset.singeId=id;
+      activeElement.current=node;
+      setSelected({id,box:rectBox(node),tag:node.tagName.toLowerCase()});
       onSelectStructured([]);
       return true;
     },
