@@ -110,7 +110,7 @@ function getSlideFiles(z:JSZip, warnings:string[]):Promise<{files:string[];size:
   })();
 }
 function extractNotes(xml:unknown):string{
-  const tree=rec(rec(rec(xml)["p:notes"])["p:cSld"])["p:spTree"];
+  const tree=rec(rec(rec(rec(xml)["p:notes"])["p:cSld"])["p:spTree"]);
   return arr(tree["p:sp"]).flatMap(value=>{
     const shape=rec(value),placeholder=rec(rec(rec(shape["p:nvSpPr"])["p:nvPr"])["p:ph"]);
     const kind=str(placeholder["@_type"]);
