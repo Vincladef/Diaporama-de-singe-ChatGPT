@@ -1,10 +1,13 @@
 import { toPng } from "html-to-image";
 import type { SlideDocument } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
+import { SlideAnimationPlayer } from "../animation/runtime";
 
 export interface CaptureOptions {
   pixelRatio?: number;
   onWarning?: (message: string) => void;
+  /** Cumulative click boundary for Google Slides / PPTX stage exports. */
+  revealClickCount?: number;
 }
 
 /**
@@ -26,6 +29,7 @@ export async function captureSlide(document: SlideDocument, options: CaptureOpti
     width: width + "px", height: height + "px",
     pointerEvents: "none", border: "0", opacity: "1",
   });
+  let player: SlideAnimationPlayer | undefined;
   try {
     const ready = new Promise<void>((resolve, reject) => {
       const timeout = window.setTimeout(() => reject(new Error("Le rendu de la diapositive a expiré.")), 15000);
@@ -56,6 +60,15 @@ export async function captureSlide(document: SlideDocument, options: CaptureOpti
       throw new Error(unavailable.length + " image(s) n'ont pas pu être chargées. Corrigez les sources avant un export fidèle.");
     }
 
+    if (options.revealClickCount !== undefined) {
+      // The same animation runtime drives Web projection and exported click boundaries.
+      // The sandbox remains script-free; its parent applies deterministic final styles.
+      player = new SlideAnimationPlayer(doc, document);
+      const missing = player.missingTargets();
+      if (missing.length) throw new Error("Animation sans cible visible : " + missing.slice(0, 5).join(", "));
+      await player.seek(options.revealClickCount, { animate: false });
+    }
+
     try {
       return await toPng(doc.body, {
         width, height,
@@ -69,6 +82,7 @@ export async function captureSlide(document: SlideDocument, options: CaptureOpti
         (error instanceof Error ? error.message : String(error)));
     }
   } finally {
+    player?.dispose();
     frame.remove();
   }
 }
