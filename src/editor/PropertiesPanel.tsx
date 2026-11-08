@@ -1,3 +1,4 @@
+import { useState, type KeyboardEvent } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { elementBox } from "./geometry";
 import { cropCoordinates, changeFilter, readFilter, type ImageFilterKey } from "../images/edit";
@@ -18,7 +19,16 @@ type Props = {
 const cleanHex = (value:unknown, defaultValue:string) => typeof value === "string" && /^#[a-f\d]{6}$/i.test(value) ? value : defaultValue;
 const numeric = (input:string, fallback:number) => Number.isFinite(Number(input)) ? Number(input) : fallback;
 
+function indentCode(e:KeyboardEvent<HTMLTextAreaElement>,apply:(value:string)=>void){
+  if(e.key!=="Tab"||e.shiftKey)return;
+  e.preventDefault();
+  const el=e.currentTarget,start=el.selectionStart,end=el.selectionEnd;
+  const next=el.value.slice(0,start)+"  "+el.value.slice(end);
+  apply(next);
+  window.requestAnimationFrame(()=>{if(el.isConnected)el.setSelectionRange(start+2,start+2);});
+}
 export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,onTabChange,onAdd,onDelete,onArrange,onOpenImages}:Props) {
+  const [expandedCode,setExpandedCode]=useState<{type:"html"|"css";value:string}|null>(null);
   const selected=selectedIds.length===1 ? doc.elements.find(e=>e.id===selectedIds[0]) : undefined;
   const box=selected ? elementBox(selected,doc) : undefined;
 
@@ -184,12 +194,46 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
       </div>}
       {(tab==="html"||tab==="css") && <div className="property-panel">
         <label htmlFor="source-editor">{tab==="html"?"HTML libre":"Styles CSS libres"}</label>
+        <button type="button" className="subtle-btn" onClick={()=>setExpandedCode({
+          type:tab,value:tab==="html"?doc.freeform?.html??"":doc.freeform?.css??""
+        })}>Agrandir l'éditeur</button>
         <textarea id="source-editor" aria-label={tab==="html"?"Code HTML de la diapositive":"Styles CSS libres"}
           spellCheck={false} className="code-editor"
           placeholder={tab==="html"?"<h1>Votre composition</h1>":"h1 { font-size: 90px; }"}
           value={tab==="html"?(doc.freeform?.html??""):(doc.freeform?.css??"")}
-          onChange={e=>updateHtml(tab,e.target.value)}/>
-        <p className="field-help">Mode avancé ; le contenu HTML/CSS reste libre et n'est pas altéré par l'éditeur visuel. Les éléments ajoutés depuis « Design » restent modifiables comme calques.</p>
+          onChange={e=>updateHtml(tab,e.target.value)}
+          onKeyDown={e=>indentCode(e,value=>updateHtml(tab,value))}/>
+        <p className="field-help">Mode avancé ; HTML/CSS libre et compatible avec les objets éditables. Touche Tab : insérer deux espaces.</p>
+        {tab==="html"&&/<script\b/i.test(doc.freeform?.html??"")&&
+          <p className="field-help" role="status">Les scripts HTML sont bloqués dans les aperçus et à l'export pour des raisons de sécurité.</p>}
+        {tab==="css"&&((doc.freeform?.css??"").match(/{/g)?.length??0)!==
+          ((doc.freeform?.css??"").match(/}/g)?.length??0)&&
+          <p className="field-help" role="status">Vérifiez les accolades CSS : leur nombre n'est pas équilibré.</p>}
+      </div>}
+      {expandedCode&&<div className="studio-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setExpandedCode(null);}}>
+        <section className="studio-dialog" role="dialog" aria-modal="true"
+          aria-label={expandedCode.type==="html"?"Modifier le HTML":"Modifier le CSS"}
+          style={{width:"min(1100px,95vw)",maxWidth:"95vw"}}>
+          <header className="studio-header">
+            <div><strong>{expandedCode.type==="html"?"Composition HTML":"Styles CSS"}</strong>
+              <span>Édition libre ; les modifications ne sont appliquées qu'à votre confirmation.</span></div>
+            <button className="studio-close" onClick={()=>setExpandedCode(null)} aria-label="Fermer">×</button>
+          </header>
+          <textarea spellCheck={false} className="code-editor" autoFocus
+            aria-label="Éditeur de code agrandi"
+            value={expandedCode.value}
+            onChange={e=>setExpandedCode({...expandedCode,value:e.target.value})}
+            onKeyDown={e=>indentCode(e,value=>setExpandedCode({...expandedCode,value}))}
+            style={{height:"min(65vh,720px)",width:"100%",minHeight:280,
+              resize:"vertical",fontFamily:"ui-monospace,Consolas,monospace"}}/>
+          <footer className="studio-variant-footer">
+            <span>{expandedCode.value.length.toLocaleString("fr-FR")} caractères</span>
+            <button onClick={()=>setExpandedCode(null)}>Annuler</button>
+            <button className="primary" onClick={()=>{updateHtml(expandedCode.type,expandedCode.value);setExpandedCode(null);}}>
+              Appliquer
+            </button>
+          </footer>
+        </section>
       </div>}
     </aside>
   );
