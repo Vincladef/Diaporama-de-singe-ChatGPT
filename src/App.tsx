@@ -13,7 +13,11 @@ import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
-import { exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
+import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
+import {
+  getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
+  saveGoogleClientId, uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
+} from "./export/googleSlides";
 import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
 const SESSION_KEY = "diaporama-chatgpt-owner-token";
@@ -62,6 +66,10 @@ export default function App() {
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
+  const [exportTarget, setExportTarget] = useState<"pptx" | "google" | null>(null);
+  const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
+  const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
+  const [googleClientInput, setGoogleClientInput] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -359,28 +367,77 @@ export default function App() {
     }finally{setBusy(false);}
   }
 
+  async function verifyExportRevision(deck: PresentationDetail) {
+    const fresh = await readDeckRevisions(token, deck.presentation.id);
+    const changed = fresh.title !== deck.presentation.title ||
+      fresh.slides.length !== deck.slides.length ||
+      fresh.slides.some((remote, i) => remote.id !== deck.slides[i]?.id ||
+        remote.revision !== deck.slides[i]?.revision || remote.position !== deck.slides[i]?.position);
+    if (changed) {
+      setExternalChanges(true);
+      throw new Error("La présentation a changé depuis ChatGPT ou un autre onglet. Actualisez-la avant l'export pour obtenir la bonne version.");
+    }
+  }
+
   async function downloadPowerPoint() {
     if (!current || exportBusy) return;
     if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
-    setExportBusy(true); setExportReport(null); setExportProgress("Préparation…"); setError("");
+    setExportBusy(true); setExportTarget("pptx"); setExportReport(null);
+    setExportProgress("Préparation…"); setError("");
     try {
-      const fresh=await readDeckRevisions(token,current.presentation.id);
-      const changed=fresh.title!==current.presentation.title||
-        fresh.slides.length!==current.slides.length||
-        fresh.slides.some((remote,i)=>remote.id!==current.slides[i]?.id||
-          remote.revision!==current.slides[i]?.revision||remote.position!==current.slides[i]?.position);
-      if(changed){
-        setExternalChanges(true);
-        throw new Error("La présentation a changé depuis ChatGPT ou un autre onglet. Actualisez-la avant l'export pour obtenir la bonne version.");
-      }
+      await verifyExportRevision(current);
       const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
         setExportProgress("Diapositive " + completed + "/" + total));
       setExportReport(report);
-      setExportProgress("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
-      setExportProgress("");
-    } finally { setExportBusy(false); }
+    } finally { setExportBusy(false); setExportTarget(null); setExportProgress(""); }
+  }
+
+  function startGoogleExport() {
+    const clientId = getGoogleClientId();
+    if (!isValidGoogleClientId(clientId)) {
+      setGoogleClientInput(clientId);
+      setGoogleSetupOpen(true);
+      setError("");
+      return;
+    }
+    void exportToGoogleSlides(clientId);
+  }
+
+  async function exportToGoogleSlides(clientId: string) {
+    if (!current || exportBusy) return;
+    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
+    const deck = current;
+    setGoogleSetupOpen(false);
+    setExportBusy(true); setExportTarget("google");
+    setGoogleReport(null); setExportReport(null);
+    setExportProgress("Connexion Google…"); setError("");
+    try {
+      // OAuth must start on the original user click, before the first await.
+      const accessToken = await requestGoogleDriveAccess(clientId);
+      setExportProgress("Vérification des diapositives…");
+      await verifyExportRevision(deck);
+      const artifact = await buildPowerPoint(deck, exportMode, ({ completed, total }) =>
+        setExportProgress("Préparation " + completed + "/" + total));
+      setExportProgress("Conversion dans Google Drive…");
+      const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, deck.presentation.title);
+      setGoogleReport(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "La conversion dans Google Slides a échoué.");
+    } finally { setExportBusy(false); setExportTarget(null); setExportProgress(""); }
+  }
+
+  function configureAndExportGoogle(event: React.FormEvent) {
+    event.preventDefault();
+    const clientId = googleClientInput.trim();
+    try {
+      saveGoogleClientId(clientId);
+      // The OAuth popup is requested directly from this form submission.
+      void exportToGoogleSlides(clientId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Identifiant Google invalide.");
+    }
   }
 
   const active = current?.slides.find(s=>s.id===slideId);
@@ -518,7 +575,11 @@ export default function App() {
                   </select>
                 </label>
                 <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || dirty || !current.slides.length}>
-                  {exportBusy ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
+                  {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
+                </button>
+                <button className="subtle-btn google-export-action" onClick={startGoogleExport}
+                  disabled={exportBusy || busy || dirty || !current.slides.length} title="Créer une présentation dans votre Google Drive">
+                  {exportBusy && exportTarget === "google" ? (exportProgress || "Conversion…") : "Exporter vers Google Slides"}
                 </button>
               </div>
             </div>
@@ -534,7 +595,12 @@ export default function App() {
               {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
                 <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
               </details>}
-              <span>Pour Google Slides, importez ce fichier PPTX dans <a target="_blank" rel="noopener noreferrer" href="https://drive.google.com/drive/u/0/my-drive">Google Drive</a>, puis ouvrez-le avec Google Slides. L'édition directe dans votre compte Google n'est pas encore connectée.</span>
+              <span>Vous pouvez aussi utiliser « Exporter vers Google Slides » pour créer une présentation directement dans votre Drive.</span>
+            </div>}
+            {googleReport && <div className="export-report google-success-report" role="status">
+              <strong>Présentation créée dans Google Slides : {googleReport.name}</strong>
+              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir la présentation Google Slides</a>
+              <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"} ; les animations Web ne sont pas transposées.</span>
             </div>}
             <div className="editor-layout">
               <aside className="slide-rail">
@@ -607,6 +673,32 @@ export default function App() {
           </div>
         )}
 
+        {googleSetupOpen && <div className="google-setup-backdrop">
+          <section className="google-setup-card" role="dialog" aria-modal="true" aria-labelledby="google-setup-title"
+            onKeyDown={event => { if (event.key === "Escape") setGoogleSetupOpen(false); }}>
+            <div className="google-setup-heading">
+              <h2 id="google-setup-title">Connecter Google Slides</h2>
+              <button type="button" className="text-btn" onClick={() => setGoogleSetupOpen(false)} aria-label="Fermer">✕</button>
+            </div>
+            <p>Configuration unique. Le compte Google sera choisi lors de chaque export ; aucun jeton d'accès n'est enregistré.</p>
+            <div className="google-setup-instructions">
+              <p>Dans <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener noreferrer">Google Cloud, Identifiants OAuth</a>, créez un client <strong>Application Web</strong>. Activez <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">l'API Google Drive</a> et autorisez cette origine JavaScript :</p>
+              <code>{window.location.origin}</code>
+              <p>Si l'application Google est en mode test, ajoutez votre adresse Gmail aux utilisateurs de test.</p>
+            </div>
+            <form onSubmit={configureAndExportGoogle} className="google-setup-form">
+              <label htmlFor="google-client-id">Identifiant client OAuth Google</label>
+              <input id="google-client-id" autoFocus spellCheck={false} autoComplete="off"
+                placeholder="123456789-xxxx.apps.googleusercontent.com"
+                value={googleClientInput} onChange={event => setGoogleClientInput(event.target.value)}/>
+              <small>Identifiant public enregistré uniquement dans ce navigateur ; aucun secret client n'est nécessaire.</small>
+              <div className="google-setup-actions">
+                <button type="button" className="subtle-btn" onClick={() => setGoogleSetupOpen(false)}>Annuler</button>
+                <button type="submit" className="primary" disabled={!isValidGoogleClientId(googleClientInput)}>Enregistrer et exporter</button>
+              </div>
+            </form>
+          </section>
+        </div>}
         {qualityOpen&&current&&<QualityStudio
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
             {...s,document:draft,notes}:s)}}
