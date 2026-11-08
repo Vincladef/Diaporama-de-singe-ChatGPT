@@ -578,6 +578,10 @@ export default function App() {
         {variantsStudioOpen&&token&&slideId&&draft&&<VariantsStudio key={slideId} token={token}
           slideId={slideId} document={draft} notes={notes} dirty={dirty} onApply={applyVariant}
           onClose={()=>setVariantsStudioOpen(false)}/>}
+        {presenting&&current&&current.slides.length>0&&<PresenterStudio
+          detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
+            {...s,document:draft,notes}:s)}}
+          initialSlideId={slideId} onClose={()=>setPresenting(false)}/>}
         <footer className="footer">Diaporama de singe · Version ChatGPT <span>Neon · Netlify</span></footer>
       </main>
     </div>
