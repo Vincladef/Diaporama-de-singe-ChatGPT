@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { z, ZodError } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/slide";
-import { createVariants, listVariants, saveAssets, listAssets } from "../../src/mcp/store";
+import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets } from "../../src/mcp/store";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -64,6 +64,21 @@ export default async function workspace(request: Request): Promise<Response> {
     } catch { return result({ ok: false, error: "invalid_json" }, 400); }
 
     switch (data.action) {
+      case "importPresentation": {
+        // Import always creates a NEW deck. The source deck is never modified.
+        const title=titleSchema.parse(data.title);
+        const slides=z.array(z.object({document:SlideDocumentSchema,notes:notesSchema.optional()}))
+          .min(1).max(40).parse(data.slides);
+        const response=await createDeck(title,slides);
+        return result({ok:true,presentation:{id:response.id,title:response.title},
+          importedSlides:response.slides},201);
+      }
+      case "appendImportedSlides": {
+        const id=idSchema.parse(data.presentationId);
+        const slides=z.array(z.object({document:SlideDocumentSchema,notes:notesSchema.optional()}))
+          .min(1).max(40).parse(data.slides);
+        return result({ok:true,...await addSlides(id,slides)},201);
+      }
       case "createPresentation": {
         const title = titleSchema.parse(data.title);
         const empty = JSON.stringify(createEmptySlideDocument());
