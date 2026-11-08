@@ -69,3 +69,13 @@ La génération se déroule dans le navigateur, sans API publique d'export. Pptx
 Le moteur capture chaque diapositive dans un iframe temporaire sans exécution JavaScript, vérifie le contenu ZIP avant de proposer le PPTX et autorise un téléchargement manuel de secours.
 
 Google Slides est pris en charge par import du fichier PPTX, et non par synchronisation directe. Voir docs/EXPORT.md pour les contraintes, la matrice de compatibilité et les tests effectués.
+
+## Étape 4 : serveur MCP
+
+Le serveur Netlify sur /mcp utilise le transport MCP Streamable HTTP en mode JSON et stateless, avec OAuth 2.1 : découverte OAuth, enregistrement dynamique limité aux rappels ChatGPT, autorisation par code + PKCE S256, jetons d'accès et de renouvellement persistés sous empreintes SHA-256. Les scopes distinguent lecture et écriture.
+
+Le domaine src/mcp/documents.ts applique des opérations ciblées sur les documents JSON ; src/mcp/store.ts orchestre les opérations Neon et les fonctions SQL de migrations 003/004 garantissent la mise à jour atomique et le tri des diapositives. Les outils privilégient la création en lot, des sommaires compacts et des réponses courtes pour limiter les appels et tokens.
+
+Le serveur fournit un catalogue de médias (liens seulement), des dossiers et des variantes de composition. Les téléchargements HTML/JSON utilisent des liens signés temporaires. Le téléchargement PowerPoint reste initié depuis l'éditeur navigateur, faute de capture HTML/CSS fiable côté serveur.
+
+Voir docs/MCP.md pour les outils, les limites et la procédure de connexion.
