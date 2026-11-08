@@ -96,3 +96,9 @@
 .freeform-selection:hover{background:#eeb16712}
 .freeform-selection>.visual-selection-name{background:#c16f25}
 .freeform-selection>.visual-resize-handle{border-color:#c16f25}
+
+
+.freeform-quickbar{position:absolute;left:0;top:-105px;display:flex;align-items:center;gap:7px;padding:12px;background:#fff;border:2px solid #e1b07a;border-radius:9px;box-shadow:0 10px 24px #25221d21;z-index:8;white-space:nowrap;min-height:78px;min-width:440px}
+.freeform-quickbar button{font:600 28px system-ui;color:#52412a;background:#fdf8f0;border:1px solid #ecd7ba;border-radius:5px;padding:10px 15px;min-height:53px;cursor:pointer}
+.freeform-quickbar button:hover{background:#f7e7d4}
+.freeform-quickbar input[type=color]{width:60px;height:53px;min-width:60px;padding:4px;border:1px solid #dec49e;border-radius:5px;background:white;cursor:pointer}
