@@ -65,3 +65,7 @@ Les requêtes vers les fournisseurs peuvent échouer ou être limitées ; ne jam
 - Génération d'images directement à partir d'un fournisseur IA autorisé.
 - Retrait de fond, détourage et retouche locale avancée.
 - Tests d'accessibilité, quotas d'API et cache réseau contrôlé.
+
+## Étape 10
+
+La recherche multisource propose aussi `curate_images` pour combiner quatre formulations et choisir automatiquement une sélection diversifiée, sans confondre qualité de recherche et autorisation de réutilisation. `apply_images` conserve les recadrages, filtres, crédits et propriétés des objets lors de transformations groupées. Six directions graphiques sont désormais disponibles ; `compare_variants` ouvre un aperçu signé et fournit des indicateurs de préservation du contenu, tandis que `revise_variant` permet des retouches avec contrôle concurrent. Pour les diagrammes, voir [CREATIVITY_STEP10.md](CREATIVITY_STEP10.md).
