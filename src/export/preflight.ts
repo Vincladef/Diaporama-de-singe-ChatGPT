@@ -1,0 +1,55 @@
+import type { SlideDocument, SlideElement } from "../domain/slide.ts";
+
+export type ExportModeHint="native"|"mixed"|"raster";
+export type SlideExportRisk={
+  position:number;mode:ExportModeHint;images:number;remoteImages:number;
+  animations:number;notesPresent:boolean;warnings:string[];
+};
+export type ExportPreflight={
+  slideCount:number;fullyNative:number;mixedEditable:number;rasterOnly:number;
+  totalRemoteImages:number;animatedSlides:number;warnings:string[];
+  slides:SlideExportRisk[];
+  googleSlides:{directPublish:false;workflow:string};
+};
+export function isNativePptxObject(e:SlideElement):boolean{
+  if(!["text","image","shape"].includes(e.type)||e.parentId)return false;
+  const excluded=["transform","filter","backdropFilter","clipPath","mask",
+    "mixBlendMode","backgroundImage","writingMode"];
+  return !excluded.some(name=>e.styles[name]!==undefined&&e.styles[name]!=="");
+}
+export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):ExportPreflight{
+  const risks:SlideExportRisk[]=[];
+  const first=slides[0]?.document.canvas;
+  const expectedRatio=first?first.width/first.height:16/9;
+  for(let i=0;i<slides.length;i++){
+    const {document,notes}=slides[i]!;
+    const media=document.elements.filter(x=>x.type==="image");
+    const remote=media.filter(x=>x.src?.startsWith("https://")).length;
+    const hasFree=!!(document.freeform?.html?.trim()||document.freeform?.css?.trim());
+    const hasUnsupported=document.elements.some(x=>!isNativePptxObject(x));
+    const mode:ExportModeHint=document.mode==="freeform"||hasUnsupported?"raster":
+      document.mode!=="structured"&&hasFree?"mixed":"native";
+    const issues:string[]=[];
+    const ratio=document.canvas.width/document.canvas.height;
+    if(Math.abs(ratio-expectedRatio)>.002)issues.push("Format différent du premier écran ; adaptation nécessaire.");
+    if(mode==="raster")issues.push("Mode objets éditables : conversion de la page en image.");
+    if(mode==="mixed")issues.push("HTML/CSS libre converti en fond ; calques structurés modifiables.");
+    if(document.animations.length)issues.push("Les animations Web ne sont pas exportées en animations PowerPoint natives.");
+    if(media.some(x=>!x.src))issues.push("Image sans source.");
+    if(remote)issues.push("Les images distantes nécessitent un accès CORS pour la capture/export dans ce navigateur.");
+    if(document.elements.length>950)issues.push("Plus de 950 éléments ; risque de surcharge mémoire.");
+    risks.push({position:i+1,mode,images:media.length,remoteImages:remote,
+      animations:document.animations.length,notesPresent:Boolean(notes?.trim()),warnings:issues});
+  }
+  const allWarnings=[...new Set(risks.flatMap(r=>r.warnings))];
+  return {
+    slideCount:slides.length,fullyNative:risks.filter(r=>r.mode==="native").length,
+    mixedEditable:risks.filter(r=>r.mode==="mixed").length,
+    rasterOnly:risks.filter(r=>r.mode==="raster").length,
+    totalRemoteImages:risks.reduce((sum,r)=>sum+r.remoteImages,0),
+    animatedSlides:risks.filter(r=>r.animations>0).length,warnings:allWarnings,
+    slides:risks,
+    googleSlides:{directPublish:false,
+      workflow:"Télécharger le PPTX puis importer le fichier dans Google Drive et l'ouvrir avec Google Slides. La publication directe nécessite une intégration OAuth Google."},
+  };
+}
