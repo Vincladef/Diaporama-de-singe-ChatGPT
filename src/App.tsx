@@ -16,7 +16,7 @@ import { alignElements, duplicateElements, transformBox, withElementBoxes, world
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
-  saveGoogleClientId, uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
+  uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
 } from "./export/googleSlides";
 import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
@@ -68,8 +68,6 @@ export default function App() {
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
   const [exportTarget, setExportTarget] = useState<"pptx" | "google" | null>(null);
   const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
-  const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
-  const [googleClientInput, setGoogleClientInput] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -397,9 +395,7 @@ export default function App() {
   function startGoogleExport() {
     const clientId = getGoogleClientId();
     if (!isValidGoogleClientId(clientId)) {
-      setGoogleClientInput(clientId);
-      setGoogleSetupOpen(true);
-      setError("");
+      setError("La connexion Google n'est pas disponible. Contactez l'administrateur de l'application.");
       return;
     }
     void exportToGoogleSlides(clientId);
@@ -409,7 +405,6 @@ export default function App() {
     if (!current || exportBusy) return;
     if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
     const deck = current;
-    setGoogleSetupOpen(false);
     setExportBusy(true); setExportTarget("google");
     setGoogleReport(null); setExportReport(null);
     setExportProgress("Connexion Google…"); setError("");
@@ -426,18 +421,6 @@ export default function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "La conversion dans Google Slides a échoué.");
     } finally { setExportBusy(false); setExportTarget(null); setExportProgress(""); }
-  }
-
-  function configureAndExportGoogle(event: React.FormEvent) {
-    event.preventDefault();
-    const clientId = googleClientInput.trim();
-    try {
-      saveGoogleClientId(clientId);
-      // The OAuth popup is requested directly from this form submission.
-      void exportToGoogleSlides(clientId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Identifiant Google invalide.");
-    }
   }
 
   const active = current?.slides.find(s=>s.id===slideId);
@@ -673,32 +656,6 @@ export default function App() {
           </div>
         )}
 
-        {googleSetupOpen && <div className="google-setup-backdrop">
-          <section className="google-setup-card" role="dialog" aria-modal="true" aria-labelledby="google-setup-title"
-            onKeyDown={event => { if (event.key === "Escape") setGoogleSetupOpen(false); }}>
-            <div className="google-setup-heading">
-              <h2 id="google-setup-title">Connecter Google Slides</h2>
-              <button type="button" className="text-btn" onClick={() => setGoogleSetupOpen(false)} aria-label="Fermer">✕</button>
-            </div>
-            <p>Configuration unique. Le compte Google sera choisi lors de chaque export ; aucun jeton d'accès n'est enregistré.</p>
-            <div className="google-setup-instructions">
-              <p>Dans <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener noreferrer">Google Cloud, Identifiants OAuth</a>, créez un client <strong>Application Web</strong>. Activez <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">l'API Google Drive</a> et autorisez cette origine JavaScript :</p>
-              <code>{window.location.origin}</code>
-              <p>Si l'application Google est en mode test, ajoutez votre adresse Gmail aux utilisateurs de test.</p>
-            </div>
-            <form onSubmit={configureAndExportGoogle} className="google-setup-form">
-              <label htmlFor="google-client-id">Identifiant client OAuth Google</label>
-              <input id="google-client-id" autoFocus spellCheck={false} autoComplete="off"
-                placeholder="123456789-xxxx.apps.googleusercontent.com"
-                value={googleClientInput} onChange={event => setGoogleClientInput(event.target.value)}/>
-              <small>Identifiant public enregistré uniquement dans ce navigateur ; aucun secret client n'est nécessaire.</small>
-              <div className="google-setup-actions">
-                <button type="button" className="subtle-btn" onClick={() => setGoogleSetupOpen(false)}>Annuler</button>
-                <button type="submit" className="primary" disabled={!isValidGoogleClientId(googleClientInput)}>Enregistrer et exporter</button>
-              </div>
-            </form>
-          </section>
-        </div>}
         {qualityOpen&&current&&<QualityStudio
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
             {...s,document:draft,notes}:s)}}
