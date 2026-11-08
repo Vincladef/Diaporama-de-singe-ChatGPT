@@ -34,7 +34,8 @@ async function authorizationGet(request: Request): Promise<Response> {
     return error("invalid_request", "Unknown client, callback, resource or PKCE challenge");
   const expires = String(Math.floor(Date.now() / 1000) + 600);
   const message = [input.client, input.redirect, input.challenge, input.state, input.scope, input.resource, expires].join("\n");
-  const fields = { ...input, expires, csrf: sign(message) };
+  const fields = { client_id: input.client, redirect_uri: input.redirect, code_challenge: input.challenge,
+    state: input.state, scope: input.scope, resource: input.resource, expires, csrf: sign(message) };
   const hidden = Object.entries(fields).map(([k, v]) =>
     '<input type="hidden" name="' + escape(k) + '" value="' + escape(v) + '">').join("");
   const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
