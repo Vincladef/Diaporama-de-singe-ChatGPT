@@ -14,7 +14,9 @@
     "@neondatabase/serverless": "^1.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.1.0"
+    "zod": "^4.1.0",
+    "pptxgenjs": "^4.0.1",
+    "html-to-image": "^1.11.13"
   },
   "devDependencies": {
     "@netlify/functions": "^4.2.0",
