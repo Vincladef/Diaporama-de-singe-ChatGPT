@@ -362,3 +362,8 @@
 .google-export-action{white-space:nowrap;border-color:#b5cab8;background:#eff5ef;color:#294f37;font-weight:650}
 .google-export-action:hover:not(:disabled){background:#e3efe5}
 .google-success-report{border-color:#cadbd0;background:#f5f9f5}
+
+/* The Google Slides/PPTX fallback turns each animation click into a visual stage. */
+.reveal-export-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#506a56;white-space:nowrap;cursor:pointer}
+.reveal-export-toggle input{accent-color:#315a3e;width:14px;height:14px;margin:0}
+.reveal-export-toggle:has(input:disabled){opacity:.55;cursor:default}
