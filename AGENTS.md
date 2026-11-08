@@ -22,4 +22,4 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 
 ## Phase du projet
 
-Étape 3 : moteur HTML/CSS libre, API Neon protégée, éditeur et exports PowerPoint en deux modes (visuel fidèle et objets modifiables). Google Slides fonctionne par import d'un PPTX. Le serveur MCP, l'OAuth Google direct, les animations exécutables et l'édition avancée à la souris restent à développer.
+Étape 4 : serveur MCP HTTPS stateless disponible sur /mcp ; 20 outils et OAuth 2.1 PKCE avec DCR ; base de documents et modifications en lot atomiques ; éditeur et exports PPTX opérationnels. La connexion de ce serveur dans ChatGPT attend une action de l’utilisateur. L'édition visuelle avancée, les animations exécutables et l'import Google Slides direct ne sont pas implémentés.
