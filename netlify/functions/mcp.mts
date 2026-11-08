@@ -5,7 +5,9 @@ import { randomUUID } from "node:crypto";
 import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/images/search";
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
-import { InitialSlideSchema, SlideOperationSchema } from "../../src/mcp/documents";
+import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
+import { AnimationStepSchema } from "../../src/domain/slide";
+import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
@@ -21,7 +23,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.4.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.7.0",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -55,7 +57,7 @@ function createServer(request: Request): McpServer {
     async()=>({project:"Diaporama de singe ChatGPT",version:"0.4.0",storage:"Neon",transport:"Streamable HTTP",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -115,6 +117,57 @@ function createServer(request: Request): McpServer {
       changes:z.array(z.object({id:uuid,revision:z.number().int().min(1).optional(),
         operations:z.array(SlideOperationSchema).min(1).max(80)})).min(1).max(40)},true,
     async a=>editSlides(a.presentationId,a.changes,a.dryRun));
+
+  register("get_animation_plan","Lire la chronologie des animations",
+    "Compact click-by-click sequence of a slide, grouping automatic after-previous cues. No HTML/CSS payload. Use this to understand the projected teaching order with minimal tokens.",
+    {slideId:uuid},false,
+    async a=>{
+      const slide=await getSlide(a.slideId,"full");
+      if(!("document" in slide))throw new Error("slide_not_found");
+      const plan=buildPlaybackPlan(slide.document.animations);
+      const format=(c:typeof plan.all[number])=>({
+        id:c.id,target:timelineTarget(c,slide.document),effect:c.effect,trigger:c.trigger,
+        durationMs:c.durationMs,delayMs:c.delayMs??0
+      });
+      return {slideId:a.slideId,revision:slide.revision,clicks:plan.clicks.length,
+        introduction:plan.intro.map(format),steps:plan.clicks.map((group,i)=>({click:i+1,cues:group.map(format)}))};
+    });
+
+  register("add_reveal_sequence","Créer une séquence d'apparitions en un appel",
+    "High-level shortcut for teaching presentations: list editable element IDs or freeform CSS selectors prefixed with css:; choose one reveal per click, all in one click (sequential), or an automatic intro. Preserves existing cues unless replace=true. An entire pedagogical sequence is saved in ONE MCP request.",
+    {presentationId:uuid,slideId:uuid,targets:z.array(z.string().min(1).max(240)).min(1).max(60),
+      mode:z.enum(["each","together","automatic"]).default("each"),
+      effect:z.enum(["appear","fade","move","scale","wipe","highlight","dim","hide"]).default("fade"),
+      durationMs:z.number().int().min(0).max(60000).default(420),
+      staggerMs:z.number().int().min(0).max(30000).default(80),
+      replace:z.boolean().default(false),dryRun:z.boolean().default(false),
+      revision:z.number().int().min(1).optional()},true,
+    async a=>{
+      const slide=await getSlide(a.slideId,"full");
+      if(!("document" in slide))throw new Error("slide_not_found");
+      if(slide.presentation_id!==a.presentationId)throw new Error("foreign_presentation");
+      const base=a.replace?0:Math.max(-1,...slide.document.animations.map(c=>c.order))+1;
+      const cues=a.targets.map((target:string,index:number)=>{
+        const free=target.startsWith("css:");
+        const selector=free?target.slice(4).trim():"";
+        if(free&&(!selector||/[<>]/.test(selector)))throw new Error("invalid_css_selector");
+        if(!free&&!slide.document.elements.some(e=>e.id===target))throw new Error("target_element_not_found:"+target);
+        const trigger=a.mode==="automatic"?"after-previous":
+          a.mode==="together"&&index>0?"after-previous":"click";
+        return AnimationStepSchema.parse({
+          id:randomUUID(),...(free?{targetSelector:selector}:{targetElementId:target}),
+          order:base+index,trigger,effect:a.effect,durationMs:a.durationMs,
+          delayMs:trigger==="after-previous"&&index>0?a.staggerMs:0,easing:"ease-out"
+        });
+      });
+      const operations:SlideOperation[]=a.replace?
+        [{op:"set_animations",animations:cues}]:
+        cues.map(animation=>({op:"append_animation",animation}));
+      const outcome=await editSlides(a.presentationId,[{id:a.slideId,revision:a.revision,operations}],a.dryRun);
+      return {slideId:a.slideId,created:cues.length,mode:a.mode,
+        newRevision:outcome.slides?.[0]?.revision??null,dryRun:a.dryRun,
+        ...("updated" in outcome?{updated:outcome.updated}:{})};
+    });
 
   register("list_folders","Lister les dossiers","List folder tree for presentation organization.",{},false,
     async()=>({folders:await listFolders()}));
