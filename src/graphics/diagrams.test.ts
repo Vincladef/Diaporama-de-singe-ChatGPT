@@ -37,3 +37,22 @@ test("focus and notes survive structured diagram generation",()=>{
   assert.equal(doc.mode,"structured");
   assert.ok(doc.elements.some(e=>e.id==="diagram-panel-step-3"));
 });
+
+test("dense flow stays within slide bounds",()=>{
+  const many=Array.from({length:16},(_,i)=>({id:"item-"+i,label:"Point "+i}));
+  const doc=composeDiagram(DiagramSchema.parse({kind:"flow",title:"Seize étapes",nodes:many}));
+  for(const e of doc.elements.filter(e=>e.id.startsWith("diagram-panel-"))){
+    const y=Number.parseFloat(String(e.styles.top)),h=Number.parseFloat(String(e.styles.height));
+    assert.ok(y>=0&&y+h<=1080,"panel must remain in canvas");
+  }
+});
+test("hierarchy without explicit edges creates more than one level",()=>{
+  const many=Array.from({length:10},(_,i)=>({id:"node-"+i,label:"Nœud "+i}));
+  const doc=composeDiagram(DiagramSchema.parse({kind:"hierarchy",title:"Structure",nodes:many}));
+  const positions=doc.elements.filter(e=>e.id.startsWith("diagram-panel-")).map(e=>e.styles.top);
+  assert.ok(new Set(positions).size>=3);
+});
+test("excessively dense radial maps are rejected explicitly",()=>{
+  const many=Array.from({length:15},(_,i)=>({id:"node-"+i,label:"Sujet "+i}));
+  assert.equal(DiagramSchema.safeParse({kind:"mindmap",title:"Carte",nodes:many}).success,false);
+});
