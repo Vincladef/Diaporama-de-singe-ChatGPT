@@ -70,3 +70,26 @@ test("import batches large documents without changing order",()=>{
  assert.deepEqual(groups.flat().map(s=>s.notes),rows.map(s=>s.notes));
  assert.ok(groups.every(c=>c.length<=20));
 });
+
+test("PowerPoint import preserves interleaved image/text drawing order",async()=>{
+ const zip=await JSZip.loadAsync(await fixture());
+ const xml=await zip.file("ppt/slides/slide1.xml")!.async("string");
+ const image='<p:pic><p:blipFill><a:blip r:embed="rId9"/></p:blipFill><p:spPr>'+
+ '<a:xfrm><a:off x="150000" y="400000"/><a:ext cx="1400000" cy="1400000"/></a:xfrm>'+
+ '</p:spPr></p:pic>';
+ zip.file("ppt/slides/slide1.xml",xml.replace("<p:spTree>","<p:spTree>"+image)
+  .replace("</p:spTree>",""+image+"</p:spTree>"));
+ zip.file("ppt/slides/_rels/slide1.xml.rels",'<Relationships>'+
+ '<Relationship Id="rId9" Target="../media/portrait.png" Type="image"/></Relationships>');
+ zip.file("ppt/media/portrait.png",Buffer.from(
+ "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJ1dB1cAAAAASUVORK5CYII=","base64"));
+ const loaded=await importPowerPoint(await zip.generateAsync({type:"arraybuffer"}),"interleaved.pptx");
+ assert.deepEqual(loaded.slides[1]?.document.elements.map(e=>e.type),["image","text","image"]);
+ assert.equal(loaded.slides[1]?.document.elements[1]?.text,"Première");
+});
+test("PowerPoint import rejects an excessive compressed ZIP member before extraction",async()=>{
+ const zip=new JSZip();
+ zip.file("ppt/media/oversized.png",new Uint8Array(17_000_000));
+ const bytes=await zip.generateAsync({type:"arraybuffer",compression:"DEFLATE"});
+ await assert.rejects(importPowerPoint(bytes,"compressed-bomb.pptx"),/dépasse 16 Mo/);
+});
