@@ -6,7 +6,7 @@ import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 
 export type PowerPointMode = "faithful" | "editable";
 export interface ExportProgress { completed: number; total: number; }
-export interface ExportReport { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; }
+export interface ExportReport { fileName: string; slideCount: number; warnings: string[]; mode: PowerPointMode; downloadUrl: string; }
 
 function getNumber(style: SlideElement["styles"], key: string, reference: number, fallback: number): number {
   return cssLength(style[key], reference, fallback);
@@ -161,6 +161,13 @@ export async function exportPowerPoint(
   if (blob.size < 800 || signature[0] !== 0x50 || signature[1] !== 0x4B) {
     throw new Error("Le fichier PowerPoint généré ne semble pas être une archive PPTX valide.");
   }
+  // Inspect ZIP's central-directory filenames at the end of the generated archive.
+  const tail = new TextDecoder("utf-8").decode(await blob.slice(Math.max(0, blob.size - 750_000)).arrayBuffer());
+  for (let i = 1; i <= deck.slides.length; i++) {
+    if (!tail.includes("ppt/slides/slide" + i + ".xml")) {
+      throw new Error("Le PowerPoint généré ne contient pas la diapositive " + i + ".");
+    }
+  }
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.download = fileName;
@@ -170,6 +177,6 @@ export async function exportPowerPoint(
   anchor.click();
   anchor.remove();
   // Allow slow download managers and embedded browsers to read the Blob fully.
-  window.setTimeout(() => URL.revokeObjectURL(href), 60_000);
-  return { fileName, slideCount: deck.slides.length, warnings, mode };
+  window.setTimeout(() => URL.revokeObjectURL(href), 300_000);
+  return { fileName, slideCount: deck.slides.length, warnings, mode, downloadUrl: href };
 }
