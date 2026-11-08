@@ -23,3 +23,7 @@ Ce dépôt appartient **exclusivement** au projet Diaporama de singe, version Ch
 ## Phase du projet
 
 Étape 8 : import PPTX/JSON/HTML, récupération des textes, images et notes, copies graphiques sans écrasement, contrôle qualité partagé entre éditeur et MCP, et tests de réimport PowerPoint. L'éditeur et le MCP utilisent le même document de référence dans Neon ChatGPT. Limites : certains effets et masques PowerPoint ne sont pas modifiables ; aucune synchronisation directe Google Slides ni export d'animations Web vers PowerPoint natif ; connexion MCP ChatGPT toujours soumise à l'autorisation de l'utilisateur. Voir `docs/INTEGRATION_IMPORT.md`.
+
+## Étape 9
+
+Trois outils de haut niveau : `compose_slides`, `review_slides`, `repair_slides`. Utiliser l'aperçu signé et un navigateur pour juger la composition réelle avant toute retouche. `workspace_status` retourne `toolCount` et `toolNames` pour comparer le catalogue effectif au cache ChatGPT. Préserver les fonds plein cadre et HTML/CSS ; les corrections dangereuses nécessitent confirmation et révision. Les tests figurent dans `src/mcp/visual.test.ts`. Documentation : `docs/AI_STEP9.md`.

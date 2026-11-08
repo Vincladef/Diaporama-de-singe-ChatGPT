@@ -70,3 +70,7 @@ Depuis chaque diapositive, le panneau **Animations** permet d'ajouter et d'ordon
 Les effets avancés PowerPoint, les masters, les diagrammes complexes et la synchronisation native Google Slides restent partiels ou non disponibles ; la capture Web fidèle et les objets natifs ne constituent pas une conversion complète de tous les styles.
 
 **Documentation : [docs/INTEGRATION_IMPORT.md](docs/INTEGRATION_IMPORT.md)**.
+
+## Étape 9 : autonomie de ChatGPT
+
+Le serveur MCP publie 32 outils, dont `compose_slides` pour produire jusqu'à 40 mises en page éditables dans un appel, `review_slides` pour obtenir un diagnostic et des aperçus navigateur signés, et `repair_slides` pour corriger en lot les défauts géométriques simples avec contrôle de révision. Le catalogue réel est exposé dans `workspace_status` pour diagnostiquer les caches d'outils ChatGPT. Les prévisualisations HTML/CSS sont isolées ; elles servent à l'inspection visuelle par navigateur, sans prétendre produire une capture raster dans le MCP. Voir [docs/AI_STEP9.md](docs/AI_STEP9.md).

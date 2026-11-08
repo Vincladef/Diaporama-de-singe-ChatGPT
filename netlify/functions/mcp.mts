@@ -6,9 +6,10 @@ import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/im
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
-import { AnimationStepSchema, type AnimationStep } from "../../src/domain/slide";
+import { AnimationStepSchema, type AnimationStep, type SlideDocument } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
+import { composeDocument, CompositionSchema, reviewDocument, repairDocument, type Composition } from "../../src/mcp/visual";
 import {
   activateVariant, addSlides, createDeck, createVariants, deleteDeck, duplicateSlide, editSlides, getDeck, getSlide,
   listAssets, listDecks, listFolders, listVariants, manageFolder, removeSlides, reorderSlides,
@@ -24,11 +25,13 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.8.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.9.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
+  const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
     handler: (args: any) => Promise<unknown>, destructive = false) {
+    publishedToolNames.push(name);
     server.registerTool(name, {
       title, description, inputSchema: schema,
       annotations: { readOnlyHint: !write, destructiveHint: destructive, idempotentHint: !write, openWorldHint: false },
@@ -55,10 +58,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.8.0",storage:"Neon",transport:"Streamable HTTP",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.9.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.9.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory"]}));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -182,6 +186,95 @@ function createServer(request: Request): McpServer {
       changes:z.array(z.object({id:uuid,revision:z.number().int().min(1).optional(),
         operations:z.array(SlideOperationSchema).min(1).max(80)})).min(1).max(40)},true,
     async a=>editSlides(a.presentationId,a.changes,a.dryRun));
+
+
+  register("review_slides","Prévisualiser et analyser visuellement plusieurs diapositives",
+    "ONE call reviews up to 40 consecutive slides with layout warnings, textual fit checks, overlap detection, source quality checks, and optional short-lived browser preview links. Open a signed preview in a browser/screenshot-capable client for real pixel inspection; diagnostics alone are heuristic.",
+    {presentationId:uuid,offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(40).default(40),
+      maxFindingsPerSlide:z.number().int().min(1).max(40).default(12),includePreviews:z.boolean().default(true)},false,
+    async a=>{
+      const deck=await getDeck(a.presentationId,"full",a.offset,a.limit);
+      const expires=Date.now()+10*60*1000;
+      const {sign}=await import("../../src/mcp/security");
+      const slides=deck.slides.filter((s):s is DbSlide=>"document" in s).map(s=>{
+        const review=reviewDocument(s.document,s.position);
+        const payload=s.id+":preview:"+expires;
+        const ticket=Buffer.from(payload).toString("base64url")+"."+sign(payload);
+        return {id:s.id,position:s.position,revision:s.revision,metrics:review.metrics,
+          findings:review.issues.slice(0,a.maxFindingsPerSlide),
+          omitted:Math.max(0,review.issues.length-a.maxFindingsPerSlide),
+          ...(a.includePreviews?{previewUrl:ORIGIN+"/previews/slide?ticket="+encodeURIComponent(ticket)}:{})};
+      });
+      return {presentationId:a.presentationId,slideCount:slides.length,slides,
+        nextOffset:deck.nextOffset,previewExpiresAt:a.includePreviews?new Date(expires).toISOString():undefined,
+        methodology:"Static geometry is approximate. Signed previews enable browser-based image inspection; links expire after 10 minutes and should not be shared publicly."};
+    });
+
+  register("repair_slides","Corriger automatiquement la mise en page de plusieurs diapositives",
+    "Conservatively repair up to 40 structured or hybrid slides in ONE atomic batch: place out-of-bounds objects back on canvas, constrain dimensions, set image object-fit, and optionally raise tiny text to 24px. HTML/CSS freeform and intentional full-bleed backgrounds are preserved. dryRun defaults to true; supply observed revisions to prevent accidental overwrite. No automatic pixel-based judgment.",
+    {presentationId:uuid,targets:z.array(z.object({slideId:uuid,revision:z.number().int().min(1)})).min(1).max(40),
+      mode:z.enum(["safe","readability"]).default("safe"),dryRun:z.boolean().default(true)},true,
+    async a=>{
+      if(new Set(a.targets.map((t:{slideId:string})=>t.slideId)).size!==a.targets.length)
+        throw new Error("duplicate_slide_id");
+      const data=await Promise.all(a.targets.map(async(t:{slideId:string;revision:number})=>{
+        const current=await getSlide(t.slideId,"full");
+        if(!("document" in current))throw new Error("slide_not_found");
+        if(current.presentation_id!==a.presentationId)throw new Error("invalid_presentation_scope");
+        if(current.revision!==t.revision)throw new Error("revision_conflict:"+t.slideId);
+        const before=reviewDocument(current.document,current.position);
+        const repaired=repairDocument(current.document,a.mode);
+        const after=reviewDocument(repaired.document,current.position);
+        return {id:t.slideId,revision:t.revision,before:before.issues.length,after:after.issues.length,
+          actions:repaired.changes,document:repaired.document};
+      }));
+      const changed=data.filter(d=>d.actions.length);
+      if(!a.dryRun&&changed.length){
+        await editSlides(a.presentationId,changed.map(d=>({id:d.id,revision:d.revision,
+          operations:[{op:"replace_document" as const,document:d.document}]})),false);
+      }
+      return {presentationId:a.presentationId,dryRun:a.dryRun,changedSlides:changed.length,
+        saved:!a.dryRun&&changed.length>0,
+        slides:data.map(d=>({id:d.id,revision:d.revision+(a.dryRun||!d.actions.length?0:1),
+          proposedActions:d.actions,findingsBefore:d.before,findingsAfter:d.after}))};
+    });
+
+  register("compose_slides","Créer des compositions graphiques en une opération",
+    "ONE call composes up to 40 slides from semantic content using hero, section, split, quote, cards, comparison or timeline scenes. No CSS or coordinates required, with optional full-width imagery. action=append creates slides; action=replace requires exact observed revisions and confirmReplace=true because it replaces existing visual content. Existing notes are kept unless new notes are provided. Supports dryRun.",
+    {presentationId:uuid,action:z.enum(["append","replace"]).default("append"),
+      slides:z.array(z.object({slideId:uuid.optional(),revision:z.number().int().min(1).optional(),
+        composition:CompositionSchema})).min(1).max(40),
+      confirmReplace:z.boolean().default(false),dryRun:z.boolean().default(false)},true,
+    async a=>{
+      const prepared:{slideId?:string;revision?:number;composition:Composition;document:SlideDocument}[]=a.slides.map((s:{slideId?:string;revision?:number;composition:Composition})=>({
+        ...s,document:composeDocument(s.composition)
+      }));
+      if(a.action==="append"){
+        if(prepared.some(s=>s.slideId||s.revision))throw new Error("invalid_append_targets");
+        if(a.dryRun){
+          await getDeck(a.presentationId,"outline",0,1);
+          return {dryRun:true,action:"append",count:prepared.length,
+            previews:prepared.map(s=>({layout:s.composition.layout,elements:s.document.elements.length,
+              issues:reviewDocument(s.document).issues.length}))};
+        }
+        const outcome=await addSlides(a.presentationId,prepared.map(s=>({
+          document:s.document,notes:s.composition.notes??""
+        })));
+        return {action:"append",created:outcome.created,slides:outcome.slides,
+          layouts:prepared.map(s=>s.composition.layout)};
+      }
+      if(!a.confirmReplace)throw new Error("invalid_replace_requires_confirmation");
+      if(prepared.some(s=>!s.slideId||!s.revision))throw new Error("invalid_replace_requires_ids_and_revisions");
+      const changes=prepared.map(s=>({
+        id:s.slideId!,revision:s.revision!,
+        operations:([{op:"replace_document" as const,document:s.document},
+          ...(s.composition.notes!==undefined?[{op:"set_notes" as const,notes:s.composition.notes}]:[])]),
+      }));
+      const result=await editSlides(a.presentationId,changes,a.dryRun);
+      return {action:"replace",dryRun:a.dryRun,
+        slides:result.slides??result.changes,
+        layouts:prepared.map(s=>s.composition.layout)};
+    });
 
   register("get_animation_plan","Lire la chronologie des animations",
     "Compact click-by-click sequence of a slide, grouping automatic after-previous cues. No HTML/CSS payload. Use this to understand the projected teaching order with minimal tokens.",
