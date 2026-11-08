@@ -85,7 +85,7 @@ Le réglage **« Étapes au clic »** (coché par défaut) garantit à présent 
 - Chaque état est capturé à la fin des animations, sans dépendre de la prise en charge des animations importées par Google.
 - Dans Google Slides, **un clic passe à la vue suivante** et révèle le contenu supplémentaire. L'animation est visuelle mais **ce sont des diapositives successives**, pas des animations natives à l'intérieur d'une seule diapositive.
 - Les fondus, déplacements, durées, mouvements continus et courbes d'accélération ne sont **pas reproduits** ; seul l'état final après chaque clic est conservé.
-- Les pages concernées sont volontairement rasterisées, y compris si l'export est en mode objets éditables ; les diapositives sans animation continuent à utiliser le mode choisi.
+- En mode visuel fidèle, les vues successives sont rasterisées. En mode modifiable, le moteur reconstruit les textes HTML et les objets structurés compatibles ; le décor CSS complexe demeure rasterisé.
 - Un plafond de 240 vues empêche une multiplication excessive ; le système signale clairement la limite.
 - Décocher « Étapes au clic » restaure l'export statique précédent, une vue par diapositive.
 
@@ -96,3 +96,24 @@ Lorsque le fichier dépasse 5 Mo, la publication utilise désormais un **transfe
 ## Étape 11 : vérification avant l'export
 
 Le modèle de prédiagnostic `src/export/preflight.ts` distingue les objets convertibles nativement, les compositions hybrides et les captures raster intégrales ; il repère les animations Web, images HTTPS externes et changements de proportions. L'éditeur vérifie les révisions distantes juste avant le PPTX. Le moteur d'export réutilise les images identiques durant une opération, avec bornes de téléchargement. Le MCP retourne les avertissements depuis `prepare_export`, sans prétendre créer le PowerPoint lui-même. L'import dans Google Slides reste celui d'un PPTX via Drive, sans publication automatique dans le compte Google.
+
+
+## Correction du 8 novembre 2026 : export modifiable et diagnostic du flash
+
+Le système de projection Web utilise maintenant deux iframes : le lecteur conserve la diapositive visible tandis que la suivante charge ses images et polices en arrière-plan. Un échange atomique remplace ensuite l'ancienne page, avec un fond sombre au lieu du blanc implicite. Le composant reste monté lors de la navigation dans la console et l'écran public. Les aperçus temporaires ont également reçu une politique CSP autorisant explicitement les images et polices HTTPS, sans autoriser les scripts des diapositives.
+
+**Mode objets modifiables (nouveau comportement)** :
+- Les textes mesurables du HTML libre sont extraits et reconstruits en boîtes de texte PowerPoint. Le calque de décor correspondant est capturé sans ces glyphes pour limiter les doublons.
+- Les éléments structurés texte/image/forme restent natifs, y compris dans les vues successives des apparitions au clic.
+- Les connexions SVG des schémas structurés deviennent des objets image vectoriels distincts ; leurs points ne deviennent pas éditables individuellement.
+- Les fonds de couleur et les dégradés simples des formes structurées deviennent des formes PowerPoint. Les dégradés sont approchés par des bandes colorées, modifiables.
+- Le mode modifiable est désormais proposé par défaut dans l'éditeur et dans la préparation d'export MCP.
+- L'audit recense aussi les photographies contenues dans le HTML libre, au lieu de compter uniquement les éléments image structurés.
+
+**Frontières techniques toujours présentes** :
+- Les photographies et SVG imbriqués dans une composition HTML libre restent dans le calque décor raster ; la conversion générale de tout le DOM/CSS en objets Office n'est pas possible sans perte. Les éléments structurés doivent être privilégiés à la création lorsqu'une édition complète est impérative.
+- Les animations Web ne deviennent pas des animations natives PowerPoint. Avec l'option « Étapes au clic », chaque état est une diapositive distincte ; les textes/formes convertibles restent désormais modifiables. Ce procédé fonctionne aussi après import du PPTX dans Google Slides, mais ne conserve pas les fondues/déplacements animés comme effets natifs.
+- La fidélité exacte de la typographie HTML et de la mise en page peut varier selon les polices disponibles dans PowerPoint/Google Slides. Le mode « Visuel fidèle » est conservé pour les situations où un rendu identique prime sur la modifiabilité.
+- Une vérification de rendu réel dans PowerPoint et une importation Google Slides sont requises avant de garantir une parfaite correspondance.
+
+Tests automatiques : pipeline TypeScript, tests Node, build Netlify ; régression de la visibilité native étape par étape et du comptage des médias HTML.
