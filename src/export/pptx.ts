@@ -68,6 +68,73 @@ function geometry(element: SlideElement, document: SlideDocument, slideW: number
  * Editable conversion of documented structured objects.
  * Arbitrary HTML/CSS remains a screenshot. This is a deliberate compatibility boundary.
  */
+type ParsedFill={color:string;transparency:number};
+function parsedFill(value:unknown):ParsedFill{
+  if(typeof value!=="string"||value==="transparent"||value==="none")
+    return {color:"FFFFFF",transparency:100};
+  const rgba=value.match(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+))?\s*\)/i);
+  if(rgba)return {color:asColor(value,"FFFFFF"),
+    transparency:Math.max(0,Math.min(100,Math.round(100*(1-Number(rgba[4]??1)))))};
+  return {color:asColor(value,"A4BDAC"),transparency:0};
+}
+function appendNativeShape(
+  pptx:pptxgen, slide:ReturnType<pptxgen["addSlide"]>,
+  id:string, box:{x:number;y:number;w:number;h:number}, style:SlideElement["styles"],
+):void{
+  const raw=String(style.backgroundColor??style.background??"transparent");
+  const gradient=raw.match(/^linear-gradient\(\s*(\d+)deg\s*,(.+)\)$/i);
+  if(gradient){
+    const stops=[...gradient[2]!.matchAll(/(rgba?\([^)]*\)|#[0-9a-fA-F]{6})\s+([\d.]+)%/g)]
+      .map(m=>({fill:parsedFill(m[1]),at:Math.max(0,Math.min(1,Number(m[2])/100))}));
+    if(stops.length>=2){
+      const vertical=Number(gradient[1])%180===0;
+      const reverse=Number(gradient[1])%360===270||Number(gradient[1])%360===0;
+      const count=24;
+      for(let i=0;i<count;i++){
+        const t=reverse?1-(i+.5)/count:(i+.5)/count;
+        let a=stops[0]!,b=stops[stops.length-1]!;
+        for(let j=1;j<stops.length;j++)if(t<=stops[j]!.at){
+          a=stops[j-1]!;b=stops[j]!;break;
+        }
+        const ratio=Math.max(0,Math.min(1,(t-a.at)/Math.max(.0001,b.at-a.at)));
+        const c=(hex:string)=>[0,2,4].map(k=>parseInt(hex.slice(k,k+2),16));
+        const left=c(a.fill.color),right=c(b.fill.color);
+        const color=left.map((v,k)=>Math.round(v+(right[k]!-v)*ratio)
+          .toString(16).padStart(2,"0")).join("").toUpperCase();
+        const transparency=Math.round(a.fill.transparency+
+          (b.fill.transparency-a.fill.transparency)*ratio);
+        const part=vertical?{x:box.x,y:box.y+i*box.h/count,
+          w:box.w,h:box.h/count+.004}:{x:box.x+i*box.w/count,y:box.y,
+          w:box.w/count+.004,h:box.h};
+        slide.addShape(pptx.ShapeType.rect,{...part,
+          objectName:id+" - dégradé "+(i+1),
+          line:{color,transparency:100},fill:{color,transparency}});
+      }
+      return;
+    }
+  }
+  const fill=parsedFill(raw);
+  const borderRadius=cssLength(style.borderRadius,1920,0);
+  const lineColor=typeof style.border==="string"
+    ? style.border.match(/#[0-9a-fA-F]{3,8}/)?.[0]:undefined;
+  slide.addShape(borderRadius>0?pptx.ShapeType.roundRect:pptx.ShapeType.rect,{
+    ...box,objectName:id,
+    line:lineColor?{color:asColor(lineColor,"FFFFFF"),width:1}
+      :{color:fill.color,transparency:100},
+    fill,
+  });
+}
+
+function safeSvgData(svg:string):string{
+  if(!/^<svg[\s>]/i.test(svg.trim())||
+    /<script|<foreignObject|\bon[a-z]+\s*=|\bhref\s*=\s*["']https?:/i.test(svg))
+    throw new Error("SVG non sécurisé pour un objet PowerPoint.");
+  const bytes=new TextEncoder().encode(svg);
+  let binary="";
+  for(const b of bytes)binary+=String.fromCharCode(b);
+  return "data:image/svg+xml;base64,"+btoa(binary);
+}
+
 async function appendNativeObjects(
   pptx: pptxgen, slide: ReturnType<pptxgen["addSlide"]>, document: SlideDocument,
   slideW: number, slideH: number,cache:Map<string,Promise<string>>,
@@ -89,12 +156,10 @@ async function appendNativeObjects(
         valign: "top", margin: 0, breakLine: false,
       });
     } else if (element.type === "shape") {
-      slide.addShape(getNumber(style, "borderRadius", document.canvas.width, 0) > 0 ?
-        pptx.ShapeType.roundRect : pptx.ShapeType.rect, {
-        ...box, objectName: element.id,
-        line: { color: asColor(style.borderColor ?? style.backgroundColor, "FFFFFF"), transparency: 100 },
-        fill: { color: asColor(style.backgroundColor, "A4BDAC") },
-      });
+      appendNativeShape(pptx,slide,element.id,box,style);
+    } else if (element.type === "svg") {
+      if(!element.text)continue;
+      slide.addImage({data:safeSvgData(element.text),...box,objectName:element.id});
     } else if (element.type === "image") {
       if (!element.src) continue;
       const data = await imageToDataUrl(element.src,cache);
