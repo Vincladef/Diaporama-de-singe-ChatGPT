@@ -1,50 +1,48 @@
 # Diaporama de singe, version ChatGPT
 
-Socle technique indépendant, développé exclusivement dans :
-- GitHub : `Vincladef/Diaporama-de-singe-ChatGPT`
-- Netlify : `diaporama-de-singe-chatgpt`
-- Neon : projet `soft-lake-83106970`, base `diaporama_singe_chatgpt`
+Projet indépendant de la version Codex.
 
-**Ne pas modifier `Vincladef/Diaporama-de-singe` ni les ressources Netlify/Neon de la version Codex.**
+| Infrastructure | Ressource |
+|---|---|
+| GitHub | Vincladef/Diaporama-de-singe-ChatGPT |
+| Netlify | diaporama-de-singe-chatgpt.netlify.app |
+| Neon | soft-lake-83106970 / diaporama_singe_chatgpt |
 
-## Étape actuelle : 1, architecture et fondations
+Ne jamais modifier le dépôt Codex, son site Netlify ni sa base Neon.
 
-- React + TypeScript + Vite, interface volontairement vide ;
-- types et validation Zod pour des documents de diapositives hybrides et versionnés ;
-- Neon PostgreSQL et migration initiale minimale à deux tables ;
-- fonction Netlify `GET /.netlify/functions/health` : vérifie réellement la connexion Neon et le schéma ;
-- configuration Netlify pour le déploiement depuis `main` ;
-- contrôles TypeScript et tests natifs Node.js, GitHub Actions CI.
+## Étape 2 : moteur de présentation
 
-Les créations, exports, outils MCP et animations seront implémentés aux étapes ultérieures. **Aucune fonctionnalité fictive n'est affichée.**
+Fonctions disponibles : création, renommage et suppression de présentations ; ajout, duplication et suppression de diapositives ; édition HTML/CSS libre ; objets individuels texte, image et forme ; aperçu immédiat dans une iframe isolée ; notes ; sauvegarde et relecture dans Neon ; conflits de modification détectés par numéro de révision.
 
-## Développement
+L'interface se trouve sur https://diaporama-de-singe-chatgpt.netlify.app/.
 
-```sh
-npm install
-npm run check
-npm run test
-npm run build
-npm run dev
-```
+## Sécurité
 
-Le navigateur de développement Vite ne lance pas les fonctions Netlify. Pour les tester localement, utiliser `netlify dev` et le fichier `.env` non versionné.
+Toutes les requêtes vers `/.netlify/functions/workspace` exigent `Authorization: Bearer <EDITOR_ACCESS_TOKEN>`.
+Le secret `EDITOR_ACCESS_TOKEN`, d'au moins 20 caractères, appartient uniquement aux fonctions serveur Netlify. Ne pas le versionner ni l'exposer via une variable VITE_.
+Le navigateur ne conserve le code d'accès que dans sessionStorage. Aucune présentation n'est accessible de manière anonyme.
+Les documents HTML/CSS sont rendus dans une iframe sandboxée à origine opaque, avec CSP qui bloque les scripts et les connexions.
 
-## Environnement
+## API
 
-Créer `DATABASE_URL` dans les variables secrètes Netlify (production / functions), avec la chaîne de connexion de **la base ChatGPT uniquement**. La variable existe déjà dans ce projet ; ne pas la remplacer par celle de Codex.
+- GET `/.netlify/functions/workspace?op=list` : présentations.
+- GET `/.netlify/functions/workspace?op=presentation&id=<uuid>` : présentation et diapositives.
+- POST `/.netlify/functions/workspace` : actions `createPresentation`, `renamePresentation`, `deletePresentation`, `addSlide`, `duplicateSlide`, `saveSlide`, `deleteSlide`.
+- `saveSlide` exige une révision valide ; toute modification concurrente entraîne HTTP 409.
 
-Migration versionnée : `sql/001_foundation.sql`. Le déploiement n'applique pas automatiquement de migrations. Dans cette installation, la migration est exécutée explicitement via Neon.
+## Schéma et code
 
-Consulter `docs/ARCHITECTURE.md` pour les choix, limites et décisions différées.
+- `sql/001_foundation.sql` : les deux tables initiales.
+- `sql/002_slide_engine.sql` : colonne revision.
+- `src/domain/slide.ts` : contrat Zod du document.
+- `src/engine/render.ts` : rendu libre et structuré.
+- `netlify/functions/workspace.mts` : API de persistance privée.
+- `src/App.tsx` : interface d'édition.
 
-## Priorité produit
+Tests automatiques : `npm run check`, `npm run test`, `npm run build` via GitHub Actions.
 
-1. Un moteur HTML/CSS permettant des diapositives très libres.
-2. Une API et un MCP facilitant le travail de ChatGPT avec peu d'appels et de tokens.
-3. Un éditeur visuel simple.
-4. Variantes et recherches d'images.
-5. Animations au clic.
-6. Exports PowerPoint et Google Slides les plus fidèles possibles.
+## Étapes suivantes
 
-Le projet est personnel et cloud-first ; l'authentification des futures routes sensibles est obligatoire.
+Les exports PowerPoint/Google Slides, le MCP distant, la manipulation visuelle avancée, les galeries d'images et les animations au clic sont encore à développer. Le modèle conserve les animations mais leur exécution n'est pas implémentée.
+
+Consulter `docs/ARCHITECTURE.md`.
