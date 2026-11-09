@@ -16,6 +16,7 @@ export function visibleStructuredElements(document: SlideDocument, clickCount: n
       step.targetSelector === '#' + item.id;
   };
   return document.elements.filter(item => {
+    if(item.hidden)return false;
     const allCues = plan.all.filter(step => affect(step, item));
     const firstEntrance = allCues.some(step => entrance.has(step.effect));
     let shown = !firstEntrance;

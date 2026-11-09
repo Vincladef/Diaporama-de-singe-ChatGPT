@@ -367,3 +367,82 @@
 .reveal-export-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#506a56;white-space:nowrap;cursor:pointer}
 .reveal-export-toggle input{accent-color:#315a3e;width:14px;height:14px;margin:0}
 .reveal-export-toggle:has(input:disabled){opacity:.55;cursor:default}
+
+
+/* UX ergonomics 2026-11-09: increase target sizes, keep the canvas central. */
+.deck-sidebar-collapsed .sidebar{display:none}
+.panel-toggle{flex-shrink:0;min-width:40px;min-height:40px;font-size:19px!important}
+.editor-layout{grid-template-columns:180px minmax(350px,1fr) 306px}
+.editor-layout.slide-rail-collapsed{grid-template-columns:minmax(350px,1fr) 306px}
+.editor-layout.inspector-collapsed{grid-template-columns:180px minmax(350px,1fr)}
+.editor-layout.slide-rail-collapsed.inspector-collapsed{grid-template-columns:minmax(350px,1fr)}
+.editor-main{min-width:0}
+.visual-toolbar button,.visual-toolbar select{min-height:36px;font-size:12px}
+.visual-toolbar-zoom{flex-wrap:wrap;gap:3px}
+.visual-toolbar-zoom span{font-size:11px;min-width:78px}
+.visual-toolbar [aria-pressed=true]{background:#e0f0e4;border-color:#8fb99a}
+.list-heading button,.rail-heading button{min-width:36px;min-height:36px}
+.property-panel label,.property-group-title,.editor-tabs button{font-size:12px}
+.property-panel input,.property-panel textarea,.property-panel select{font-size:13px;min-height:36px}
+.property-panel button{min-height:35px;font-size:12px}
+.property-empty,.field-help,.canvas-footer{font-size:12px}
+.layer-list{display:flex;flex-direction:column;gap:5px}
+.layer-row{display:flex;align-items:center;min-width:0;gap:3px;padding:3px;border:1px solid #e0e8e2;border-radius:7px;background:#fbfdfb}
+.layer-row.selected{background:#e8f3e9;border-color:#8bb69a}
+.layer-row button{border:0;background:transparent;min-height:35px;padding:5px;flex-shrink:0;color:#334b3a}
+.layer-row .layer-select{display:flex;align-items:center;gap:7px;min-width:0;flex:1;text-align:left}
+.layer-row .layer-name{display:block;min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px}
+.layer-row .layer-name small{display:block;opacity:.65}
+.layer-row .layer-icon-button{min-width:27px;width:27px;font-size:15px;padding:3px}
+.layer-row .layer-icon-button[aria-pressed=true]{background:#dbe8df}
+.layer-row .layer-rename{flex:1;min-width:0;font-size:12px;max-width:130px;padding:5px}
+.layer-row .layer-icon{flex-shrink:0}
+.timeline-visual-preview{padding:15px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid #e1e9e0;background:#fcfdfb}
+.timeline-preview-controls{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.timeline-preview-controls strong{font-size:13px}
+.timeline-preview-controls div{display:flex;gap:5px}
+.timeline-preview-controls button,.timeline-click-strip button{min-height:36px;padding:7px 10px;border:1px solid #d7e4d9;border-radius:6px;background:white;font-size:12px}
+.timeline-preview-slide{width:min(350px,100%);background:#1b2b23;border-radius:6px;overflow:hidden}
+.timeline-preview-slide .slide-thumb{width:100%}
+.timeline-visual-preview small{font-size:11px;color:#718075}
+.timeline-click-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:5px;max-width:100%}
+.timeline-click-strip button{flex-shrink:0}
+.timeline-click-strip button.current{background:#295e40;color:white;border-color:#295e40}
+.timeline-cues{display:flex;flex-direction:row;align-items:stretch;overflow-x:auto;overflow-y:hidden;max-height:unset;gap:9px;padding:14px}
+.timeline-cue{flex:0 0 265px;min-width:0;border:1px solid #e0e9df;border-radius:8px;padding:12px;justify-content:flex-start}
+.timeline-cue-main{align-items:flex-start}
+.timeline-cue-order{border:0;min-width:33px;min-height:33px;cursor:pointer;font-size:12px}
+.timeline-cue-controls{grid-template-columns:1fr 1fr 1fr;grid-auto-rows:auto}
+.timeline-cue-controls>select,.timeline-cue-controls>label{grid-column:1 / -1}
+.timeline-cue-controls button{min-height:32px}
+.timeline-compatibility{color:#67816d!important;font-size:11px!important;white-space:normal}
+.timeline-keyframes{margin-left:0}
+@media(max-width:1280px){
+ .editor-layout{grid-template-columns:155px minmax(320px,1fr)}
+ .editor-layout.slide-rail-collapsed,.editor-layout.slide-rail-collapsed.inspector-collapsed{grid-template-columns:minmax(320px,1fr)}
+ .editor-layout.inspector-collapsed{grid-template-columns:155px minmax(320px,1fr)}
+ .editor-layout>.inspector{grid-column:1/-1}
+ .visual-toolbar{gap:7px}
+}
+@media(max-width:760px){
+ .editor-layout,.editor-layout.inspector-collapsed,.editor-layout.slide-rail-collapsed{display:flex;flex-direction:column}
+ .topbar{gap:7px}
+ .timeline-preview-slide{width:100%}
+ .layer-row .layer-icon-button{min-width:34px;width:34px}
+}
+
+/* Ensure focus remains visible when editing entirely by keyboard. */
+button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:focus-visible{
+  outline:3px solid #357c55;outline-offset:2px
+}
+.visual-object-hit:focus-visible{outline:4px solid #2b83e2}
+.layer-row:focus-within{border-color:#7fb394}
+
+.export-preflight{margin:12px 24px;padding:12px 15px;border:1px solid #d8e5da;border-radius:9px;background:#f8fbf8;font-size:12px}
+.export-preflight summary{cursor:pointer;font-weight:700;color:#345540;padding:4px 0;line-height:1.5}
+.export-preflight p{font-size:12px;color:#506c58;line-height:1.6}
+.export-preflight-scroll{max-width:100%;overflow-x:auto}
+.export-preflight table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}
+.export-preflight th,.export-preflight td{padding:9px 12px;border-bottom:1px solid #dce7df}
+.export-preflight th{color:#365943;background:#edf5ee}
+.export-preflight-disclaimer{color:#607866!important;font-size:11px!important}

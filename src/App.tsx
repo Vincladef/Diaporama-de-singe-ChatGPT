@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
@@ -12,8 +12,11 @@ import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
-import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
+import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
+import { inspectExport, isNativePptxObject } from "./export/preflight";
+import {makeSmartConnector,refreshSmartConnectors} from "./graphics/connectors";
+import { canUseNativeAnimations } from "./export/nativeAnimations";
 import type { RevealExportMode } from "./export/reveals";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
@@ -46,7 +49,10 @@ export default function App() {
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
   const [qualityOpen,setQualityOpen]=useState(false);
-  const [animationPanelOpen,setAnimationPanelOpen]=useState(true);
+  const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
+  const [showDeckSidebar,setShowDeckSidebar]=useState(true);
+  const [showSlideRail,setShowSlideRail]=useState(true);
+  const [showInspector,setShowInspector]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [autoSave, setAutoSave] = useState(true);
@@ -54,11 +60,14 @@ export default function App() {
   const draftRef = useRef<SlideDocument | null>(null);
   const currentRef = useRef<PresentationDetail | null>(null);
   const dirtyRef = useRef(false);
+  const notesRef = useRef("");
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const versionRef = useRef(0);
   const historyRef = useRef<{undo:SlideDocument[];redo:SlideDocument[];key:string;time:number}>({undo:[],redo:[],key:"",time:0});
   const [, setHistoryTick] = useState(0);
   currentRef.current = current;
   dirtyRef.current = dirty;
+  notesRef.current = notes;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -110,8 +119,8 @@ export default function App() {
     finally { setLoginBusy(false); }
   }
 
-  function logout() {
-    if (dirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+  async function logout() {
+    if (!await flushPending()) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
     setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
@@ -122,12 +131,28 @@ export default function App() {
     const next=slide ? structuredClone(slide.document):null;
     draftRef.current=next;
     setDraft(next);
-    setNotes(slide?.notes??"");
-    setSelectedIds([]);setDirty(false);setTab("design");setExternalChanges(false);
+    notesRef.current=slide?.notes??"";
+    setNotes(notesRef.current);
+    setSelectedIds([]);dirtyRef.current=false;setDirty(false);setTab("design");setExternalChanges(false);
     historyRef.current={undo:[],redo:[],key:"",time:0};
     setHistoryTick(v=>v+1);
   }
-  function confirmLeave() { return !dirty || window.confirm("Quitter sans enregistrer les modifications ?"); }
+  async function flushPending():Promise<boolean>{
+    // The save pipeline is serialized so a later navigation cannot drop edits.
+    for(let attempt=0;attempt<5;attempt++){
+      if(!dirtyRef.current && !saveInFlightRef.current)return true;
+      if(!await save())return false;
+      if(!dirtyRef.current)return true;
+    }
+    setError("D'autres changements sont encore en cours. Réessayez après leur sauvegarde.");
+    return false;
+  }
+  async function navigateToSlide(slide:SlideRecord){
+    if(slideId===slide.id)return;
+    if(!await flushPending())return;
+    const updated=currentRef.current?.slides.find(s=>s.id===slide.id);
+    if(updated)pickSlide(updated);
+  }
   function backupDraft(){
     if(!draft||!slideId||!current)return;
     // The backup is deliberately a native importable presentation, not an opaque dump.
@@ -149,14 +174,14 @@ export default function App() {
     pickSlide(detail.slides.find(s => s.id === preferred) ?? detail.slides[0]);
   }
   async function openDeck(id: string) {
-    if (!confirmLeave()) return;
+    if (!await flushPending()) return;
     setBusy(true); setError("");
     try { await loadDeck(id); } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
   async function createDeck() {
     const title = window.prompt("Titre de la présentation", "Sans titre");
-    if (!title?.trim() || !confirmLeave()) return;
+    if (!title?.trim() || !await flushPending()) return;
     setBusy(true); setError("");
     try {
       const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title: title.trim() });
@@ -187,7 +212,7 @@ export default function App() {
     finally { setBusy(false); }
   }
   async function slideAction(action: "addSlide" | "duplicateSlide" | "deleteSlide") {
-    if (!current || !confirmLeave()) return;
+    if (!current || !await flushPending()) return;
     const currentId = current.presentation.id;
     if (action === "deleteSlide" && !window.confirm("Supprimer cette diapositive ?")) return;
     if (action !== "addSlide" && !slideId) return;
@@ -207,20 +232,21 @@ export default function App() {
     const time=Date.now(), h=historyRef.current;
     const grouped=/^(text|style-|code-|object)/.test(key)&&key===h.key&&time-h.time<850;
     if(previous&&!grouped){h.undo=[...h.undo.slice(-49),structuredClone(previous)];h.redo=[];}
-    h.key=key;h.time=time;draftRef.current=next;versionRef.current++;
-    setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+    const prepared=refreshSmartConnectors(next);
+    h.key=key;h.time=time;draftRef.current=prepared;versionRef.current++;
+    setDraft(prepared);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function undo(){
     const h=historyRef.current,prior=h.undo.pop(),now=draftRef.current;
     if(!prior||!now)return;
     h.redo.push(structuredClone(now));h.key="";
-    draftRef.current=prior;versionRef.current++;setDraft(prior);setDirty(true);setHistoryTick(v=>v+1);
+    draftRef.current=prior;versionRef.current++;setDraft(prior);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function redo(){
     const h=historyRef.current,next=h.redo.pop(),now=draftRef.current;
     if(!next||!now)return;
     h.undo.push(structuredClone(now));h.key="";
-    draftRef.current=next;versionRef.current++;setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+    draftRef.current=next;versionRef.current++;setDraft(next);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function updateFreeform(part: "html" | "css", value: string) {
     if (!draft) return;
@@ -272,7 +298,7 @@ export default function App() {
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
   function applyVariant(document:SlideDocument,variantNotes:string){
-    editDocument(document,"variant");setNotes(variantNotes);setSelectedIds([]);
+    editDocument(document,"variant");notesRef.current=variantNotes;setNotes(variantNotes);setSelectedIds([]);
   }
   function updateObject(id: string, patch: Partial<SlideElement>) {
     if (!draft) return;
@@ -283,10 +309,50 @@ export default function App() {
     editDocument({ ...draft, elements: draft.elements.filter(item => item.id !== id && item.parentId !== id) });
     setSelectedIds([]);
   }
+  function groupSelection(mode:"group"|"ungroup"){
+    const doc=draftRef.current;
+    if(!doc||!selectedIds.length)return;
+    const ids=new Set(selectedIds);
+    if(mode==="group"){
+      if(ids.size<2)return;
+      const groupId=crypto.randomUUID();
+      const groupName="Groupe "+(new Set(doc.elements.map(e=>e.groupId).filter(Boolean)).size+1);
+      editDocument({...doc,elements:doc.elements.map(e=>
+        ids.has(e.id)&&!e.locked?{...e,groupId,groupName}:e)},"layers");
+    }else{
+      const groups=new Set(doc.elements.filter(e=>ids.has(e.id)&&e.groupId).map(e=>e.groupId));
+      editDocument({...doc,elements:doc.elements.map(e=>
+        ids.has(e.id)||(e.groupId&&groups.has(e.groupId))
+        ?{...e,groupId:undefined,groupName:undefined}:e)},"layers");
+    }
+  }
+  function connectSelection(){
+    const doc=draftRef.current;
+    if(!doc||selectedIds.length!==2)return;
+    const connector=makeSmartConnector(doc,selectedIds[0]!,selectedIds[1]!,crypto.randomUUID());
+    editDocument({...doc,elements:[connector,...doc.elements]},"connector");
+    setSelectedIds([connector.id]);
+  }
+  function animateSelection(){
+    const doc=draftRef.current;
+    if(!doc||!selectedIds.length)return;
+    const ids=selectedIds.filter(id=>doc.elements.some(e=>e.id===id&&!e.hidden));
+    if(!ids.length)return;
+    const additions=ids.map((id,i)=>({
+      id:crypto.randomUUID(),targetElementId:id,order:doc.animations.length+i,
+      trigger:"click" as const,effect:"fade" as const,durationMs:400,
+    }));
+    editDocument({...doc,animations:[...doc.animations,...additions]},"animations");
+    setAnimationPanelOpen(true);
+  }
   function removeSelection() {
     const doc=draftRef.current;
     if(!doc||!selectedIds.length)return;
-    const removed=new Set(selectedIds);
+    const removed=new Set(selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked));
+    for(const element of doc.elements){
+      if((element.linkFrom&&removed.has(element.linkFrom))||
+        (element.linkTo&&removed.has(element.linkTo)))removed.add(element.id);
+    }
     let changed=true;
     while(changed){
       changed=false;
@@ -297,12 +363,12 @@ export default function App() {
   }
   function copySelection() {
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
-    const {document:next,created}=duplicateElements(doc,selectedIds,()=>crypto.randomUUID());
+    const {document:next,created}=duplicateElements(doc,selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked),()=>crypto.randomUUID());
     editDocument(next,"duplicate");setSelectedIds(created);
   }
   function arrangeSelection(direction:"front"|"back"|"forward"|"backward") {
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
-    const list=[...doc.elements],members=new Set(selectedIds);
+    const list=[...doc.elements],members=new Set(selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked));
     let elements:typeof list;
     if(direction==="front"||direction==="back"){
       const selected=list.filter(e=>members.has(e.id)),remaining=list.filter(e=>!members.has(e.id));
@@ -322,19 +388,23 @@ export default function App() {
   }
   function alignSelection(kind:"left"|"right"|"center"|"top"|"middle"|"bottom") {
     const doc=draftRef.current;
-    if(doc)editDocument(alignElements(doc,selectedIds,kind),"align");
+    if(doc)editDocument(alignElements(doc,selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked),kind),"align");
+  }
+  function distributeSelection(axis:"horizontal"|"vertical"){
+    const doc=draftRef.current;
+    if(doc)editDocument(distributeElements(doc,selectedIds,axis),"distribute");
   }
   function nudgeSelection(dx:number,dy:number){
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
     const changes:Record<string,Box>={};
     for(const id of selectedIds){
       const element=doc.elements.find(e=>e.id===id);
-      if(element){const box=worldBox(element,doc);changes[id]=transformBox(box,dx,dy,"move",0);}
+      if(element&&!element.locked&&!element.hidden){const box=worldBox(element,doc);changes[id]=transformBox(box,dx,dy,"move",0);}
     }
     if(Object.keys(changes).length)editDocument(withElementBoxes(doc,changes),"nudge");
   }
   async function reorderSlide(fromId:string,toId:string) {
-    if (!current||fromId===toId||!confirmLeave())return;
+    if (!current||fromId===toId||!await flushPending())return;
     const ids=current.slides.map(s=>s.id),from=ids.indexOf(fromId),to=ids.indexOf(toId);
     if(from<0||to<0)return;
     const [moved]=ids.splice(from,1);ids.splice(to,0,moved!);
@@ -345,27 +415,43 @@ export default function App() {
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
-  async function save() {
-    if (!draft || !slideId || !current) return;
-    const check = SlideDocumentSchema.safeParse(draft);
-    if (!check.success) { setError("Document invalide : " + check.error.issues[0]?.message); return; }
-    const old = current.slides.find(s => s.id === slideId);
-    if (!old) return;
-    if(busy||externalChanges)return;
-    const started=versionRef.current, savedNotes=notes, savedSlideId=slideId;
-    setBusy(true);setError("");
-    try {
-      const result=await command<{slide:{revision:number;updated_at:string}}>(token,{
-        action:"saveSlide",id:savedSlideId,revision:old.revision,document:check.data,notes:savedNotes,
-      });
-      setCurrent(previous=>previous?{...previous,slides:previous.slides.map(s=>s.id===savedSlideId?
-        {...s,document:check.data,notes:savedNotes,revision:result.slide.revision,updated_at:result.slide.updated_at}:s)}:previous);
-      if(versionRef.current===started)setDirty(false);
-      setExternalChanges(false);
-    }catch(e){
-      if(e instanceof ApiError&&e.status===409)setExternalChanges(true);
-      setError(e instanceof Error?e.message:String(e));
-    }finally{setBusy(false);}
+  async function save():Promise<boolean>{
+    if(saveInFlightRef.current)return saveInFlightRef.current;
+    if(!dirtyRef.current)return true;
+    const operation=async():Promise<boolean>=>{
+      const pending=draftRef.current,deck=currentRef.current,pendingId=slideId;
+      const pendingNotes=notesRef.current;
+      if(!pending||!deck||!pendingId)return false;
+      if(externalChanges){setError("Conflit : sauvegardez le brouillon local avant de recharger.");return false;}
+      const parsed=SlideDocumentSchema.safeParse(pending);
+      if(!parsed.success){setError("Document invalide : "+parsed.error.issues[0]?.message);return false;}
+      const old=deck.slides.find(s=>s.id===pendingId);
+      if(!old)return false;
+      const started=versionRef.current;
+      setBusy(true);setError("");
+      try{
+        const result=await command<{slide:{revision:number;updated_at:string}}>(token,{
+          action:"saveSlide",id:pendingId,revision:old.revision,document:parsed.data,notes:pendingNotes,
+        });
+        const latest=currentRef.current;
+        if(latest){
+          const updated={...latest,slides:latest.slides.map(item=>item.id===pendingId?{
+            ...item,document:parsed.data,notes:pendingNotes,revision:result.slide.revision,
+            updated_at:result.slide.updated_at,
+          }:item)};
+          currentRef.current=updated;setCurrent(updated);
+        }
+        if(versionRef.current===started){dirtyRef.current=false;setDirty(false);}
+        setExternalChanges(false);
+        return true;
+      }catch(e){
+        if(e instanceof ApiError&&e.status===409)setExternalChanges(true);
+        setError(e instanceof Error?e.message:String(e));return false;
+      }finally{setBusy(false);}
+    };
+    const pending=operation().finally(()=>{if(saveInFlightRef.current===pending)saveInFlightRef.current=null;});
+    saveInFlightRef.current=pending;
+    return pending;
   }
 
   async function verifyExportRevision(deck: PresentationDetail) {
@@ -382,13 +468,15 @@ export default function App() {
 
   async function downloadPowerPoint() {
     if (!current || exportBusy) return;
-    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
+    if(!await flushPending())return;
+    const fresh=currentRef.current;
+    if(!fresh)return;
     setExportBusy(true); setExportTarget("pptx"); setExportReport(null);
     setExportProgress("Préparation…"); setError("");
     try {
-      await verifyExportRevision(current);
+      await verifyExportRevision(fresh);
       const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
+      const report = await exportPowerPoint(fresh, exportMode, ({ completed, total }) =>
         setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportReport(report);
     } catch (e) {
@@ -407,7 +495,6 @@ export default function App() {
 
   async function exportToGoogleSlides(clientId: string) {
     if (!current || exportBusy) return;
-    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
     const deck = current;
     setExportBusy(true); setExportTarget("google");
     setGoogleReport(null); setGoogleExportSlideCount(null); setExportReport(null);
@@ -415,16 +502,18 @@ export default function App() {
     try {
       // OAuth must start on the original user click, before the first await.
       const accessToken = await requestGoogleDriveAccess(clientId);
+      if(!await flushPending())return;
+      const fresh=currentRef.current??deck;
       setExportProgress("Vérification des diapositives…");
-      await verifyExportRevision(deck);
+      await verifyExportRevision(fresh);
       // Both destinations receive the same PPTX: native animations on compatible
       // editable slides, progressive frames only when native conversion is impossible.
       // Google Drive may still drop some OOXML timing effects during conversion.
       const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const artifact = await buildPowerPoint(deck, exportMode, ({ completed, total }) =>
+      const artifact = await buildPowerPoint(fresh, exportMode, ({ completed, total }) =>
         setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportProgress("Conversion dans Google Drive…");
-      const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, deck.presentation.title);
+      const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, fresh.presentation.title);
       setGoogleExportSlideCount(artifact.slideCount);
       setGoogleReport(result);
     } catch (e) {
@@ -434,6 +523,18 @@ export default function App() {
 
   const active = current?.slides.find(s=>s.id===slideId);
   const statusText = externalChanges ? "Nouvelle version distante" : dirty ? "Modifications non enregistrées" : "Enregistré";
+  const exportPreview=useMemo(()=>{
+    if(!current)return null;
+    const sources=current.slides.map(slide=>slide.id===slideId&&draft?
+      {...slide,document:draft,notes}:slide);
+    return {report:inspectExport(sources),
+      objects:sources.map(slide=>({
+        total:slide.document.elements.filter(e=>!e.hidden).length,
+        native:slide.document.elements.filter(e=>!e.hidden&&isNativePptxObject(e)).length,
+        animations:slide.document.animations.length,
+        office:canUseNativeAnimations(slide.document),
+      }))};
+  },[current,slideId,draft,notes]);
 
   useEffect(()=>{
     if(!token||!current?.presentation.id)return;
@@ -510,7 +611,7 @@ export default function App() {
   );
 
   return (
-    <div className="app">
+    <div className={"app"+(!showDeckSidebar?" deck-sidebar-collapsed":"")}>
       <aside className="sidebar">
         <div className="identity"><span className="identity-mark">◆</span><strong>Diaporama<br />de singe</strong></div>
         <div className="edition">ÉDITION CHATGPT</div>
@@ -527,12 +628,14 @@ export default function App() {
         </div>
         <div className="sidebar-bottom">
           <span className="connected-dot" /> Stockage privé
-          <button className="text-btn logout" onClick={logout}>Quitter</button>
+          <button className="text-btn logout" onClick={() => void logout()}>Quitter</button>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
+          <button className="subtle-btn panel-toggle" aria-label={showDeckSidebar?"Masquer la liste des présentations":"Afficher les présentations"}
+            aria-pressed={showDeckSidebar} onClick={()=>setShowDeckSidebar(v=>!v)}>☰</button>
           <div className="breadcrumb">{current ? current.presentation.title : "Mes présentations"}</div>
           <button className="subtle-btn import-top-button" onClick={()=>setImportOpen(true)} disabled={busy}>⇧ Importer</button>
           {current && <div className="header-actions">
@@ -571,11 +674,11 @@ export default function App() {
                     onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
                   Étapes au clic
                 </label>
-                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || dirty || !current.slides.length}>
+                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || !current.slides.length}>
                   {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
                 </button>
                 <button className="subtle-btn google-export-action" onClick={startGoogleExport}
-                  disabled={exportBusy || busy || dirty || !current.slides.length} title="Créer une présentation dans votre Google Drive">
+                  disabled={exportBusy || busy || !current.slides.length} title="Créer une présentation dans votre Google Drive">
                   {exportBusy && exportTarget === "google" ? (exportProgress || "Conversion…") : "Exporter vers Google Slides"}
                 </button>
               </div>
@@ -585,6 +688,30 @@ export default function App() {
               {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
+            {exportPreview&&<details className="export-preflight">
+              <summary>Contrôle avant export : {exportPreview.report.fullyNative} diapo(s) entièrement éditables,
+                {" "+exportPreview.report.mixedEditable} mixtes et {exportPreview.report.rasterOnly} aplatie(s)
+              </summary>
+              <p>Le mode « Visuel fidèle » produit des images. En mode « Objets modifiables »,
+                seuls les effets incompatibles sont isolés, sauf pour les compositions imbriquées.
+                Google Slides peut modifier certains effets PowerPoint au moment de l'importation.</p>
+              <div className="export-preflight-scroll"><table>
+                <thead><tr><th>Diapositive</th><th>Modifiabilité</th><th>Animations au clic</th></tr></thead>
+                <tbody>{exportPreview.report.slides.map((risk,i)=><tr key={i}>
+                  <td>{i+1}</td>
+                  <td>{exportMode==="faithful"?"Image entière":
+                    risk.mode==="raster"?"Composition aplatie":
+                    exportPreview.objects[i]?.native+" / "+exportPreview.objects[i]?.total+" objets natifs"}
+                  </td>
+                  <td>{exportPreview.objects[i]?.animations===0?"Aucune":
+                    exportMode==="faithful"?"Étapes statiques":
+                    exportPreview.objects[i]?.office?"Effets PowerPoint natifs possibles":"Étapes de secours"}
+                  </td>
+                </tr>)}</tbody>
+              </table></div>
+              {exportPreview.report.warnings.length>0&&
+                <p className="export-preflight-disclaimer">{exportPreview.report.warnings.join(" · ")}</p>}
+            </details>}
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
               <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
@@ -603,17 +730,15 @@ export default function App() {
                   : " · Export statique sans animations Web."}
               </span>
             </div>}
-            <div className="editor-layout">
-              <aside className="slide-rail">
+            <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
+              {showSlideRail&&<aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
                 {current.slides.map((s, i) =>
                   <button key={s.id} draggable className={"slide-tile " + (s.id === slideId ? "selected" : "")}
                     onDragStart={e=>{e.dataTransfer.setData("text/x-singe-slide",s.id);e.dataTransfer.effectAllowed="move";}}
                     onDragOver={e=>e.preventDefault()}
                     onDrop={e=>{e.preventDefault();const source=e.dataTransfer.getData("text/x-singe-slide");if(source)void reorderSlide(source,s.id);}}
-                    onClick={() => {
-                    if (confirmLeave()) pickSlide(s);
-                  }}>
+                    onClick={() => void navigateToSlide(s)}>
                     <div className="slide-mini"><SlideThumbnail document={s.document} index={i+1}/></div>
                     <span>Diapositive {i + 1}</span>
                   </button>
@@ -622,16 +747,22 @@ export default function App() {
                   <button onClick={() => void slideAction("duplicateSlide")} disabled={busy}>Dupliquer</button>
                   <button onClick={() => void slideAction("deleteSlide")} disabled={busy} className="danger-text">Supprimer</button>
                 </div>}
-              </aside>
+              </aside>}
               <section className="editor-main">
                 {draft ? <>
                   <div className="visual-toolbar">
                     <div className="visual-toolbar-group">
+                      <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"Masquer les diapos":"Diapos"}</button>
+                      <button onClick={()=>{setShowInspector(true);setTab("layers");}} title="Gérer les calques">Calques</button>
+                      <button onClick={()=>setShowInspector(v=>!v)} title="Afficher ou masquer l'inspecteur">{showInspector?"Masquer les outils":"Outils"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
                       <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
                       <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
                       <button onClick={()=>setHistoryStudioOpen(true)} title="Afficher l'historique des sauvegardes">Historique</button>
-                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} title="Configurer les animations au clic">Animations</button>
+                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen} title="Configurer les animations au clic">Animations</button>
+                      <button onClick={animateSelection} disabled={!selectedIds.length} title="Ajouter un fondu au clic sur les calques sélectionnés">+ Animer</button>
+                      <button onClick={connectSelection} disabled={selectedIds.length!==2}
+                        title="Créer une flèche liée aux deux objets, qui les suit lors de leur déplacement">Relier →</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
@@ -642,15 +773,20 @@ export default function App() {
                     </div>
                     <div className="visual-toolbar-group">
                       <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
-                        onChange={e=>{if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
+                        onChange={e=>{if(e.target.value==="distribute-h")distributeSelection("horizontal");else if(e.target.value==="distribute-v")distributeSelection("vertical");else if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
                         <option value="">Aligner</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
-                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option>
+                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option><option value="distribute-h">Répartir horizontalement (3+)</option><option value="distribute-v">Répartir verticalement (3+)</option>
                       </select>
                     </div>
                     <div className="visual-toolbar-group visual-toolbar-zoom">
                       <button aria-label="Réduire le zoom" onClick={()=>setZoom(z=>Math.max(.5,Math.round((z-.1)*10)/10))}>−</button>
-                      <span>{Math.round(zoom*100)} %</span>
-                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(2.5,Math.round((z+.1)*10)/10))}>+</button>
+                      <button onClick={()=>setZoom(1)} title="Ajuster à la fenêtre">Ajuster</button>
+                      <span title="Zoom par rapport au format ajusté">{Math.round(zoom*100)} % ajusté</span>
+                      <button onClick={()=>{
+                        const width=document.querySelector<HTMLElement>(".visual-viewport")?.clientWidth??840;
+                        if(draft)setZoom(draft.canvas.width/Math.max(width-2,250));
+                      }} title="Afficher les pixels à leur taille réelle">100 % réel</button>
+                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(5,Math.round((z+.1)*10)/10))}>+</button>
                     </div>
                   </div>
                   <div className="section-caption"><span>DIAPOSITIVE · {draft.canvas.width} × {draft.canvas.height}</span>
@@ -659,17 +795,17 @@ export default function App() {
                   <VisualCanvas document={draft} selectedIds={selectedIds} onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid}/>
                   <div className="canvas-footer">Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments.</div>
                   {animationPanelOpen&&<AnimationTimeline document={draft} selectedIds={selectedIds}
-                    onChange={editDocument} onPreview={()=>setPresenting(true)}/>}
+                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/>}
                   <div className="notes-row">
                     <label htmlFor="slide-notes">Notes du présentateur</label>
-                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;setNotes(e.target.value); setDirty(true); }} placeholder="Notes facultatives…" />
+                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
                   </div>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
+              {draft && showInspector && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onChange={editDocument} tab={tab} onTabChange={setTab}
                 onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                onOpenImages={()=>setImageStudioOpen(true)}/>}
+                onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
             </div>
           </div>
         )}
@@ -681,8 +817,8 @@ export default function App() {
           onFocus={index=>{
             const next=current.slides[index];
             if(!next)return;
-            if(next.id!==slideId){if(!confirmLeave())return;pickSlide(next);}
             setQualityOpen(false);
+            if(next.id!==slideId)void navigateToSlide(next);
           }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}

@@ -1,4 +1,7 @@
-import { useMemo,useState } from "react";
+import { useEffect,useMemo,useState } from "react";
+import { SlideThumbnail } from "./SlideThumbnail";
+import { visibleStructuredElements } from "../export/nativeSteps";
+import { isNativePptxObject } from "../export/preflight";
 import { AnimationStepSchema,type AnimationStep,type SlideDocument } from "../domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../animation/timeline";
 
@@ -7,6 +10,7 @@ type Props={
   selectedIds:string[];
   onChange:(document:SlideDocument,key?:string)=>void;
   onPreview:()=>void;
+  onSelect?:(ids:string[])=>void;
 };
 const EFFECTS=[
   ["appear","Apparition immédiate"],["fade","Fondu"],["move","Glissement"],["scale","Zoom doux"],
@@ -31,7 +35,7 @@ function freeformTargets(html:string):TargetChoice[]{
     return choices;
   }catch{return [];}
 }
-export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:Props){
+export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview,onSelect}:Props){
   const [target,setTarget]=useState("");
   const [customSelector,setCustomSelector]=useState("");
   const [effect,setEffect]=useState<AnimationStep["effect"]>("fade");
@@ -43,6 +47,7 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
   const [dragged,setDragged]=useState<string|null>(null);
   const [editingKeyframes,setEditingKeyframes]=useState<string|null>(null);
   const [jsonText,setJsonText]=useState("");
+  const [previewClick,setPreviewClick]=useState(0);
   const ordered=useMemo(()=>[...doc.animations].sort((a,b)=>a.order-b.order),[doc.animations]);
   const plan=useMemo(()=>buildPlaybackPlan(doc.animations),[doc.animations]);
   const structured=doc.elements.map(el=>({
@@ -52,6 +57,11 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
   }));
   const free=freeformTargets(doc.freeform?.html??"");
   const options=[...structured,...free];
+  const previewDocument=useMemo(()=>({...doc,elements:visibleStructuredElements(doc,previewClick)}),[doc,previewClick]);
+  useEffect(()=>{setPreviewClick(c=>Math.min(c,plan.clicks.length));},[plan.clicks.length]);
+  useEffect(()=>{
+    if(selectedIds.length===1)setTarget("element:"+selectedIds[0]);
+  },[selectedIds.join("|")]);
   const currentTarget=target||((selectedIds.length===1?"element:"+selectedIds[0]:"")||options[0]?.value||"css");
 
   function apply(steps:AnimationStep[]){
@@ -109,7 +119,29 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
     <div className="animation-timeline-head">
       <div><strong>Animations</strong>
         <span>{plan.clicks.length} clic{plan.clicks.length>1?"s":""} ; {ordered.length} effet{ordered.length>1?"s":""}</span></div>
-      <button className="subtle-btn" onClick={onPreview}>Prévisualiser</button>
+      <button className="subtle-btn" onClick={onPreview}>Projection plein écran</button>
+    </div>
+    <div className="timeline-visual-preview">
+      <div className="timeline-preview-controls">
+        <strong>Aperçu au clic · {previewClick}/{plan.clicks.length}</strong>
+        <div>
+          <button onClick={()=>setPreviewClick(c=>Math.max(0,c-1))}
+            disabled={previewClick===0} aria-label="Clic précédent">←</button>
+          <button onClick={()=>setPreviewClick(c=>Math.min(plan.clicks.length,c+1))}
+            disabled={previewClick===plan.clicks.length} aria-label="Clic suivant">Clic suivant →</button>
+        </div>
+      </div>
+      <div className="timeline-preview-slide">
+        <SlideThumbnail document={previewDocument} index={0}/>
+      </div>
+      {doc.mode!=="structured"&&<small>Pour les animations HTML, utiliser « Projection plein écran » ; cet aperçu affiche les calques structurés.</small>}
+      <div className="timeline-click-strip" aria-label="Étapes au clic">
+        {Array.from({length:plan.clicks.length+1},(_,i)=>
+          <button key={i} aria-current={previewClick===i?"step":undefined}
+            className={previewClick===i?"current":""} onClick={()=>setPreviewClick(i)}>
+            {i===0?"Départ":"Clic "+i}
+          </button>)}
+      </div>
     </div>
     <div className="timeline-quick-add">
       <label>Élément à animer
@@ -153,9 +185,17 @@ export function AnimationTimeline({document:doc,selectedIds,onChange,onPreview}:
         onDragOver={e=>e.preventDefault()}
         onDrop={e=>{e.preventDefault();const origin=e.dataTransfer.getData("text/x-singe-cue")||dragged;if(origin)move(origin,i);setDragged(null);}}>
         <div className="timeline-cue-main">
-          <span className="timeline-cue-order">{String(i+1).padStart(2,"0")}</span>
+          <button className="timeline-cue-order" title="Prévisualiser cette étape"
+            onClick={()=>{const n=plan.clicks.findIndex(group=>group.some(c=>c.id===step.id));setPreviewClick(n<0?0:n+1);
+              if(step.targetElementId)onSelect?.([step.targetElementId]);}}>
+            {String(i+1).padStart(2,"0")}
+          </button>
           <div className="timeline-cue-description"><strong>{timelineTarget(step,doc)}</strong>
-            <small>{step.trigger==="click"?"● Clic pour avancer":"↳ Après le précédent"}</small></div>
+            <small>{step.trigger==="click"?"● Clic pour avancer":"↳ Après le précédent"}</small>
+            <small className="timeline-compatibility">{doc.mode!=="freeform" &&
+              ["appear","fade","move","scale","wipe"].includes(step.effect) &&
+              doc.elements.some(el=>el.id===step.targetElementId&&!el.hidden&&isNativePptxObject(el))
+                ?"PowerPoint : effet natif possible":"Export : effet Web ou étape de secours"}</small></div>
           <span className="timeline-drag-handle" aria-hidden="true">⠿</span>
         </div>
         <div className="timeline-cue-controls">

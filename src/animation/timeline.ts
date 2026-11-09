@@ -46,6 +46,7 @@ export function timelineTarget(step:AnimationStep,document:SlideDocument):string
   if(step.targetElementId){
     const e=document.elements.find(x=>x.id===step.targetElementId);
     if(!e)return "Élément introuvable";
+    if(e.name)return e.name;
     if(e.type==="text")return "Texte : "+(e.text??"").replace(/\s+/g," ").slice(0,37);
     return ({image:"Image",shape:"Forme",group:"Groupe",svg:"SVG"} as Record<string,string>)[e.type]??e.type;
   }

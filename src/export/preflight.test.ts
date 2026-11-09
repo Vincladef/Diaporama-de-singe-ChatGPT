@@ -27,7 +27,7 @@ test("flags CORS risks, non-native animation and aspect ratio changes",()=>{
  const report=inspectExport([{document:a},{document:b}]);
  assert.equal(report.totalRemoteImages,1);
  assert.equal(report.animatedSlides,1);
- assert.ok(report.warnings.some(w=>w.includes("animations Web")));
+ assert.ok(report.warnings.some(w=>w.includes("animations PowerPoint natives")));
  assert.ok(report.warnings.some(w=>w.includes("Format différent")));
 });
 
@@ -52,4 +52,16 @@ test("diagram connector SVG stays an independent vector picture",()=>{
  assert.equal(report.fullyNative,1);
  assert.equal(report.rasterOnly,0);
  assert.ok(report.warnings.some(x=>x.includes("SVG")));
+});
+
+test("isolated photo filter preserves editable text on the same slide",()=>{
+ const doc=createEmptySlideDocument();
+ doc.elements=[
+  {id:"title",type:"text",text:"Titre",styles:{left:"20px"}},
+  {id:"photo",type:"image",src:"https://example.com/p.jpg",styles:{filter:"blur(3px)"}},
+ ];
+ const report=inspectExport([{document:doc}]);
+ assert.equal(report.rasterOnly,0);
+ assert.equal(report.mixedEditable,1);
+ assert.ok(report.warnings.some(x=>x.includes("séparément")));
 });

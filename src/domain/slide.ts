@@ -5,7 +5,15 @@ export const SlideElementSchema = z.object({
   type: z.enum(["text", "image", "shape", "svg", "group"]),
   text: z.string().optional(),
   src: z.url().optional(),
+  alt: z.string().max(350).optional(),
   parentId: z.string().optional(),
+  name: z.string().max(140).optional(),
+  hidden: z.boolean().optional(),
+  locked: z.boolean().optional(),
+  groupId: z.string().max(128).optional(),
+  groupName: z.string().max(140).optional(),
+  linkFrom: z.string().min(1).max(128).optional(),
+  linkTo: z.string().min(1).max(128).optional(),
   styles: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
 }).strict();
 

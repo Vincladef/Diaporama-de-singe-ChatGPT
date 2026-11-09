@@ -15,8 +15,8 @@ type Gesture = {
 };
 const handles: TransformMode[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 function getVisualLabel(e: SlideElement): string {
-  return e.type === "text" ? (e.text?.slice(0, 55) || "Texte vide") :
-    e.type === "image" ? "Image" : e.type === "shape" ? "Forme" : e.type === "svg" ? "SVG" : "Groupe";
+  return e.name || (e.type === "text" ? (e.text?.slice(0, 55) || "Texte vide") :
+    e.type === "image" ? "Image" : e.type === "shape" ? "Forme" : e.type === "svg" ? "SVG" : "Groupe");
 }
 type Props = {
   document: SlideDocument;
@@ -89,18 +89,26 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   }
   function begin(e: PointerEvent<HTMLElement>, id: string, mode: TransformMode) {
     if (readOnly || editId) return;
+    const clicked=doc.elements.find(item=>item.id===id);
+    if(!clicked||clicked.locked||clicked.hidden)return;
+    if(clicked.linkFrom&&clicked.linkTo){onSelect([clicked.id]);return;}
     e.preventDefault();
     e.stopPropagation();
     freeRef.current?.clear();
-    const selected = selectionRef.current;
-    let ids: string[];
-    if (e.shiftKey && mode === "move") {
-      ids = selected.includes(id) ? selected.filter(x=>x!==id) : [...selected,id];
+    const selected=selectionRef.current;
+    const group=clicked.groupId && mode==="move"
+      ?doc.elements.filter(item=>item.groupId===clicked.groupId&&!item.locked&&!item.hidden).map(item=>item.id)
+      :[id];
+    let ids:string[];
+    if(e.shiftKey&&mode==="move"){
+      ids=selected.includes(id)?selected.filter(x=>!group.includes(x)):[...new Set([...selected,...group])];
       onSelect(ids);
-      if (!ids.includes(id)) return;
-    } else {
-      ids = selected.includes(id) && mode==="move" ? selected : [id];
-      if (ids.length!==selected.length || !ids.every((x,i)=>selected[i]===x)) onSelect(ids);
+      if(!ids.includes(id))return;
+    }else{
+      ids=selected.includes(id)&&mode==="move"
+        ?selected.filter(x=>!doc.elements.find(item=>item.id===x)?.locked)
+        :group;
+      if(ids.length!==selected.length||!ids.every((x,i)=>selected[i]===x))onSelect(ids);
     }
     const initial:Record<string,Box>={};
     for (const member of mode==="move" ? ids : [id]) {
@@ -134,7 +142,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
   function beginInlineEdit(element: SlideElement) {
-    if (readOnly || element.type!=="text") return;
+    if (readOnly || element.locked || element.hidden || element.type!=="text") return;
     setEditId(element.id);
     setEditValue(element.text ?? "");
     onSelect([element.id]);
@@ -174,7 +182,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
             const rect=e.currentTarget.getBoundingClientRect();
             freeRef.current?.selectAt((e.clientX-rect.left)/fit,(e.clientY-rect.top)/fit);
           }}>
-          {!readOnly && doc.elements.filter(el=>!el.parentId).concat(doc.elements.filter(el=>!!el.parentId)).map(element=>{
+          {!readOnly && doc.elements.filter(el=>!el.parentId&&!el.hidden).concat(doc.elements.filter(el=>!!el.parentId&&!el.hidden)).map(element=>{
             const box=live[element.id]??worldBox(element,doc);
             const picked=selectedIds.includes(element.id);
             return (
@@ -182,16 +190,20 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 key={element.id}
                 data-visual-id={element.id}
                 className={"visual-object-hit"+(picked?" is-selected":"")}
-                style={{left:box.x,top:box.y,width:box.w,height:box.h}}
+                style={{left:box.x,top:box.y,width:box.w,height:box.h,pointerEvents:element.locked?"none":"auto"}}
                 title={getVisualLabel(element)}
                 aria-label={getVisualLabel(element)}
+                role="button" tabIndex={element.locked?-1:0} aria-pressed={picked}
+                onKeyDown={e=>{
+                  if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();onSelect([element.id]);}
+                }}
                 onPointerDown={e=>begin(e,element.id,"move")}
                 onPointerMove={move}
                 onPointerUp={end}
                 onPointerCancel={end}
                 onDoubleClick={e=>{e.stopPropagation();beginInlineEdit(element);}}
               >
-                {picked && <span className="visual-selection-name">{element.type === "text" ? "Texte" : element.type==="image" ? "Image" : element.type==="shape" ? "Forme" : "Élément"}</span>}
+                {picked && <span className="visual-selection-name">{getVisualLabel(element).slice(0,32)}</span>}
                 {picked && selectedIds.length===1 && handles.map(mode=>(
                   <span key={mode} data-handle={mode} className={"visual-resize-handle handle-"+mode}
                     onPointerDown={e=>begin(e,element.id,mode)}

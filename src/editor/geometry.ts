@@ -100,13 +100,38 @@ export function alignElements(doc: SlideDocument, ids: string[], type: "left" | 
   }
   return withElementBoxes(doc,changes);
 }
+/** Evenly distribute three or more objects while keeping the outer boundaries fixed. */
+export function distributeElements(doc:SlideDocument,ids:string[],axis:"horizontal"|"vertical"):SlideDocument{
+  const selected=doc.elements.filter(e=>ids.includes(e.id)&&!e.locked);
+  if(selected.length<3)return doc;
+  const horizontal=axis==="horizontal";
+  const boxes=selected.map(el=>({id:el.id,box:worldBox(el,doc)}))
+    .sort((a,b)=>horizontal?a.box.x-b.box.x:a.box.y-b.box.y);
+  const start=horizontal?boxes[0]!.box.x:boxes[0]!.box.y;
+  const end=horizontal?boxes[boxes.length-1]!.box.x+boxes[boxes.length-1]!.box.w:
+    boxes[boxes.length-1]!.box.y+boxes[boxes.length-1]!.box.h;
+  const occupied=boxes.reduce((sum,b)=>sum+(horizontal?b.box.w:b.box.h),0);
+  const gap=(end-start-occupied)/(boxes.length-1);
+  let cursor=start;
+  const changes:Record<string,Box>={};
+  for(const {id,box} of boxes){
+    changes[id]=horizontal?{...box,x:cursor}:{...box,y:cursor};
+    cursor+=(horizontal?box.w:box.h)+gap;
+  }
+  return withElementBoxes(doc,changes);
+}
 export function duplicateElements(doc: SlideDocument, ids: string[], makeId: () => string): { document: SlideDocument; created: string[] } {
   const selected = doc.elements.filter(e => ids.includes(e.id));
   const newIds = new Map(selected.map(e => [e.id, makeId()]));
+  const groupIds=new Map<string,string>();
+  for(const e of selected)if(e.groupId&&!groupIds.has(e.groupId))groupIds.set(e.groupId,makeId());
   const elements = selected.map(e => ({
     ...structuredClone(e),
     id: newIds.get(e.id)!,
     parentId: e.parentId ? newIds.get(e.parentId) ?? e.parentId : undefined,
+    groupId:e.groupId?groupIds.get(e.groupId):undefined,
+    linkFrom:e.linkFrom?newIds.get(e.linkFrom)??e.linkFrom:undefined,
+    linkTo:e.linkTo?newIds.get(e.linkTo)??e.linkTo:undefined,
     styles: {
       ...e.styles,
       left: rounded(lengthToPx(e.styles.left,doc.canvas.width) + 30) + "px",

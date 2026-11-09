@@ -31,17 +31,20 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
     const remote=media.filter(x=>x.src?.startsWith("https://")).length+
       embeddedImages.length+cssUrls.length;
     const hasFree=!!(document.freeform?.html?.trim()||document.freeform?.css?.trim());
-    const hasUnsupported=document.elements.some(x=>!isNativePptxObject(x));
-    const mode:ExportModeHint=hasUnsupported?"raster":
-      document.mode!=="structured"&&hasFree?"mixed":"native";
+    const hasGroups=document.elements.some(x=>x.type==="group" || Boolean(x.parentId) ||
+      document.elements.some(child=>child.parentId===x.id));
+    const isolated=document.elements.filter(x=>!isNativePptxObject(x)).length;
+    const mode:ExportModeHint=hasGroups?"raster":
+      (isolated>0 || (document.mode!=="structured"&&hasFree))?"mixed":"native";
     const issues:string[]=[];
     const ratio=document.canvas.width/document.canvas.height;
     if(Math.abs(ratio-expectedRatio)>.002)issues.push("Format différent du premier écran ; adaptation nécessaire.");
-    if(mode==="raster")issues.push("Mode objets éditables : conversion de la page en image.");
-    if(mode==="mixed")issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
-    if(document.elements.some(x=>x.type==="svg")&&!hasUnsupported)
+    if(mode==="raster")issues.push("Groupes imbriqués : conversion de la page en image de secours.");
+    if(isolated && !hasGroups)issues.push(isolated+" objet(s) complexe(s) rendu(s) séparément ; les autres restent modifiables.");
+    if(document.mode!=="structured"&&hasFree)issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
+    if(document.elements.some(x=>x.type==="svg")&&!hasGroups)
       issues.push("Les tracés SVG sont conservés en image vectorielle indépendante, sans édition des points.");
-    if(document.animations.length)issues.push("Les animations Web ne sont pas exportées en animations PowerPoint natives.");
+    if(document.animations.length)issues.push("Apparitions : animations PowerPoint natives pour les objets compatibles ; étapes successives sinon. La conversion Google Slides peut modifier les effets.");
     if(media.some(x=>!x.src))issues.push("Image sans source.");
     if(remote)issues.push("Les images distantes nécessitent un accès CORS pour la capture/export dans ce navigateur.");
     if(document.elements.length>950)issues.push("Plus de 950 éléments ; risque de surcharge mémoire.");

@@ -35,10 +35,11 @@ function renderObjects(document: SlideDocument): string {
     return (children.get(parent) ?? []).map(item => {
       if (seen.has(item.id)) return "";
       seen.add(item.id);
+      if(item.hidden)return "";
       const style = cssStyle(item.styles);
       const id = escapeHtml(item.id);
       const inner = walk(item.id, depth + 1);
-      if (item.type === "image") return '<img data-id="' + id + '" alt="" src="' + safeImageUrl(item.src) + '" style="' + style + '"/>';
+      if (item.type === "image") return '<img data-id="' + id + '" alt="' + escapeHtml(item.alt??"") + '" src="' + safeImageUrl(item.src) + '" style="' + style + '"/>';
       if (item.type === "svg") return '<div data-id="' + id + '" style="' + style + '">' + (item.text ?? "") + inner + "</div>";
       if (item.type === "shape" || item.type === "group") return '<div data-id="' + id + '" style="' + style + '">' + inner + "</div>";
       return '<div data-id="' + id + '" style="' + style + '">' + escapeHtml(item.text ?? "") + inner + "</div>";
