@@ -46,7 +46,10 @@ export default function App() {
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
   const [qualityOpen,setQualityOpen]=useState(false);
-  const [animationPanelOpen,setAnimationPanelOpen]=useState(true);
+  const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
+  const [showDeckSidebar,setShowDeckSidebar]=useState(true);
+  const [showSlideRail,setShowSlideRail]=useState(true);
+  const [showInspector,setShowInspector]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [autoSave, setAutoSave] = useState(true);
@@ -302,10 +305,39 @@ export default function App() {
     editDocument({ ...draft, elements: draft.elements.filter(item => item.id !== id && item.parentId !== id) });
     setSelectedIds([]);
   }
+  function groupSelection(mode:"group"|"ungroup"){
+    const doc=draftRef.current;
+    if(!doc||!selectedIds.length)return;
+    const ids=new Set(selectedIds);
+    if(mode==="group"){
+      if(ids.size<2)return;
+      const groupId=crypto.randomUUID();
+      const groupName="Groupe "+(new Set(doc.elements.map(e=>e.groupId).filter(Boolean)).size+1);
+      editDocument({...doc,elements:doc.elements.map(e=>
+        ids.has(e.id)&&!e.locked?{...e,groupId,groupName}:e)},"layers");
+    }else{
+      const groups=new Set(doc.elements.filter(e=>ids.has(e.id)&&e.groupId).map(e=>e.groupId));
+      editDocument({...doc,elements:doc.elements.map(e=>
+        ids.has(e.id)||(e.groupId&&groups.has(e.groupId))
+        ?{...e,groupId:undefined,groupName:undefined}:e)},"layers");
+    }
+  }
+  function animateSelection(){
+    const doc=draftRef.current;
+    if(!doc||!selectedIds.length)return;
+    const ids=selectedIds.filter(id=>doc.elements.some(e=>e.id===id&&!e.hidden));
+    if(!ids.length)return;
+    const additions=ids.map((id,i)=>({
+      id:crypto.randomUUID(),targetElementId:id,order:doc.animations.length+i,
+      trigger:"click" as const,effect:"fade" as const,durationMs:400,
+    }));
+    editDocument({...doc,animations:[...doc.animations,...additions]},"animations");
+    setAnimationPanelOpen(true);
+  }
   function removeSelection() {
     const doc=draftRef.current;
     if(!doc||!selectedIds.length)return;
-    const removed=new Set(selectedIds);
+    const removed=new Set(selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked));
     let changed=true;
     while(changed){
       changed=false;
@@ -316,12 +348,12 @@ export default function App() {
   }
   function copySelection() {
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
-    const {document:next,created}=duplicateElements(doc,selectedIds,()=>crypto.randomUUID());
+    const {document:next,created}=duplicateElements(doc,selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked),()=>crypto.randomUUID());
     editDocument(next,"duplicate");setSelectedIds(created);
   }
   function arrangeSelection(direction:"front"|"back"|"forward"|"backward") {
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
-    const list=[...doc.elements],members=new Set(selectedIds);
+    const list=[...doc.elements],members=new Set(selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked));
     let elements:typeof list;
     if(direction==="front"||direction==="back"){
       const selected=list.filter(e=>members.has(e.id)),remaining=list.filter(e=>!members.has(e.id));
@@ -341,14 +373,14 @@ export default function App() {
   }
   function alignSelection(kind:"left"|"right"|"center"|"top"|"middle"|"bottom") {
     const doc=draftRef.current;
-    if(doc)editDocument(alignElements(doc,selectedIds,kind),"align");
+    if(doc)editDocument(alignElements(doc,selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked),kind),"align");
   }
   function nudgeSelection(dx:number,dy:number){
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
     const changes:Record<string,Box>={};
     for(const id of selectedIds){
       const element=doc.elements.find(e=>e.id===id);
-      if(element){const box=worldBox(element,doc);changes[id]=transformBox(box,dx,dy,"move",0);}
+      if(element&&!element.locked&&!element.hidden){const box=worldBox(element,doc);changes[id]=transformBox(box,dx,dy,"move",0);}
     }
     if(Object.keys(changes).length)editDocument(withElementBoxes(doc,changes),"nudge");
   }
