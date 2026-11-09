@@ -16,16 +16,14 @@ type Props={
   onDeleteDeck:(id:string)=>Promise<boolean>;
 };
 const readableDate=(date:string)=>new Date(date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
-const cardCache=new Map<string,SlideDocument|null>();
 function DeckCover({id,token}:{id:string;token:string}){
   const ref=useRef<HTMLDivElement>(null);
-  const [cover,setCover]=useState<SlideDocument|null|undefined>(()=>cardCache.get(id));
+  const [cover,setCover]=useState<SlideDocument|null|undefined>(undefined);
   useEffect(()=>{
-    if(cardCache.has(id)){setCover(cardCache.get(id));return;}
     const target=ref.current;if(!target)return;
     let cancelled=false;
     const load=()=>{void readDeckCover(token,id).then(doc=>{
-      if(!cancelled){cardCache.set(id,doc);setCover(doc);}
+      if(!cancelled)setCover(doc);
     }).catch(()=>{if(!cancelled)setCover(null);});};
     if(typeof IntersectionObserver==="undefined"){load();return;}
     const observer=new IntersectionObserver(entries=>{
