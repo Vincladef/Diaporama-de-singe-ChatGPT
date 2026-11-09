@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
@@ -14,6 +14,8 @@ import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
+import { inspectExport, isNativePptxObject } from "./export/preflight";
+import { canUseNativeAnimations } from "./export/nativeAnimations";
 import type { RevealExportMode } from "./export/reveals";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
@@ -504,6 +506,18 @@ export default function App() {
 
   const active = current?.slides.find(s=>s.id===slideId);
   const statusText = externalChanges ? "Nouvelle version distante" : dirty ? "Modifications non enregistrées" : "Enregistré";
+  const exportPreview=useMemo(()=>{
+    if(!current)return null;
+    const sources=current.slides.map(slide=>slide.id===slideId&&draft?
+      {...slide,document:draft,notes}:slide);
+    return {report:inspectExport(sources),
+      objects:sources.map(slide=>({
+        total:slide.document.elements.filter(e=>!e.hidden).length,
+        native:slide.document.elements.filter(e=>!e.hidden&&isNativePptxObject(e)).length,
+        animations:slide.document.animations.length,
+        office:canUseNativeAnimations(slide.document),
+      }))};
+  },[current,slideId,draft,notes]);
 
   useEffect(()=>{
     if(!token||!current?.presentation.id)return;
@@ -657,6 +671,30 @@ export default function App() {
               {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
+            {exportPreview&&<details className="export-preflight">
+              <summary>Contrôle avant export : {exportPreview.report.fullyNative} diapo(s) entièrement éditables,
+                {" "+exportPreview.report.mixedEditable} mixtes et {exportPreview.report.rasterOnly} aplatie(s)
+              </summary>
+              <p>Le mode « Visuel fidèle » produit des images. En mode « Objets modifiables »,
+                seuls les effets incompatibles sont isolés, sauf pour les compositions imbriquées.
+                Google Slides peut modifier certains effets PowerPoint au moment de l'importation.</p>
+              <div className="export-preflight-scroll"><table>
+                <thead><tr><th>Diapositive</th><th>Modifiabilité</th><th>Animations au clic</th></tr></thead>
+                <tbody>{exportPreview.report.slides.map((risk,i)=><tr key={i}>
+                  <td>{i+1}</td>
+                  <td>{exportMode==="faithful"?"Image entière":
+                    risk.mode==="raster"?"Composition aplatie":
+                    exportPreview.objects[i]?.native+" / "+exportPreview.objects[i]?.total+" objets natifs"}
+                  </td>
+                  <td>{exportPreview.objects[i]?.animations===0?"Aucune":
+                    exportMode==="faithful"?"Étapes statiques":
+                    exportPreview.objects[i]?.office?"Effets PowerPoint natifs possibles":"Étapes de secours"}
+                  </td>
+                </tr>)}</tbody>
+              </table></div>
+              {exportPreview.report.warnings.length>0&&
+                <p className="export-preflight-disclaimer">{exportPreview.report.warnings.join(" · ")}</p>}
+            </details>}
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
               <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
