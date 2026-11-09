@@ -449,13 +449,15 @@ export default function App() {
 
   async function downloadPowerPoint() {
     if (!current || exportBusy) return;
-    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
+    if(!await flushPending())return;
+    const fresh=currentRef.current;
+    if(!fresh)return;
     setExportBusy(true); setExportTarget("pptx"); setExportReport(null);
     setExportProgress("Préparation…"); setError("");
     try {
-      await verifyExportRevision(current);
+      await verifyExportRevision(fresh);
       const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
+      const report = await exportPowerPoint(fresh, exportMode, ({ completed, total }) =>
         setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportReport(report);
     } catch (e) {
@@ -474,7 +476,6 @@ export default function App() {
 
   async function exportToGoogleSlides(clientId: string) {
     if (!current || exportBusy) return;
-    if (dirty) { setError("Enregistrez vos modifications avant l'exportation."); return; }
     const deck = current;
     setExportBusy(true); setExportTarget("google");
     setGoogleReport(null); setGoogleExportSlideCount(null); setExportReport(null);
@@ -482,16 +483,18 @@ export default function App() {
     try {
       // OAuth must start on the original user click, before the first await.
       const accessToken = await requestGoogleDriveAccess(clientId);
+      if(!await flushPending())return;
+      const fresh=currentRef.current??deck;
       setExportProgress("Vérification des diapositives…");
-      await verifyExportRevision(deck);
+      await verifyExportRevision(fresh);
       // Both destinations receive the same PPTX: native animations on compatible
       // editable slides, progressive frames only when native conversion is impossible.
       // Google Drive may still drop some OOXML timing effects during conversion.
       const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const artifact = await buildPowerPoint(deck, exportMode, ({ completed, total }) =>
+      const artifact = await buildPowerPoint(fresh, exportMode, ({ completed, total }) =>
         setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportProgress("Conversion dans Google Drive…");
-      const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, deck.presentation.title);
+      const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, fresh.presentation.title);
       setGoogleExportSlideCount(artifact.slideCount);
       setGoogleReport(result);
     } catch (e) {
