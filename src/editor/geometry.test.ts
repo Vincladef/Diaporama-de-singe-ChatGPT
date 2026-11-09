@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptySlideDocument } from "../domain/slide.ts";
-import { alignElements, duplicateElements, elementBox, lengthToPx, transformBox, withElementBoxes, worldBox } from "./geometry.ts";
+import { alignElements, distributeElements, duplicateElements, elementBox, lengthToPx, transformBox, withElementBoxes, worldBox } from "./geometry.ts";
 
 test("CSS coordinates support px, percentages and safe fallbacks",()=>{
   assert.equal(lengthToPx("25%", 1920),480);
@@ -45,4 +45,29 @@ test("alignment and duplication keep original objects editable",()=>{
   assert.equal(duplicated.document.elements.length,3);
   assert.equal(duplicated.document.elements[2]?.styles.left,"70px");
   assert.equal(doc.elements.length,2);
+});
+
+test("distributes three boxes with constant gaps without moving outer bounds",()=>{
+  const doc=createEmptySlideDocument();
+  doc.elements=[
+    {id:"a",type:"shape",styles:{left:"100px",top:"0px",width:"100px",height:"40px"}},
+    {id:"b",type:"shape",styles:{left:"220px",top:"0px",width:"100px",height:"40px"}},
+    {id:"c",type:"shape",styles:{left:"700px",top:"0px",width:"100px",height:"40px"}}
+  ];
+  const result=distributeElements(doc,["a","b","c"],"horizontal");
+  assert.equal(result.elements[0]?.styles.left,"100px");
+  assert.equal(result.elements[1]?.styles.left,"400px");
+  assert.equal(result.elements[2]?.styles.left,"700px");
+});
+test("duplicated semantic groups do not change their originals on future moves",()=>{
+  const doc=createEmptySlideDocument();
+  doc.elements=[
+    {id:"a",type:"text",groupId:"original",groupName:"Étape",styles:{left:"20px"}},
+    {id:"b",type:"text",groupId:"original",groupName:"Étape",styles:{left:"70px"}}
+  ];
+  let i=0;
+  const copy=duplicateElements(doc,["a","b"],()=>String(++i));
+  const duplicateIds=copy.document.elements.slice(2).map(e=>e.groupId);
+  assert.equal(duplicateIds[0],duplicateIds[1]);
+  assert.notEqual(duplicateIds[0],"original");
 });
