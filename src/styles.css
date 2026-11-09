@@ -567,3 +567,199 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
  .library-deck-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
  .library-deck-grid.is-list .library-deck-open{flex-wrap:wrap}
 }
+
+
+/* Editor scroll model: the library scrolls normally, but an opened deck is
+ * an application workspace. Slide thumbnails, canvas and inspector each have
+ * their own scroll container, like a slide editor. */
+.app-slides-style.is-editing{
+  height:100vh;
+  height:100dvh;
+  min-height:0;
+  overflow:hidden;
+}
+.app-slides-style.is-editing .workspace{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  max-height:100%;
+  overflow:hidden;
+}
+.app-slides-style.is-editing .slides-header,
+.app-slides-style.is-editing .footer,
+.app-slides-style.is-editing .error-line{
+  flex:0 0 auto;
+}
+.app-slides-style.is-editing .editing-area{
+  flex:1 1 0;
+  min-height:0;
+  max-height:100%;
+  overflow:hidden;
+}
+.app-slides-style.is-editing .editor-layout{
+  flex:1 1 0;
+  min-height:0;
+  max-height:100%;
+  height:100%;
+  overflow:hidden;
+  grid-template-rows:minmax(0,1fr);
+}
+.app-slides-style.is-editing .slide-rail{
+  min-height:0;
+  max-height:100%;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  padding:15px 9px 10px;
+}
+.app-slides-style.is-editing .rail-heading,
+.app-slides-style.is-editing .rail-tools{
+  flex:0 0 auto;
+}
+.app-slides-style.is-editing .slide-list{
+  flex:1 1 0;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  padding:3px 4px 12px 0;
+  outline-offset:-2px;
+}
+.app-slides-style.is-editing .slide-list .slide-tile{
+  flex:0 0 auto;
+  margin-bottom:9px;
+}
+.app-slides-style.is-editing .editor-main{
+  min-width:0;
+  min-height:0;
+  max-height:100%;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.app-slides-style.is-editing .inspector{
+  min-height:0;
+  max-height:100%;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.app-slides-style.is-editing .inspector-heading,
+.app-slides-style.is-editing .editor-tabs{
+  flex:0 0 auto;
+}
+.app-slides-style.is-editing .property-panel{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.app-slides-style.is-editing .external-banner,
+.app-slides-style.is-editing .export-report{
+  flex:0 0 auto;
+  max-height:25dvh;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.app-slides-style.is-editing .animation-timeline{
+  max-width:100%;
+  min-width:0;
+}
+.app-slides-style.is-editing .timeline-cues{
+  overscroll-behavior-x:contain;
+}
+
+/* Override the former responsive rule that moved the inspector under the
+ * canvas and made the entire presentation grow indefinitely. */
+@media (min-width:761px){
+  .app-slides-style.is-editing .editor-layout{
+    display:grid;
+    grid-template-columns:clamp(130px,13vw,200px) minmax(0,1fr) clamp(235px,22vw,305px);
+  }
+  .app-slides-style.is-editing .editor-layout.slide-rail-collapsed{
+    grid-template-columns:minmax(0,1fr) clamp(235px,22vw,305px);
+  }
+  .app-slides-style.is-editing .editor-layout.inspector-collapsed{
+    grid-template-columns:clamp(130px,13vw,200px) minmax(0,1fr);
+  }
+  .app-slides-style.is-editing .editor-layout.slide-rail-collapsed.inspector-collapsed{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .app-slides-style.is-editing .editor-layout>.inspector{
+    grid-column:auto;
+    border-top:0;
+    border-left:1px solid #e1e7e1;
+  }
+  .app-slides-style.is-editing .property-panel{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+}
+
+/* On narrow screens the rail scrolls horizontally, and the optional
+ * inspector opens over the bottom of the canvas instead of extending page. */
+@media (max-width:760px){
+  .app-slides-style.is-editing .editor-layout{
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    min-height:0;
+  }
+  .app-slides-style.is-editing .slide-rail{
+    flex:0 0 auto;
+    height:158px;
+    max-height:28dvh;
+    padding:6px 10px;
+    border-right:0;
+    border-bottom:1px solid #e5ebe5;
+  }
+  .app-slides-style.is-editing .slide-list{
+    display:flex;
+    flex-direction:row;
+    align-items:flex-start;
+    gap:8px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    padding:3px 2px 6px;
+    scrollbar-gutter:auto;
+  }
+  .app-slides-style.is-editing .slide-list .slide-tile{
+    flex:0 0 125px;
+    width:125px;
+    margin-bottom:0;
+  }
+  .app-slides-style.is-editing .rail-heading{margin-bottom:4px;}
+  .app-slides-style.is-editing .rail-tools{display:none;}
+  .app-slides-style.is-editing .editor-main{
+    flex:1 1 0;
+    min-height:0;
+    padding:12px;
+  }
+  .app-slides-style.is-editing .inspector{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:8;
+    flex:0 0 auto;
+    width:100%;
+    height:min(46dvh,420px);
+    max-height:min(46dvh,420px);
+    border-top:2px solid #b6d2bd;
+    border-left:0;
+    background:white;
+    box-shadow:0 -10px 30px #163a2420;
+  }
+  .app-slides-style.is-editing .property-panel{
+    display:flex;
+    flex-direction:column;
+    max-height:none;
+  }
+}
