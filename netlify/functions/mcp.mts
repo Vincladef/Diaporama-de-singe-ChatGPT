@@ -6,6 +6,7 @@ import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/
 import { compareOneVariant } from "../../src/variants/compare";
 import { fingerprint } from "../../src/mcp/fingerprint";
 import { listSlideHistory } from "../../src/mcp/history";
+import { getCreationInstructions, saveCreationInstructions } from "../../src/mcp/instructions";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -59,8 +60,8 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.11.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.12.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -92,11 +93,22 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.11.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.11.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.12.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.12.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions"]}));
+
+  register("get_creation_instructions","Lire les instructions de création",
+    "MANDATORY before creating, improving or restyling slides: read the persistent artistic and animation instructions. Pass presentationId when working on an existing presentation. Presentation-specific instructions take precedence over global rules in case of conflict.",
+    {presentationId:uuid.optional()},false,
+    async a=>getCreationInstructions(a.presentationId));
+
+  register("update_creation_instructions","Enregistrer les instructions de création",
+    "Update persistent creation instructions (global or for one presentation). An empty presentation-specific value clears its override, restoring global rules. The instructions are shared with the Web editor.",
+    {scope:z.enum(["global","presentation"]),instructions:z.string().max(12000),
+      presentationId:uuid.optional()},true,
+    async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
@@ -125,7 +137,7 @@ function createServer(request: Request): McpServer {
     });
 
   register("get_improvement_brief","Préparer l'amélioration d'une présentation",
-    "Summarize the COMPLETE slide deck for AI restyling in a single token-efficient call. Preserves important text, notes, source image origins and revision numbers without sending full HTML/CSS or embedded base64. Use before edit_slides and create_variants.",
+    "Read get_creation_instructions with presentationId first. Summarize the COMPLETE slide deck for AI restyling in a single token-efficient call. Preserves important text, notes, source image origins and revision numbers without sending full HTML/CSS or embedded base64. Use before edit_slides and create_variants.",
     {presentationId:uuid,maxCharsPerSlide:z.number().int().min(200).max(3000).default(900),
       includeNotes:z.boolean().default(true)},false,
     async a=>{
@@ -179,7 +191,7 @@ function createServer(request: Request): McpServer {
     async a=>getSlide(a.id,a.scope));
 
   register("create_presentation","Créer une présentation complète",
-    "Create up to 40 slides in ONE call. IMPORTANT: prefer structured or hybrid slide elements for editable PowerPoint/Google Slides output (native text, images, shapes, SVG). Arbitrary freeform HTML is visually flexible; HTML text can be made editable, but CSS décor and photographs embedded in HTML may remain rasterized. Animations export as successive editable reveal views, not native effects. One initial slide if omitted.",
+    "Read get_creation_instructions first to apply the saved user preferences. Create up to 40 slides in ONE call. IMPORTANT: prefer structured or hybrid slide elements for editable PowerPoint/Google Slides output (native text, images, shapes, SVG). Arbitrary freeform HTML is visually flexible; HTML text can be made editable, but CSS décor and photographs embedded in HTML may remain rasterized. Animations export as successive editable reveal views, not native effects. One initial slide if omitted.",
     {title:z.string().min(1).max(180),folderId:uuid.optional(),
       slides:z.array(InitialSlideSchema).max(40).default([])},true,
     async a=>({presentation:await createDeck(a.title,a.slides,a.folderId)}));

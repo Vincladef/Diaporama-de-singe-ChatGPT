@@ -11,6 +11,7 @@ import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { HomeLibrary } from "./home/HomeLibrary";
+import { CreationInstructionsStudio } from "./editor/CreationInstructionsStudio";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport } from "./export/pptx";
@@ -47,6 +48,7 @@ export default function App() {
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
+  const [creationSettingsOpen,setCreationSettingsOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
   const [showSlideRail,setShowSlideRail]=useState(true);
   const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
@@ -712,6 +714,8 @@ export default function App() {
                 </div>
               </details>
             </>}
+            <button className="subtle-btn creation-settings-open" title="Instructions de création des diapositives"
+              onClick={()=>setCreationSettingsOpen(true)}>⚙ Paramètres</button>
             <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
           </div>
         </header>
@@ -834,6 +838,9 @@ export default function App() {
           </div>
         )}
 
+        {creationSettingsOpen&&token&&<CreationInstructionsStudio token={token}
+          presentationId={current?.presentation.id} presentationTitle={current?.presentation.title}
+          onClose={()=>setCreationSettingsOpen(false)}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}

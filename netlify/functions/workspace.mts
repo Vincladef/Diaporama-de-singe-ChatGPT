@@ -4,6 +4,7 @@ import { z, ZodError } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/slide";
 import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets, activateVariant } from "../../src/mcp/store";
 import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
+import { getCreationInstructions, saveCreationInstructions } from "../../src/mcp/instructions";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -35,6 +36,11 @@ export default async function workspace(request: Request): Promise<Response> {
         const presentations = await db.query(
           "SELECT p.id::text AS id, p.title, p.format, p.updated_at, p.folder_id::text AS folder_id, COUNT(s.id)::int AS slide_count FROM public.presentations p LEFT JOIN public.slides s ON s.presentation_id=p.id GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 200", []);
         return result({ ok: true, presentations });
+      }
+      if(operation==="creationInstructions"){
+        const id=query.searchParams.get("id")||undefined;
+        if(id)idSchema.parse(id);
+        return result(await getCreationInstructions(id));
       }
       if(operation==="folders"){
         const folders=await db.query(
@@ -86,6 +92,13 @@ export default async function workspace(request: Request): Promise<Response> {
     } catch { return result({ ok: false, error: "invalid_json" }, 400); }
 
     switch (data.action) {
+      case "saveCreationInstructions":{
+        const scope=z.enum(["global","presentation"]).parse(data.scope);
+        const instructions=z.string().max(12000).parse(data.instructions);
+        const presentationId=data.presentationId===undefined?undefined:idSchema.parse(data.presentationId);
+        if(scope==="presentation"&&!presentationId)return result({error:"invalid_presentation_id"},400);
+        return result(await saveCreationInstructions(scope,instructions,presentationId));
+      }
       case "importPresentation": {
         // Import always creates a NEW deck. The source deck is never modified.
         const title=titleSchema.parse(data.title);

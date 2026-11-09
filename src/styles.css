@@ -775,3 +775,23 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
     max-height:none;
   }
 }
+
+
+/* Instructions de création : réglages communs à l'éditeur et au MCP. */
+.creation-settings-dialog{width:min(900px,96vw);max-height:min(90vh,940px)}
+.creation-settings-content{padding:22px 28px;overflow-y:auto;display:flex;flex-direction:column;gap:24px;overscroll-behavior:contain}
+.creation-settings-section{display:flex;flex-direction:column;gap:11px}
+.creation-settings-heading{display:flex;align-items:baseline;gap:15px;flex-wrap:wrap}
+.creation-settings-heading h3{font-size:17px;font-weight:700;margin:0;color:#243b2d}
+.creation-settings-heading>span{font-size:12px;color:#7d8f80}
+.creation-settings-section p{font-size:13px;line-height:1.6;color:#687b6b;margin:0}
+.creation-settings-section label{font-size:12px;font-weight:700;color:#314d39}
+.creation-settings-section textarea{display:block;width:100%;resize:vertical;min-height:130px;border:1px solid #d4e2d6;border-radius:8px;padding:15px;font-size:13px;line-height:1.6;color:#263e2b;background:#fff}
+.creation-settings-section textarea:focus{border-color:#56846a;outline:2px solid #bed8c6}
+.creation-settings-section small{font-size:11px;color:#829487;text-align:right}
+.creation-settings-local-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.creation-settings-explain{font-size:12px;line-height:1.6;color:#688372;background:#eef4ef;border-radius:7px;padding:12px 15px;margin:0}
+.creation-settings-error{font-size:12px;background:#fff2f1;color:#9b3f38;padding:12px;border-radius:7px;margin:0}
+.creation-settings-success{font-size:12px;background:#eff8f0;color:#2a7948;padding:12px;border-radius:7px;margin:0}
+.creation-settings-footer{padding:16px 27px;border-top:1px solid #e0e9e2;display:flex;justify-content:flex-end;gap:10px;background:#fff}
+@media(max-width:760px){.creation-settings-open{padding:8px!important;font-size:11px!important}.creation-settings-content{padding:15px}.creation-settings-footer{padding:12px;flex-wrap:wrap}.creation-settings-heading{display:block}}

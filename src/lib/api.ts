@@ -67,6 +67,23 @@ async function call<T>(token: string, options: { op?: string; id?: string; actio
   }
   return payload as T;
 }
+export interface CreationInstructions {
+  global:string;
+  presentation:string;
+  effective:string;
+  presentationId:string|null;
+  precedence:string;
+  updatedAt:string|null;
+}
+export async function readCreationInstructions(token:string,presentationId?:string):Promise<CreationInstructions>{
+  return call<CreationInstructions>(token,{op:"creationInstructions",id:presentationId});
+}
+export async function writeCreationInstructions(
+  token:string,scope:"global"|"presentation",instructions:string,presentationId?:string
+):Promise<CreationInstructions>{
+  return call<CreationInstructions>(token,{action:{action:"saveCreationInstructions",scope,instructions,presentationId}});
+}
+
 export async function listPresentations(token: string): Promise<DeckSummary[]> {
   return (await call<{ presentations: DeckSummary[] }>(token, { op: "list" })).presentations;
 }
