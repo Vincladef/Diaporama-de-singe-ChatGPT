@@ -91,6 +91,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     if (readOnly || editId) return;
     const clicked=doc.elements.find(item=>item.id===id);
     if(!clicked||clicked.locked||clicked.hidden)return;
+    if(clicked.linkFrom&&clicked.linkTo){onSelect([clicked.id]);return;}
     e.preventDefault();
     e.stopPropagation();
     freeRef.current?.clear();
