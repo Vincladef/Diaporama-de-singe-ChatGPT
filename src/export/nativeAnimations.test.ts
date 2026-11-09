@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import JSZip from "jszip";
+import PptxGenJS from "pptxgenjs";
 import { XMLValidator } from "fast-xml-parser";
 import { createEmptySlideDocument } from "../domain/slide.ts";
 import { buildExportFrames } from "./reveals.ts";
@@ -66,4 +67,20 @@ test("ZIP receives a timing tree without multiplying slides",async()=>{
   const xml=await result.file("ppt/slides/slide1.xml")!.async("string");
   assert.equal(XMLValidator.validate(xml),true);
   assert.match(xml,/<p:timing>/);
+});
+
+test("integrates animation timing into an actual PptxGenJS generated PowerPoint",async()=>{
+  const deck=new PptxGenJS();
+  deck.layout="LAYOUT_WIDE";
+  const slide=deck.addSlide();
+  slide.addText("Un bloc",{x:1,y:1,w:3,h:1,objectName:"block"});
+  slide.addShape(deck.ShapeType.rect,{x:2,y:2,w:2,h:.5,objectName:"arrow"});
+  const bytes=await deck.write({outputType:"blob"});
+  const blob=bytes instanceof Blob?bytes:new Blob([bytes as ArrayBuffer]);
+  const animated=await addNativeAnimationsToPptx(blob,[{index:0,document:sample()}]);
+  const zip=await JSZip.loadAsync(animated);
+  const xml=await zip.file("ppt/slides/slide1.xml")!.async("string");
+  assert.equal(XMLValidator.validate(xml),true);
+  assert.match(xml,/<p:timing>/);
+  assert.equal((xml.match(/nodeType="clickEffect"/g)||[]).length,2);
 });
