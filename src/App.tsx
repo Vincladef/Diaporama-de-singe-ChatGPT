@@ -54,11 +54,14 @@ export default function App() {
   const draftRef = useRef<SlideDocument | null>(null);
   const currentRef = useRef<PresentationDetail | null>(null);
   const dirtyRef = useRef(false);
+  const notesRef = useRef("");
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const versionRef = useRef(0);
   const historyRef = useRef<{undo:SlideDocument[];redo:SlideDocument[];key:string;time:number}>({undo:[],redo:[],key:"",time:0});
   const [, setHistoryTick] = useState(0);
   currentRef.current = current;
   dirtyRef.current = dirty;
+  notesRef.current = notes;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -110,8 +113,8 @@ export default function App() {
     finally { setLoginBusy(false); }
   }
 
-  function logout() {
-    if (dirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+  async function logout() {
+    if (!await flushPending()) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
     setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
@@ -122,12 +125,28 @@ export default function App() {
     const next=slide ? structuredClone(slide.document):null;
     draftRef.current=next;
     setDraft(next);
-    setNotes(slide?.notes??"");
-    setSelectedIds([]);setDirty(false);setTab("design");setExternalChanges(false);
+    notesRef.current=slide?.notes??"";
+    setNotes(notesRef.current);
+    setSelectedIds([]);dirtyRef.current=false;setDirty(false);setTab("design");setExternalChanges(false);
     historyRef.current={undo:[],redo:[],key:"",time:0};
     setHistoryTick(v=>v+1);
   }
-  function confirmLeave() { return !dirty || window.confirm("Quitter sans enregistrer les modifications ?"); }
+  async function flushPending():Promise<boolean>{
+    // The save pipeline is serialized so a later navigation cannot drop edits.
+    for(let attempt=0;attempt<5;attempt++){
+      if(!dirtyRef.current && !saveInFlightRef.current)return true;
+      if(!await save())return false;
+      if(!dirtyRef.current)return true;
+    }
+    setError("D'autres changements sont encore en cours. Réessayez après leur sauvegarde.");
+    return false;
+  }
+  async function navigateToSlide(slide:SlideRecord){
+    if(slideId===slide.id)return;
+    if(!await flushPending())return;
+    const updated=currentRef.current?.slides.find(s=>s.id===slide.id);
+    if(updated)pickSlide(updated);
+  }
   function backupDraft(){
     if(!draft||!slideId||!current)return;
     // The backup is deliberately a native importable presentation, not an opaque dump.
@@ -149,14 +168,14 @@ export default function App() {
     pickSlide(detail.slides.find(s => s.id === preferred) ?? detail.slides[0]);
   }
   async function openDeck(id: string) {
-    if (!confirmLeave()) return;
+    if (!await flushPending()) return;
     setBusy(true); setError("");
     try { await loadDeck(id); } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
   async function createDeck() {
     const title = window.prompt("Titre de la présentation", "Sans titre");
-    if (!title?.trim() || !confirmLeave()) return;
+    if (!title?.trim() || !await flushPending()) return;
     setBusy(true); setError("");
     try {
       const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title: title.trim() });
@@ -187,7 +206,7 @@ export default function App() {
     finally { setBusy(false); }
   }
   async function slideAction(action: "addSlide" | "duplicateSlide" | "deleteSlide") {
-    if (!current || !confirmLeave()) return;
+    if (!current || !await flushPending()) return;
     const currentId = current.presentation.id;
     if (action === "deleteSlide" && !window.confirm("Supprimer cette diapositive ?")) return;
     if (action !== "addSlide" && !slideId) return;
@@ -208,19 +227,19 @@ export default function App() {
     const grouped=/^(text|style-|code-|object)/.test(key)&&key===h.key&&time-h.time<850;
     if(previous&&!grouped){h.undo=[...h.undo.slice(-49),structuredClone(previous)];h.redo=[];}
     h.key=key;h.time=time;draftRef.current=next;versionRef.current++;
-    setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+    setDraft(next);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function undo(){
     const h=historyRef.current,prior=h.undo.pop(),now=draftRef.current;
     if(!prior||!now)return;
     h.redo.push(structuredClone(now));h.key="";
-    draftRef.current=prior;versionRef.current++;setDraft(prior);setDirty(true);setHistoryTick(v=>v+1);
+    draftRef.current=prior;versionRef.current++;setDraft(prior);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function redo(){
     const h=historyRef.current,next=h.redo.pop(),now=draftRef.current;
     if(!next||!now)return;
     h.undo.push(structuredClone(now));h.key="";
-    draftRef.current=next;versionRef.current++;setDraft(next);setDirty(true);setHistoryTick(v=>v+1);
+    draftRef.current=next;versionRef.current++;setDraft(next);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function updateFreeform(part: "html" | "css", value: string) {
     if (!draft) return;
@@ -272,7 +291,7 @@ export default function App() {
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
   function applyVariant(document:SlideDocument,variantNotes:string){
-    editDocument(document,"variant");setNotes(variantNotes);setSelectedIds([]);
+    editDocument(document,"variant");notesRef.current=variantNotes;setNotes(variantNotes);setSelectedIds([]);
   }
   function updateObject(id: string, patch: Partial<SlideElement>) {
     if (!draft) return;
@@ -334,7 +353,7 @@ export default function App() {
     if(Object.keys(changes).length)editDocument(withElementBoxes(doc,changes),"nudge");
   }
   async function reorderSlide(fromId:string,toId:string) {
-    if (!current||fromId===toId||!confirmLeave())return;
+    if (!current||fromId===toId||!await flushPending())return;
     const ids=current.slides.map(s=>s.id),from=ids.indexOf(fromId),to=ids.indexOf(toId);
     if(from<0||to<0)return;
     const [moved]=ids.splice(from,1);ids.splice(to,0,moved!);
@@ -345,27 +364,43 @@ export default function App() {
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
-  async function save() {
-    if (!draft || !slideId || !current) return;
-    const check = SlideDocumentSchema.safeParse(draft);
-    if (!check.success) { setError("Document invalide : " + check.error.issues[0]?.message); return; }
-    const old = current.slides.find(s => s.id === slideId);
-    if (!old) return;
-    if(busy||externalChanges)return;
-    const started=versionRef.current, savedNotes=notes, savedSlideId=slideId;
-    setBusy(true);setError("");
-    try {
-      const result=await command<{slide:{revision:number;updated_at:string}}>(token,{
-        action:"saveSlide",id:savedSlideId,revision:old.revision,document:check.data,notes:savedNotes,
-      });
-      setCurrent(previous=>previous?{...previous,slides:previous.slides.map(s=>s.id===savedSlideId?
-        {...s,document:check.data,notes:savedNotes,revision:result.slide.revision,updated_at:result.slide.updated_at}:s)}:previous);
-      if(versionRef.current===started)setDirty(false);
-      setExternalChanges(false);
-    }catch(e){
-      if(e instanceof ApiError&&e.status===409)setExternalChanges(true);
-      setError(e instanceof Error?e.message:String(e));
-    }finally{setBusy(false);}
+  async function save():Promise<boolean>{
+    if(saveInFlightRef.current)return saveInFlightRef.current;
+    if(!dirtyRef.current)return true;
+    const operation=async():Promise<boolean>=>{
+      const pending=draftRef.current,deck=currentRef.current,pendingId=slideId;
+      const pendingNotes=notesRef.current;
+      if(!pending||!deck||!pendingId)return false;
+      if(externalChanges){setError("Conflit : sauvegardez le brouillon local avant de recharger.");return false;}
+      const parsed=SlideDocumentSchema.safeParse(pending);
+      if(!parsed.success){setError("Document invalide : "+parsed.error.issues[0]?.message);return false;}
+      const old=deck.slides.find(s=>s.id===pendingId);
+      if(!old)return false;
+      const started=versionRef.current;
+      setBusy(true);setError("");
+      try{
+        const result=await command<{slide:{revision:number;updated_at:string}}>(token,{
+          action:"saveSlide",id:pendingId,revision:old.revision,document:parsed.data,notes:pendingNotes,
+        });
+        const latest=currentRef.current;
+        if(latest){
+          const updated={...latest,slides:latest.slides.map(item=>item.id===pendingId?{
+            ...item,document:parsed.data,notes:pendingNotes,revision:result.slide.revision,
+            updated_at:result.slide.updated_at,
+          }:item)};
+          currentRef.current=updated;setCurrent(updated);
+        }
+        if(versionRef.current===started){dirtyRef.current=false;setDirty(false);}
+        setExternalChanges(false);
+        return true;
+      }catch(e){
+        if(e instanceof ApiError&&e.status===409)setExternalChanges(true);
+        setError(e instanceof Error?e.message:String(e));return false;
+      }finally{setBusy(false);}
+    };
+    const pending=operation().finally(()=>{if(saveInFlightRef.current===pending)saveInFlightRef.current=null;});
+    saveInFlightRef.current=pending;
+    return pending;
   }
 
   async function verifyExportRevision(deck: PresentationDetail) {
@@ -527,7 +562,7 @@ export default function App() {
         </div>
         <div className="sidebar-bottom">
           <span className="connected-dot" /> Stockage privé
-          <button className="text-btn logout" onClick={logout}>Quitter</button>
+          <button className="text-btn logout" onClick={() => void logout()}>Quitter</button>
         </div>
       </aside>
 
@@ -611,9 +646,7 @@ export default function App() {
                     onDragStart={e=>{e.dataTransfer.setData("text/x-singe-slide",s.id);e.dataTransfer.effectAllowed="move";}}
                     onDragOver={e=>e.preventDefault()}
                     onDrop={e=>{e.preventDefault();const source=e.dataTransfer.getData("text/x-singe-slide");if(source)void reorderSlide(source,s.id);}}
-                    onClick={() => {
-                    if (confirmLeave()) pickSlide(s);
-                  }}>
+                    onClick={() => void navigateToSlide(s)}>
                     <div className="slide-mini"><SlideThumbnail document={s.document} index={i+1}/></div>
                     <span>Diapositive {i + 1}</span>
                   </button>
@@ -662,7 +695,7 @@ export default function App() {
                     onChange={editDocument} onPreview={()=>setPresenting(true)}/>}
                   <div className="notes-row">
                     <label htmlFor="slide-notes">Notes du présentateur</label>
-                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;setNotes(e.target.value); setDirty(true); }} placeholder="Notes facultatives…" />
+                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
                   </div>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
@@ -681,7 +714,7 @@ export default function App() {
           onFocus={index=>{
             const next=current.slides[index];
             if(!next)return;
-            if(next.id!==slideId){if(!confirmLeave())return;pickSlide(next);}
+            if(next.id!==slideId){void navigateToSlide(next);return;}
             setQualityOpen(false);
           }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
