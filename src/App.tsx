@@ -577,7 +577,7 @@ export default function App() {
   );
 
   return (
-    <div className="app">
+    <div className={"app"+(!showDeckSidebar?" deck-sidebar-collapsed":"")}>
       <aside className="sidebar">
         <div className="identity"><span className="identity-mark">◆</span><strong>Diaporama<br />de singe</strong></div>
         <div className="edition">ÉDITION CHATGPT</div>
@@ -600,6 +600,8 @@ export default function App() {
 
       <main className="workspace">
         <header className="topbar">
+          <button className="subtle-btn panel-toggle" aria-label={showDeckSidebar?"Masquer la liste des présentations":"Afficher les présentations"}
+            aria-pressed={showDeckSidebar} onClick={()=>setShowDeckSidebar(v=>!v)}>☰</button>
           <div className="breadcrumb">{current ? current.presentation.title : "Mes présentations"}</div>
           <button className="subtle-btn import-top-button" onClick={()=>setImportOpen(true)} disabled={busy}>⇧ Importer</button>
           {current && <div className="header-actions">
@@ -638,11 +640,11 @@ export default function App() {
                     onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
                   Étapes au clic
                 </label>
-                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || dirty || !current.slides.length}>
+                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || !current.slides.length}>
                   {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
                 </button>
                 <button className="subtle-btn google-export-action" onClick={startGoogleExport}
-                  disabled={exportBusy || busy || dirty || !current.slides.length} title="Créer une présentation dans votre Google Drive">
+                  disabled={exportBusy || busy || !current.slides.length} title="Créer une présentation dans votre Google Drive">
                   {exportBusy && exportTarget === "google" ? (exportProgress || "Conversion…") : "Exporter vers Google Slides"}
                 </button>
               </div>
@@ -670,8 +672,8 @@ export default function App() {
                   : " · Export statique sans animations Web."}
               </span>
             </div>}
-            <div className="editor-layout">
-              <aside className="slide-rail">
+            <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
+              {showSlideRail&&<aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
                 {current.slides.map((s, i) =>
                   <button key={s.id} draggable className={"slide-tile " + (s.id === slideId ? "selected" : "")}
@@ -687,16 +689,20 @@ export default function App() {
                   <button onClick={() => void slideAction("duplicateSlide")} disabled={busy}>Dupliquer</button>
                   <button onClick={() => void slideAction("deleteSlide")} disabled={busy} className="danger-text">Supprimer</button>
                 </div>}
-              </aside>
+              </aside>}
               <section className="editor-main">
                 {draft ? <>
                   <div className="visual-toolbar">
                     <div className="visual-toolbar-group">
+                      <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"Masquer les diapos":"Diapos"}</button>
+                      <button onClick={()=>{setShowInspector(true);setTab("layers");}} title="Gérer les calques">Calques</button>
+                      <button onClick={()=>setShowInspector(v=>!v)} title="Afficher ou masquer l'inspecteur">{showInspector?"Masquer les outils":"Outils"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
                       <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
                       <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
                       <button onClick={()=>setHistoryStudioOpen(true)} title="Afficher l'historique des sauvegardes">Historique</button>
-                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} title="Configurer les animations au clic">Animations</button>
+                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen} title="Configurer les animations au clic">Animations</button>
+                      <button onClick={animateSelection} disabled={!selectedIds.length} title="Ajouter un fondu au clic sur les calques sélectionnés">+ Animer</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
@@ -714,8 +720,13 @@ export default function App() {
                     </div>
                     <div className="visual-toolbar-group visual-toolbar-zoom">
                       <button aria-label="Réduire le zoom" onClick={()=>setZoom(z=>Math.max(.5,Math.round((z-.1)*10)/10))}>−</button>
-                      <span>{Math.round(zoom*100)} %</span>
-                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(2.5,Math.round((z+.1)*10)/10))}>+</button>
+                      <button onClick={()=>setZoom(1)} title="Ajuster à la fenêtre">Ajuster</button>
+                      <span title="Zoom par rapport au format ajusté">{Math.round(zoom*100)} % ajusté</span>
+                      <button onClick={()=>{
+                        const width=document.querySelector<HTMLElement>(".visual-viewport")?.clientWidth??840;
+                        if(draft)setZoom(draft.canvas.width/Math.max(width-2,250));
+                      }} title="Afficher les pixels à leur taille réelle">100 % réel</button>
+                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(5,Math.round((z+.1)*10)/10))}>+</button>
                     </div>
                   </div>
                   <div className="section-caption"><span>DIAPOSITIVE · {draft.canvas.width} × {draft.canvas.height}</span>
@@ -731,10 +742,10 @@ export default function App() {
                   </div>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
+              {draft && showInspector && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onChange={editDocument} tab={tab} onTabChange={setTab}
                 onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                onOpenImages={()=>setImageStudioOpen(true)}/>}
+                onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
             </div>
           </div>
         )}
