@@ -387,8 +387,9 @@ export default function App() {
     setExportProgress("Préparation…"); setError("");
     try {
       await verifyExportRevision(current);
+      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
       const report = await exportPowerPoint(current, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), revealExportMode);
+        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportReport(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
