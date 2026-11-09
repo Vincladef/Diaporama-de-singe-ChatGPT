@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { combineCreationInstructions } from "./instructions";
+import { combineCreationInstructions } from "./instructions.ts";
 
 test("les règles globales sont utilisées seules sans instruction locale",()=>{
   assert.equal(combineCreationInstructions("Images nombreuses",""),"Images nombreuses");
