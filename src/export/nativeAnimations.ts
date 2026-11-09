@@ -30,7 +30,7 @@ export function canUseNativeAnimations(doc: SlideDocument): boolean {
   if(!doc.animations.length || doc.mode==="freeform" ||
     doc.elements.some(el=>!isNativePptxObject(el))) return false;
   const eligible=new Set(doc.elements.filter(el=>el.type!=="group" &&
-    (el.type!=="image" || Boolean(el.src)) &&
+    (el.type!=="image" || Boolean(el.src)) && !el.hidden &&
     !(el.type==="shape" && String(el.styles.background??el.styles.backgroundColor??"").startsWith("linear-gradient("))
   ).map(el=>el.id));
   return doc.animations.every(step=>{
