@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
@@ -10,19 +10,17 @@ import { VariantsStudio } from "./editor/VariantsStudio";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
-import { QualityStudio } from "./quality/QualityStudio";
+import { HomeLibrary } from "./home/HomeLibrary";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
-import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
-import { inspectExport, isNativePptxObject } from "./export/preflight";
+import { buildPowerPoint, exportPowerPoint, type ExportReport } from "./export/pptx";
+import { buildHtmlArchive } from "./export/html";
 import {makeSmartConnector,refreshSmartConnectors} from "./graphics/connectors";
-import { canUseNativeAnimations } from "./export/nativeAnimations";
-import type { RevealExportMode } from "./export/reveals";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
   uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
 } from "./export/googleSlides";
-import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
+import { ApiError, command, listPresentations, listFolders, readPresentation, readDeckRevisions, type FolderSummary, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
 const SESSION_KEY = "diaporama-chatgpt-owner-token";
 const DECK_KEY = "diaporama-chatgpt-current-deck";
@@ -35,6 +33,7 @@ export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem(SESSION_KEY) ?? "");
   const [entry, setEntry] = useState("");
   const [decks, setDecks] = useState<DeckSummary[]>([]);
+  const [folders,setFolders]=useState<FolderSummary[]>([]);
   const [current, setCurrent] = useState<PresentationDetail | null>(null);
   const [slideId, setSlideId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SlideDocument | null>(null);
@@ -48,14 +47,11 @@ export default function App() {
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
-  const [qualityOpen,setQualityOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
-  const [showDeckSidebar,setShowDeckSidebar]=useState(true);
   const [showSlideRail,setShowSlideRail]=useState(true);
   const [showInspector,setShowInspector]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
-  const [autoSave, setAutoSave] = useState(true);
   const [externalChanges, setExternalChanges] = useState(false);
   const draftRef = useRef<SlideDocument | null>(null);
   const currentRef = useRef<PresentationDetail | null>(null);
@@ -71,39 +67,40 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
-  const [exportMode, setExportMode] = useState<PowerPointMode>(() =>
-    new URLSearchParams(window.location.search).get("export") === "faithful" ? "faithful" : "editable");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
-  const [exportTarget, setExportTarget] = useState<"pptx" | "google" | null>(null);
+  const [exportTarget, setExportTarget] = useState<"pptx" | "google" | "html" | null>(null);
+  const [htmlExportReport,setHtmlExportReport]=useState<{fileName:string;downloadUrl:string}|null>(null);
+  const [editingDeckTitle,setEditingDeckTitle]=useState(false);
+  const [newDeckTitle,setNewDeckTitle]=useState("");
   const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
   const [googleExportSlideCount, setGoogleExportSlideCount] = useState<number | null>(null);
-  const [revealExportMode, setRevealExportMode] = useState<RevealExportMode>("steps");
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    listPresentations(token).then(items => {
-      if (cancelled) return;
-      setDecks(items);
-      const remembered = new URLSearchParams(window.location.search).get("deck") ?? sessionStorage.getItem(DECK_KEY);
-      if (remembered && items.some(item => item.id === remembered)) {
-        void readPresentation(token, remembered).then(data => {
-          if (!cancelled) {
-            setCurrent(data);
-            const first = data.slides[0];
-            pickSlide(first);
-          }
-        }).catch(e => { if (!cancelled) setError(String(e.message ?? e)); });
+  useEffect(()=>{
+    if(!token)return;
+    let cancelled=false;
+    Promise.all([listPresentations(token),listFolders(token)]).then(([items,directory])=>{
+      if(cancelled)return;
+      setDecks(items);setFolders(directory);
+      // The library is the default landing page; only an explicit deep link
+      // opens an editor directly.
+      const requested=new URLSearchParams(window.location.search).get("deck");
+      if(requested&&items.some(deck=>deck.id===requested)){
+        void readPresentation(token,requested).then(data=>{
+          if(cancelled)return;
+          setCurrent(data);pickSlide(data.slides[0]);
+        }).catch(e=>{if(!cancelled)setError(String(e.message??e));});
       }
-    }).catch(e => {
-      if (cancelled) return;
-      setError(e instanceof Error ? e.message : "Accès impossible.");
-      if (e instanceof ApiError && e.status === 401) { sessionStorage.removeItem(SESSION_KEY); setToken(""); }
+    }).catch(e=>{
+      if(cancelled)return;
+      setError(e instanceof Error?e.message:"Accès impossible.");
+      if(e instanceof ApiError&&e.status===401){
+        sessionStorage.removeItem(SESSION_KEY);setToken("");
+      }
     });
-    return () => { cancelled = true; };
-  }, [token]);
+    return()=>{cancelled=true;};
+  },[token]);
 
   async function login(event: React.FormEvent) {
     event.preventDefault();
@@ -111,9 +108,9 @@ export default function App() {
     if (!key) return;
     setLoginBusy(true); setError("");
     try {
-      const items = await listPresentations(key);
+      const [items,foldersLoaded] = await Promise.all([listPresentations(key),listFolders(key)]);
       sessionStorage.setItem(SESSION_KEY, key);
-      setDecks(items);
+      setDecks(items);setFolders(foldersLoaded);
       setEntry(""); setToken(key);
     } catch (e) { setError(e instanceof Error ? e.message : "Connexion impossible."); }
     finally { setLoginBusy(false); }
@@ -123,7 +120,7 @@ export default function App() {
     if (!await flushPending()) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
-    setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
+    setToken(""); setDecks([]);setFolders([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
   }
 
   function pickSlide(slide?: SlideRecord) {
@@ -166,11 +163,52 @@ export default function App() {
     window.document.body.appendChild(link);link.click();link.remove();
     window.setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
-  async function refreshList() { setDecks(await listPresentations(token)); }
+  async function refreshList() {setDecks(await listPresentations(token));}
+  async function refreshFolders(){setFolders(await listFolders(token));}
+  async function goHome(){
+    if(!await flushPending())return;
+    setCurrent(null);pickSlide(undefined);
+    sessionStorage.removeItem(DECK_KEY);
+    const url=new URL(window.location.href);
+    url.searchParams.delete("deck");url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
+    setError("");setEditingDeckTitle(false);
+    void Promise.all([refreshList(),refreshFolders()]).catch(()=>{});
+  }
+  async function createFolder(name:string,parentId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"createFolder",name,parentId});await refreshFolders();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function renameFolder(id:string,name:string):Promise<boolean>{
+    try{await command(token,{action:"renameFolder",id,name});await refreshFolders();return true;}
+    catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function deleteFolder(id:string):Promise<boolean>{
+    try{
+      await command(token,{action:"deleteFolder",id});
+      await Promise.all([refreshFolders(),refreshList()]);return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function moveDeck(id:string,folderId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"movePresentation",id,folderId});
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function moveFolder(id:string,parentId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"moveFolder",id,parentId});
+      await refreshFolders();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
   async function loadDeck(id: string, preferred?: string) {
     const detail = await readPresentation(token, id);
     setCurrent(detail);
-    sessionStorage.setItem(DECK_KEY, id);
+    sessionStorage.setItem(DECK_KEY,id);
+    const url=new URL(window.location.href);
+    url.searchParams.set("deck",id);url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
     pickSlide(detail.slides.find(s => s.id === preferred) ?? detail.slides[0]);
   }
   async function openDeck(id: string) {
@@ -179,37 +217,39 @@ export default function App() {
     try { await loadDeck(id); } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  async function createDeck() {
-    const title = window.prompt("Titre de la présentation", "Sans titre");
-    if (!title?.trim() || !await flushPending()) return;
+  async function createDeck(folderId:string|null=null) {
+    if(!await flushPending())return;
+    const title="Sans titre";
     setBusy(true); setError("");
     try {
-      const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title: title.trim() });
+      const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title,folderId });
       await refreshList(); await loadDeck(response.presentation.id);
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  async function renameDeck() {
-    if (!current) return;
-    const title = window.prompt("Nouveau titre", current.presentation.title);
-    if (!title?.trim()) return;
-    setBusy(true); setError("");
-    try {
-      await command(token, { action: "renamePresentation", id: current.presentation.id, title: title.trim() });
-      setCurrent({ ...current, presentation: { ...current.presentation, title: title.trim() } });
-      await refreshList();
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+  async function renameDeck(id:string,name:string):Promise<boolean>{
+    const title=name.trim();
+    if(!title)return false;
+    try{
+      await command(token,{action:"renamePresentation",id,title});
+      if(currentRef.current?.presentation.id===id){
+        setCurrent(previous=>previous?{...previous,presentation:{...previous.presentation,title}}:previous);
+      }
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }
-  async function deleteDeck() {
-    if (!current || !window.confirm("Supprimer cette présentation et toutes ses diapositives ?")) return;
-    setBusy(true); setError("");
-    try {
-      await command(token, { action: "deletePresentation", id: current.presentation.id });
-      setCurrent(null); setDraft(null); setDirty(false); setSlideId(null); sessionStorage.removeItem(DECK_KEY);
-      await refreshList();
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+  async function deleteDeck(id:string):Promise<boolean>{
+    if(!await flushPending())return false;
+    try{
+      await command(token,{action:"deletePresentation",id});
+      if(currentRef.current?.presentation.id===id){
+        setCurrent(null);pickSlide(undefined);
+        sessionStorage.removeItem(DECK_KEY);
+        const url=new URL(window.location.href);url.searchParams.delete("deck");
+        window.history.replaceState({},"",url.pathname+url.search+url.hash);
+      }
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }
   async function slideAction(action: "addSlide" | "duplicateSlide" | "deleteSlide") {
     if (!current || !await flushPending()) return;
@@ -523,18 +563,6 @@ export default function App() {
 
   const active = current?.slides.find(s=>s.id===slideId);
   const statusText = externalChanges ? "Nouvelle version distante" : dirty ? "Modifications non enregistrées" : "Enregistré";
-  const exportPreview=useMemo(()=>{
-    if(!current)return null;
-    const sources=current.slides.map(slide=>slide.id===slideId&&draft?
-      {...slide,document:draft,notes}:slide);
-    return {report:inspectExport(sources),
-      objects:sources.map(slide=>({
-        total:slide.document.elements.filter(e=>!e.hidden).length,
-        native:slide.document.elements.filter(e=>!e.hidden&&isNativePptxObject(e)).length,
-        animations:slide.document.animations.length,
-        office:canUseNativeAnimations(slide.document),
-      }))};
-  },[current,slideId,draft,notes]);
 
   useEffect(()=>{
     if(!token||!current?.presentation.id)return;
@@ -569,10 +597,10 @@ export default function App() {
   },[token,current?.presentation.id,slideId,busy,exportBusy]);
 
   useEffect(()=>{
-    if(!autoSave||!dirty||busy||exportBusy||externalChanges||!current||!draft)return;
+    if(!dirty||busy||exportBusy||externalChanges||!current||!draft)return;
     const timer=window.setTimeout(()=>void save(),1900);
     return()=>window.clearTimeout(timer);
-  },[autoSave,dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
+  },[dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
 
   useEffect(()=>{
     const handler=(e:KeyboardEvent)=>{
