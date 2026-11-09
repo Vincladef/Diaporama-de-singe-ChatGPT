@@ -727,47 +727,27 @@ export default function App() {
               {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
-            {exportPreview&&<details className="export-preflight">
-              <summary>Contrôle avant export : {exportPreview.report.fullyNative} diapo(s) entièrement éditables,
-                {" "+exportPreview.report.mixedEditable} mixtes et {exportPreview.report.rasterOnly} aplatie(s)
-              </summary>
-              <p>Le mode « Visuel fidèle » produit des images. En mode « Objets modifiables »,
-                seuls les effets incompatibles sont isolés, sauf pour les compositions imbriquées.
-                Google Slides peut modifier certains effets PowerPoint au moment de l'importation.</p>
-              <div className="export-preflight-scroll"><table>
-                <thead><tr><th>Diapositive</th><th>Modifiabilité</th><th>Animations au clic</th></tr></thead>
-                <tbody>{exportPreview.report.slides.map((risk,i)=><tr key={i}>
-                  <td>{i+1}</td>
-                  <td>{exportMode==="faithful"?"Image entière":
-                    risk.mode==="raster"?"Composition aplatie":
-                    exportPreview.objects[i]?.native+" / "+exportPreview.objects[i]?.total+" objets natifs"}
-                  </td>
-                  <td>{exportPreview.objects[i]?.animations===0?"Aucune":
-                    exportMode==="faithful"?"Étapes statiques":
-                    exportPreview.objects[i]?.office?"Effets PowerPoint natifs possibles":"Étapes de secours"}
-                  </td>
-                </tr>)}</tbody>
-              </table></div>
-              {exportPreview.report.warnings.length>0&&
-                <p className="export-preflight-disclaimer">{exportPreview.report.warnings.join(" · ")}</p>}
-            </details>}
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
               <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
-              <span>{exportReport.slideCount} diapositive{exportReport.slideCount > 1 ? "s" : ""} · {exportReport.mode === "faithful" ? "Rendu en images" : "Éléments éditables lorsque compatibles"}.</span>
+              <span>{exportReport.slideCount} diapositive{exportReport.slideCount>1?"s":""} ; les objets compatibles restent modifiables.</span>
               {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
                 <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
               </details>}
               <span>Vous pouvez aussi utiliser « Exporter vers Google Slides » pour créer une présentation directement dans votre Drive.</span>
             </div>}
-            {googleReport && <div className="export-report google-success-report" role="status">
-              <strong>Présentation créée dans Google Slides : {googleReport.name}</strong>
-              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir la présentation Google Slides</a>
-              <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"}
-                {revealExportMode === "steps" && googleExportSlideCount !== null
-                  ? " · " + googleExportSlideCount + " diapositives exportées. Le PPTX contient des animations natives quand elles sont compatibles ; Google peut modifier ou supprimer certains effets. Les compositions complexes utilisent des étapes successives."
-                  : " · Export statique sans animations Web."}
-              </span>
+            {googleReport&&<div className="export-report google-success-report" role="status">
+              <strong>Google Slides : {googleReport.name}</strong>
+              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">
+                Ouvrir la présentation Google Slides
+              </a>
+              <span>{googleExportSlideCount} diapositives exportées. Certains effets peuvent être simplifiés par Google.</span>
+            </div>}
+            {htmlExportReport&&<div className="export-report" role="status">
+              <strong>Archive HTML/CSS prête : {htmlExportReport.fileName}</strong>
+              <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>
+                Télécharger à nouveau l'archive
+              </a>
             </div>}
             <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
               {showSlideRail&&<aside className="slide-rail">
@@ -849,16 +829,6 @@ export default function App() {
           </div>
         )}
 
-        {qualityOpen&&current&&<QualityStudio
-          detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
-            {...s,document:draft,notes}:s)}}
-          onClose={()=>setQualityOpen(false)}
-          onFocus={index=>{
-            const next=current.slides[index];
-            if(!next)return;
-            setQualityOpen(false);
-            if(next.id!==slideId)void navigateToSlide(next);
-          }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
