@@ -192,6 +192,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 style={{left:box.x,top:box.y,width:box.w,height:box.h,pointerEvents:element.locked?"none":"auto"}}
                 title={getVisualLabel(element)}
                 aria-label={getVisualLabel(element)}
+                role="button" tabIndex={element.locked?-1:0} aria-pressed={picked}
+                onKeyDown={e=>{
+                  if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();onSelect([element.id]);}
+                }}
                 onPointerDown={e=>begin(e,element.id,"move")}
                 onPointerMove={move}
                 onPointerUp={end}
