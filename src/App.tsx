@@ -562,7 +562,7 @@ export default function App() {
                     <option value="editable">Objets modifiables (recommandé)</option>
                   </select>
                 </label>
-                <label className="reveal-export-toggle" title="Les apparitions se déroulent sur des diapositives successives. En mode modifiable, textes et objets compatibles restent éditables ; les mouvements ne sont pas des animations natives.">
+                <label className="reveal-export-toggle" title="PowerPoint modifiable : animations natives au clic pour les objets structurés compatibles. HTML complexe et Google Slides : progression en diapositives successives.">
                   <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
                     onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
                   Étapes au clic
