@@ -437,3 +437,12 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 }
 .visual-object-hit:focus-visible{outline:4px solid #2b83e2}
 .layer-row:focus-within{border-color:#7fb394}
+
+.export-preflight{margin:12px 24px;padding:12px 15px;border:1px solid #d8e5da;border-radius:9px;background:#f8fbf8;font-size:12px}
+.export-preflight summary{cursor:pointer;font-weight:700;color:#345540;padding:4px 0;line-height:1.5}
+.export-preflight p{font-size:12px;color:#506c58;line-height:1.6}
+.export-preflight-scroll{max-width:100%;overflow-x:auto}
+.export-preflight table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}
+.export-preflight th,.export-preflight td{padding:9px 12px;border-bottom:1px solid #dce7df}
+.export-preflight th{color:#365943;background:#edf5ee}
+.export-preflight-disclaimer{color:#607866!important;font-size:11px!important}
