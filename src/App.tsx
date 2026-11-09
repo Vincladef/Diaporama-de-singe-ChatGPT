@@ -738,7 +738,7 @@ export default function App() {
                   <VisualCanvas document={draft} selectedIds={selectedIds} onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid}/>
                   <div className="canvas-footer">Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments.</div>
                   {animationPanelOpen&&<AnimationTimeline document={draft} selectedIds={selectedIds}
-                    onChange={editDocument} onPreview={()=>setPresenting(true)}/>}
+                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/>}
                   <div className="notes-row">
                     <label htmlFor="slide-notes">Notes du présentateur</label>
                     <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
