@@ -430,3 +430,10 @@
  .timeline-preview-slide{width:100%}
  .layer-row .layer-icon-button{min-width:34px;width:34px}
 }
+
+/* Ensure focus remains visible when editing entirely by keyboard. */
+button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:focus-visible{
+  outline:3px solid #357c55;outline-offset:2px
+}
+.visual-object-hit:focus-visible{outline:4px solid #2b83e2}
+.layer-row:focus-within{border-color:#7fb394}
