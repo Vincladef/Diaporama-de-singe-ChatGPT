@@ -117,3 +117,20 @@ Le système de projection Web utilise maintenant deux iframes : le lecteur conse
 - Une vérification de rendu réel dans PowerPoint et une importation Google Slides sont requises avant de garantir une parfaite correspondance.
 
 Tests automatiques : pipeline TypeScript, tests Node, build Netlify ; régression de la visibilité native étape par étape et du comptage des médias HTML.
+
+
+## 9 novembre 2026 : animations PowerPoint natives (première implémentation)
+
+L'export PowerPoint en mode **Objets modifiables**, avec « Étapes au clic » activé, privilégie désormais une chronologie OOXML native pour les diapositives dont toutes les cibles d'animation sont des objets structurés compatibles.
+
+- La conversion produit **une seule diapositive PowerPoint**, puis écrit les effets dans `ppt/slides/slideN.xml`, dans un élément `p:timing` (PresentationML).
+- Les effets `appear`, `fade`, `wipe`, `scale` et `move` sont convertis en préréglages d'entrée Office. L'effet `move` est une entrée depuis le bas et le `scale` un zoom standard ; les trajectoires Web personnalisées ne sont pas traduites exactement.
+- Les groupes au clic et les effets `after-previous` sont inscrits dans la séquence `mainSeq`.
+- Le moteur identifie les objets PowerPoint générés par leur `objectName` ; les cibles absentes ou complexes ne sont jamais associées arbitrairement à un autre objet.
+- Si une diapositive utilise du HTML libre, un objet incompatible, un effet non disponible ou une cible non native, elle conserve le système de vues successives. Cela préserve les idées découvertes au clic sans promettre une animation native de ce HTML.
+- L'export fidèle reste inchangé et privilégie la capture visuelle. La conversion Google Slides conserve volontairement les vues successives, car l'import de chronologies OOXML n'a pas été validé comme fidèle.
+- La case « Étapes au clic » désactivée laisse un export statique.
+
+La bibliothèque PptxGenJS n'émet pas elle-même de chronologie d'objet ; le module `src/export/nativeAnimations.ts` intervient après génération du PPTX, avec JSZip. Le pipeline CI teste le typage, l'assemblage, l'existence des effets et leur cible dans le XML ; un test utilise un vrai fichier PptxGenJS.
+
+**Validation encore nécessaire :** ouvrir un fichier animé dans PowerPoint pour Windows ou Mac, lire les effets au clic et contrôler leur édition dans le volet Animation. Un résultat de tests OOXML ne suffit pas à garantir que Microsoft PowerPoint exécutera chaque effet exactement comme le navigateur.
