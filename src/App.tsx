@@ -802,8 +802,8 @@ export default function App() {
           onFocus={index=>{
             const next=current.slides[index];
             if(!next)return;
-            if(next.id!==slideId){void navigateToSlide(next);return;}
             setQualityOpen(false);
+            if(next.id!==slideId)void navigateToSlide(next);
           }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
