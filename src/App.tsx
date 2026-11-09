@@ -515,9 +515,8 @@ export default function App() {
     setExportProgress("Préparation…"); setError("");
     try {
       await verifyExportRevision(fresh);
-      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const report = await exportPowerPoint(fresh, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
+      const report = await exportPowerPoint(fresh, "editable", ({completed,total})=>
+        setExportProgress("Diapositive "+completed+"/"+total), "native");
       setExportReport(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
@@ -549,9 +548,8 @@ export default function App() {
       // Both destinations receive the same PPTX: native animations on compatible
       // editable slides, progressive frames only when native conversion is impossible.
       // Google Drive may still drop some OOXML timing effects during conversion.
-      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const artifact = await buildPowerPoint(fresh, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
+      const artifact = await buildPowerPoint(fresh, "editable", ({completed,total})=>
+        setExportProgress("Diapositive "+completed+"/"+total), "native");
       setExportProgress("Conversion dans Google Drive…");
       const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, fresh.presentation.title);
       setGoogleExportSlideCount(artifact.slideCount);
@@ -559,6 +557,25 @@ export default function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "La conversion dans Google Slides a échoué.");
     } finally { setExportBusy(false); setExportTarget(null); setExportProgress(""); }
+  }
+
+  async function downloadHtml(){
+    if(!current||exportBusy)return;
+    if(!await flushPending())return;
+    const fresh=currentRef.current;
+    if(!fresh)return;
+    setExportBusy(true);setExportTarget("html");setHtmlExportReport(null);
+    setExportProgress("Préparation du HTML/CSS…");setError("");
+    try{
+      await verifyExportRevision(fresh);
+      const archive=await buildHtmlArchive(fresh);
+      const downloadUrl=URL.createObjectURL(archive.blob);
+      const anchor=document.createElement("a");
+      anchor.href=downloadUrl;anchor.download=archive.fileName;
+      document.body.appendChild(anchor);anchor.click();anchor.remove();
+      setHtmlExportReport({fileName:archive.fileName,downloadUrl});
+    }catch(e){setError(e instanceof Error?e.message:"L'export HTML/CSS a échoué.");}
+    finally{setExportBusy(false);setExportTarget(null);setExportProgress("");}
   }
 
   const active = current?.slides.find(s=>s.id===slideId);
