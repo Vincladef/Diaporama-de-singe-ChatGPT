@@ -29,7 +29,10 @@ function targetId(step: AnimationStep): string | null {
 export function canUseNativeAnimations(doc: SlideDocument): boolean {
   if(!doc.animations.length || doc.mode==="freeform" ||
     doc.elements.some(el=>!isNativePptxObject(el))) return false;
-  const eligible=new Set(doc.elements.filter(el=>el.type!=="group").map(el=>el.id));
+  const eligible=new Set(doc.elements.filter(el=>el.type!=="group" &&
+    (el.type!=="image" || Boolean(el.src)) &&
+    !(el.type==="shape" && /^linear-gradient\\(/i.test(String(el.styles.background??el.styles.backgroundColor??"")))
+  ).map(el=>el.id));
   return doc.animations.every(step=>{
     const id=targetId(step);
     return Boolean(id&&eligible.has(id)&&supported.has(step.effect));
