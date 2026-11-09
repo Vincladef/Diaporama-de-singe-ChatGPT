@@ -659,7 +659,7 @@ export default function App() {
   );
 
   return (
-    <div className="app app-slides-style">
+    <div className={"app app-slides-style "+(current?"is-editing":"is-library")}>
       <main className="workspace">
         <header className="topbar slides-header">
           <button className="app-brand" title="Retour à l'accueil"
@@ -755,6 +755,7 @@ export default function App() {
             <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
               {showSlideRail&&<aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
+                <div className="slide-list" role="region" aria-label="Liste des diapositives" tabIndex={0}>
                 {current.slides.map((s, i) =>
                   <button key={s.id} draggable className={"slide-tile " + (s.id === slideId ? "selected" : "")}
                     onDragStart={e=>{e.dataTransfer.setData("text/x-singe-slide",s.id);e.dataTransfer.effectAllowed="move";}}
@@ -765,6 +766,7 @@ export default function App() {
                     <span>Diapositive {i + 1}</span>
                   </button>
                 )}
+                </div>
                 {active && <div className="rail-tools">
                   <button onClick={() => void slideAction("duplicateSlide")} disabled={busy}>Dupliquer</button>
                   <button onClick={() => void slideAction("deleteSlide")} disabled={busy} className="danger-text">Supprimer</button>
