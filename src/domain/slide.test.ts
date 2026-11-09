@@ -23,3 +23,13 @@ test("les apparitions au clic sont modélisables", () => {
   };
   assert.equal(SlideDocumentSchema.parse(doc).animations[0]?.trigger, "click");
 });
+
+test("editable layer metadata persists without changing the slide format",()=>{
+ const doc=createEmptySlideDocument();
+ doc.elements=[{id:"title",type:"text",text:"Titre",name:"Grand titre",
+  hidden:false,locked:true,groupId:"cluster-1",groupName:"Chronologie",styles:{}}];
+ const value=SlideDocumentSchema.parse(doc);
+ assert.equal(value.elements[0]?.name,"Grand titre");
+ assert.equal(value.elements[0]?.locked,true);
+ assert.equal(value.elements[0]?.groupName,"Chronologie");
+});
