@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
@@ -10,19 +10,17 @@ import { VariantsStudio } from "./editor/VariantsStudio";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
-import { QualityStudio } from "./quality/QualityStudio";
+import { HomeLibrary } from "./home/HomeLibrary";
 import type { ImageCandidate } from "./images/search";
 import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
-import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
-import { inspectExport, isNativePptxObject } from "./export/preflight";
+import { buildPowerPoint, exportPowerPoint, type ExportReport } from "./export/pptx";
+import { buildHtmlArchive } from "./export/html";
 import {makeSmartConnector,refreshSmartConnectors} from "./graphics/connectors";
-import { canUseNativeAnimations } from "./export/nativeAnimations";
-import type { RevealExportMode } from "./export/reveals";
 import {
   getGoogleClientId, isValidGoogleClientId, requestGoogleDriveAccess,
   uploadPowerPointToGoogleSlides, type GoogleSlidesResult,
 } from "./export/googleSlides";
-import { ApiError, command, listPresentations, readPresentation, readDeckRevisions, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
+import { ApiError, command, listPresentations, listFolders, readPresentation, readDeckRevisions, type FolderSummary, type DeckSummary, type PresentationDetail, type SlideRecord } from "./lib/api";
 
 const SESSION_KEY = "diaporama-chatgpt-owner-token";
 const DECK_KEY = "diaporama-chatgpt-current-deck";
@@ -35,6 +33,7 @@ export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem(SESSION_KEY) ?? "");
   const [entry, setEntry] = useState("");
   const [decks, setDecks] = useState<DeckSummary[]>([]);
+  const [folders,setFolders]=useState<FolderSummary[]>([]);
   const [current, setCurrent] = useState<PresentationDetail | null>(null);
   const [slideId, setSlideId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SlideDocument | null>(null);
@@ -48,14 +47,11 @@ export default function App() {
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
-  const [qualityOpen,setQualityOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
-  const [showDeckSidebar,setShowDeckSidebar]=useState(true);
   const [showSlideRail,setShowSlideRail]=useState(true);
   const [showInspector,setShowInspector]=useState(true);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
-  const [autoSave, setAutoSave] = useState(true);
   const [externalChanges, setExternalChanges] = useState(false);
   const draftRef = useRef<SlideDocument | null>(null);
   const currentRef = useRef<PresentationDetail | null>(null);
@@ -71,39 +67,40 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
-  const [exportMode, setExportMode] = useState<PowerPointMode>(() =>
-    new URLSearchParams(window.location.search).get("export") === "faithful" ? "faithful" : "editable");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [exportReport, setExportReport] = useState<ExportReport | null>(null);
-  const [exportTarget, setExportTarget] = useState<"pptx" | "google" | null>(null);
+  const [exportTarget, setExportTarget] = useState<"pptx" | "google" | "html" | null>(null);
+  const [htmlExportReport,setHtmlExportReport]=useState<{fileName:string;downloadUrl:string}|null>(null);
+  const [editingDeckTitle,setEditingDeckTitle]=useState(false);
+  const [newDeckTitle,setNewDeckTitle]=useState("");
   const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
   const [googleExportSlideCount, setGoogleExportSlideCount] = useState<number | null>(null);
-  const [revealExportMode, setRevealExportMode] = useState<RevealExportMode>("steps");
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    listPresentations(token).then(items => {
-      if (cancelled) return;
-      setDecks(items);
-      const remembered = new URLSearchParams(window.location.search).get("deck") ?? sessionStorage.getItem(DECK_KEY);
-      if (remembered && items.some(item => item.id === remembered)) {
-        void readPresentation(token, remembered).then(data => {
-          if (!cancelled) {
-            setCurrent(data);
-            const first = data.slides[0];
-            pickSlide(first);
-          }
-        }).catch(e => { if (!cancelled) setError(String(e.message ?? e)); });
+  useEffect(()=>{
+    if(!token)return;
+    let cancelled=false;
+    Promise.all([listPresentations(token),listFolders(token)]).then(([items,directory])=>{
+      if(cancelled)return;
+      setDecks(items);setFolders(directory);
+      // The library is the default landing page; only an explicit deep link
+      // opens an editor directly.
+      const requested=new URLSearchParams(window.location.search).get("deck");
+      if(requested&&items.some(deck=>deck.id===requested)){
+        void readPresentation(token,requested).then(data=>{
+          if(cancelled)return;
+          setCurrent(data);pickSlide(data.slides[0]);
+        }).catch(e=>{if(!cancelled)setError(String(e.message??e));});
       }
-    }).catch(e => {
-      if (cancelled) return;
-      setError(e instanceof Error ? e.message : "Accès impossible.");
-      if (e instanceof ApiError && e.status === 401) { sessionStorage.removeItem(SESSION_KEY); setToken(""); }
+    }).catch(e=>{
+      if(cancelled)return;
+      setError(e instanceof Error?e.message:"Accès impossible.");
+      if(e instanceof ApiError&&e.status===401){
+        sessionStorage.removeItem(SESSION_KEY);setToken("");
+      }
     });
-    return () => { cancelled = true; };
-  }, [token]);
+    return()=>{cancelled=true;};
+  },[token]);
 
   async function login(event: React.FormEvent) {
     event.preventDefault();
@@ -111,9 +108,9 @@ export default function App() {
     if (!key) return;
     setLoginBusy(true); setError("");
     try {
-      const items = await listPresentations(key);
+      const [items,foldersLoaded] = await Promise.all([listPresentations(key),listFolders(key)]);
       sessionStorage.setItem(SESSION_KEY, key);
-      setDecks(items);
+      setDecks(items);setFolders(foldersLoaded);
       setEntry(""); setToken(key);
     } catch (e) { setError(e instanceof Error ? e.message : "Connexion impossible."); }
     finally { setLoginBusy(false); }
@@ -123,7 +120,10 @@ export default function App() {
     if (!await flushPending()) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
-    setToken(""); setDecks([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
+    const url=new URL(window.location.href);
+    url.searchParams.delete("deck");url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
+    setToken(""); setDecks([]);setFolders([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
   }
 
   function pickSlide(slide?: SlideRecord) {
@@ -166,11 +166,52 @@ export default function App() {
     window.document.body.appendChild(link);link.click();link.remove();
     window.setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
-  async function refreshList() { setDecks(await listPresentations(token)); }
+  async function refreshList() {setDecks(await listPresentations(token));}
+  async function refreshFolders(){setFolders(await listFolders(token));}
+  async function goHome(){
+    if(!await flushPending())return;
+    setCurrent(null);pickSlide(undefined);
+    sessionStorage.removeItem(DECK_KEY);
+    const url=new URL(window.location.href);
+    url.searchParams.delete("deck");url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
+    setError("");setEditingDeckTitle(false);
+    void Promise.all([refreshList(),refreshFolders()]).catch(()=>{});
+  }
+  async function createFolder(name:string,parentId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"createFolder",name,parentId});await refreshFolders();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function renameFolder(id:string,name:string):Promise<boolean>{
+    try{await command(token,{action:"renameFolder",id,name});await refreshFolders();return true;}
+    catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function deleteFolder(id:string):Promise<boolean>{
+    try{
+      await command(token,{action:"deleteFolder",id});
+      await Promise.all([refreshFolders(),refreshList()]);return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function moveDeck(id:string,folderId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"movePresentation",id,folderId});
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
+  async function moveFolder(id:string,parentId:string|null):Promise<boolean>{
+    try{
+      await command(token,{action:"moveFolder",id,parentId});
+      await refreshFolders();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }
   async function loadDeck(id: string, preferred?: string) {
     const detail = await readPresentation(token, id);
     setCurrent(detail);
-    sessionStorage.setItem(DECK_KEY, id);
+    sessionStorage.setItem(DECK_KEY,id);
+    const url=new URL(window.location.href);
+    url.searchParams.set("deck",id);url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
     pickSlide(detail.slides.find(s => s.id === preferred) ?? detail.slides[0]);
   }
   async function openDeck(id: string) {
@@ -179,37 +220,39 @@ export default function App() {
     try { await loadDeck(id); } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  async function createDeck() {
-    const title = window.prompt("Titre de la présentation", "Sans titre");
-    if (!title?.trim() || !await flushPending()) return;
+  async function createDeck(folderId:string|null=null) {
+    if(!await flushPending())return;
+    const title="Sans titre";
     setBusy(true); setError("");
     try {
-      const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title: title.trim() });
+      const response = await command<{ presentation: { id: string } }>(token, { action: "createPresentation", title,folderId });
       await refreshList(); await loadDeck(response.presentation.id);
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  async function renameDeck() {
-    if (!current) return;
-    const title = window.prompt("Nouveau titre", current.presentation.title);
-    if (!title?.trim()) return;
-    setBusy(true); setError("");
-    try {
-      await command(token, { action: "renamePresentation", id: current.presentation.id, title: title.trim() });
-      setCurrent({ ...current, presentation: { ...current.presentation, title: title.trim() } });
-      await refreshList();
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+  async function renameDeck(id:string,name:string):Promise<boolean>{
+    const title=name.trim();
+    if(!title)return false;
+    try{
+      await command(token,{action:"renamePresentation",id,title});
+      if(currentRef.current?.presentation.id===id){
+        setCurrent(previous=>previous?{...previous,presentation:{...previous.presentation,title}}:previous);
+      }
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }
-  async function deleteDeck() {
-    if (!current || !window.confirm("Supprimer cette présentation et toutes ses diapositives ?")) return;
-    setBusy(true); setError("");
-    try {
-      await command(token, { action: "deletePresentation", id: current.presentation.id });
-      setCurrent(null); setDraft(null); setDirty(false); setSlideId(null); sessionStorage.removeItem(DECK_KEY);
-      await refreshList();
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+  async function deleteDeck(id:string):Promise<boolean>{
+    if(!await flushPending())return false;
+    try{
+      await command(token,{action:"deletePresentation",id});
+      if(currentRef.current?.presentation.id===id){
+        setCurrent(null);pickSlide(undefined);
+        sessionStorage.removeItem(DECK_KEY);
+        const url=new URL(window.location.href);url.searchParams.delete("deck");
+        window.history.replaceState({},"",url.pathname+url.search+url.hash);
+      }
+      await refreshList();return true;
+    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }
   async function slideAction(action: "addSlide" | "duplicateSlide" | "deleteSlide") {
     if (!current || !await flushPending()) return;
@@ -475,9 +518,8 @@ export default function App() {
     setExportProgress("Préparation…"); setError("");
     try {
       await verifyExportRevision(fresh);
-      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const report = await exportPowerPoint(fresh, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
+      const report = await exportPowerPoint(fresh, "editable", ({completed,total})=>
+        setExportProgress("Diapositive "+completed+"/"+total), "native");
       setExportReport(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'exportation n'a pas abouti.");
@@ -509,9 +551,8 @@ export default function App() {
       // Both destinations receive the same PPTX: native animations on compatible
       // editable slides, progressive frames only when native conversion is impossible.
       // Google Drive may still drop some OOXML timing effects during conversion.
-      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
-      const artifact = await buildPowerPoint(fresh, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
+      const artifact = await buildPowerPoint(fresh, "editable", ({completed,total})=>
+        setExportProgress("Diapositive "+completed+"/"+total), "native");
       setExportProgress("Conversion dans Google Drive…");
       const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, fresh.presentation.title);
       setGoogleExportSlideCount(artifact.slideCount);
@@ -521,20 +562,27 @@ export default function App() {
     } finally { setExportBusy(false); setExportTarget(null); setExportProgress(""); }
   }
 
+  async function downloadHtml(){
+    if(!current||exportBusy)return;
+    if(!await flushPending())return;
+    const fresh=currentRef.current;
+    if(!fresh)return;
+    setExportBusy(true);setExportTarget("html");setHtmlExportReport(null);
+    setExportProgress("Préparation du HTML/CSS…");setError("");
+    try{
+      await verifyExportRevision(fresh);
+      const archive=await buildHtmlArchive(fresh);
+      const downloadUrl=URL.createObjectURL(archive.blob);
+      const anchor=document.createElement("a");
+      anchor.href=downloadUrl;anchor.download=archive.fileName;
+      document.body.appendChild(anchor);anchor.click();anchor.remove();
+      setHtmlExportReport({fileName:archive.fileName,downloadUrl});
+    }catch(e){setError(e instanceof Error?e.message:"L'export HTML/CSS a échoué.");}
+    finally{setExportBusy(false);setExportTarget(null);setExportProgress("");}
+  }
+
   const active = current?.slides.find(s=>s.id===slideId);
   const statusText = externalChanges ? "Nouvelle version distante" : dirty ? "Modifications non enregistrées" : "Enregistré";
-  const exportPreview=useMemo(()=>{
-    if(!current)return null;
-    const sources=current.slides.map(slide=>slide.id===slideId&&draft?
-      {...slide,document:draft,notes}:slide);
-    return {report:inspectExport(sources),
-      objects:sources.map(slide=>({
-        total:slide.document.elements.filter(e=>!e.hidden).length,
-        native:slide.document.elements.filter(e=>!e.hidden&&isNativePptxObject(e)).length,
-        animations:slide.document.animations.length,
-        office:canUseNativeAnimations(slide.document),
-      }))};
-  },[current,slideId,draft,notes]);
 
   useEffect(()=>{
     if(!token||!current?.presentation.id)return;
@@ -569,10 +617,10 @@ export default function App() {
   },[token,current?.presentation.id,slideId,busy,exportBusy]);
 
   useEffect(()=>{
-    if(!autoSave||!dirty||busy||exportBusy||externalChanges||!current||!draft)return;
+    if(!dirty||busy||exportBusy||externalChanges||!current||!draft)return;
     const timer=window.setTimeout(()=>void save(),1900);
     return()=>window.clearTimeout(timer);
-  },[autoSave,dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
+  },[dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
 
   useEffect(()=>{
     const handler=(e:KeyboardEvent)=>{
@@ -611,124 +659,98 @@ export default function App() {
   );
 
   return (
-    <div className={"app"+(!showDeckSidebar?" deck-sidebar-collapsed":"")}>
-      <aside className="sidebar">
-        <div className="identity"><span className="identity-mark">◆</span><strong>Diaporama<br />de singe</strong></div>
-        <div className="edition">ÉDITION CHATGPT</div>
-        <div className="list-heading"><span>PRÉSENTATIONS</span><button onClick={() => void createDeck()} disabled={busy} title="Nouvelle présentation">+</button></div>
-        <div className="deck-list">
-          {decks.map(deck =>
-            <button key={deck.id} className={"deck-item " + (current?.presentation.id === deck.id ? "active" : "")}
-              onClick={() => void openDeck(deck.id)} disabled={busy}>
-              <span className="deck-name">{deck.title}</span>
-              <small>{deck.slide_count} diapo{deck.slide_count !== 1 ? "s" : ""}</small>
-            </button>
-          )}
-          {decks.length === 0 && <p className="sidebar-hint">Aucune présentation</p>}
-        </div>
-        <div className="sidebar-bottom">
-          <span className="connected-dot" /> Stockage privé
-          <button className="text-btn logout" onClick={() => void logout()}>Quitter</button>
-        </div>
-      </aside>
-
+    <div className="app app-slides-style">
       <main className="workspace">
-        <header className="topbar">
-          <button className="subtle-btn panel-toggle" aria-label={showDeckSidebar?"Masquer la liste des présentations":"Afficher les présentations"}
-            aria-pressed={showDeckSidebar} onClick={()=>setShowDeckSidebar(v=>!v)}>☰</button>
-          <div className="breadcrumb">{current ? current.presentation.title : "Mes présentations"}</div>
-          <button className="subtle-btn import-top-button" onClick={()=>setImportOpen(true)} disabled={busy}>⇧ Importer</button>
-          {current && <div className="header-actions">
-            <button className="subtle-btn" onClick={()=>setImproveOpen(true)} disabled={busy}>✦ Améliorer</button>
-            <button className="subtle-btn" onClick={() => void renameDeck()} disabled={busy}>Renommer</button>
-            <button className="subtle-btn danger-text" onClick={() => void deleteDeck()} disabled={busy}>Supprimer</button>
-          </div>}
+        <header className="topbar slides-header">
+          <button className="app-brand" title="Retour à l'accueil"
+            aria-label="Diaporama de singe : accueil" onClick={()=>void goHome()}>
+            <span className="identity-mark">◆</span>
+            <span>Diaporama de singe</span>
+          </button>
+          <div className="slides-header-current">
+            {current ? <>
+              {editingDeckTitle?
+                <input autoFocus className="inline-deck-title" aria-label="Titre de la présentation"
+                  value={newDeckTitle} maxLength={180}
+                  onChange={e=>setNewDeckTitle(e.target.value)}
+                  onBlur={()=>{if(newDeckTitle.trim()&&newDeckTitle.trim()!==current.presentation.title)
+                    void renameDeck(current.presentation.id,newDeckTitle);setEditingDeckTitle(false);}}
+                  onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();
+                    if(e.key==="Escape"){setNewDeckTitle(current.presentation.title);setEditingDeckTitle(false);}}}/>:
+                <button className="presentation-title" title="Cliquer pour renommer"
+                  onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>
+                  {current.presentation.title} <span>✎</span>
+                </button>}
+              <small className={dirty||externalChanges?"dirty-indicator":"saved-indicator"}
+                aria-live="polite">{externalChanges?"Conflit de version":dirty?"Enregistrement automatique…":"✓ Enregistré"}</small>
+            </> : <span className="library-header-label">Mes présentations</span>}
+          </div>
+          <div className="slides-header-actions">
+            {!current && <button className="subtle-btn" onClick={()=>setImportOpen(true)}
+              disabled={busy}>⇧ Importer</button>}
+            {current&&<>
+              <button className="subtle-btn present-action" onClick={()=>setPresenting(true)}
+                disabled={!current.slides.length}>▶ Présenter</button>
+              <button className="slides-export-primary" onClick={()=>void downloadPowerPoint()}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="pptx"?(exportProgress||"Export en cours…"):"Exporter PowerPoint"}
+              </button>
+              <button className="slides-export-primary slides-export-google" onClick={startGoogleExport}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="google"?(exportProgress||"Conversion…"):"Exporter Google Slides"}
+              </button>
+              <button className="slides-export-html" onClick={()=>void downloadHtml()}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="html"?(exportProgress||"Préparation…"):"Exporter HTML/CSS"}
+              </button>
+              <details className="slides-extra-actions">
+                <summary title="Autres actions">⋯</summary>
+                <div>
+                  <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
+                  <button onClick={()=>{setImportOpen(true);}}>Importer</button>
+                  <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
+                </div>
+              </details>
+            </>}
+            <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
+          </div>
         </header>
-        <ErrorMessage text={error} clear={() => setError("")} />
+        <ErrorMessage text={error} clear={()=>setError("")}/>
         {!current ? (
-          <section className="home-content">
-            <span className="eyebrow">ATELIER DE CRÉATION · HTML/CSS</span>
-            <h1>Vos présentations.</h1>
-            <p>Créez une présentation, puis composez librement chaque diapositive.</p>
-            <button className="primary" onClick={() => void createDeck()} disabled={busy}>+ Nouvelle présentation</button>
-          </section>
+          <HomeLibrary token={token} decks={decks} folders={folders} busy={busy}
+            onOpen={id=>void openDeck(id)}
+            onCreateDeck={id=>void createDeck(id)}
+            onCreateFolder={createFolder} onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder} onMoveDeck={moveDeck} onMoveFolder={moveFolder}
+            onRenameDeck={renameDeck} onDeleteDeck={deleteDeck}/>
         ) : (
           <div className="editing-area">
-            <div className="editor-topline">
-              <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositive{current.slides.length > 1 ? "s" : ""}</span></div>
-              <div className="save-row">
-                <span className={dirty||externalChanges ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
-                <label className="auto-save-option"><input type="checkbox" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)}/> Auto</label>
-                <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
-                <button className="subtle-btn" onClick={()=>setQualityOpen(true)} disabled={!current.slides.length}>✓ Vérifier</button>
-                <button className="subtle-btn present-action" onClick={()=>setPresenting(true)} disabled={!current.slides.length}>▶ Présenter</button>
-                <label className="export-mode-label" htmlFor="export-mode">Export
-                  <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
-                    onChange={e => setExportMode(e.target.value as PowerPointMode)}>
-                    <option value="faithful">Visuel fidèle</option>
-                    <option value="editable">Objets modifiables (recommandé)</option>
-                  </select>
-                </label>
-                <label className="reveal-export-toggle" title="PPTX et Google Slides utilisent le même fichier. Animations natives pour les objets compatibles ; étapes de repli pour les compositions complexes. Google peut modifier les effets à la conversion.">
-                  <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
-                    onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
-                  Étapes au clic
-                </label>
-                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || !current.slides.length}>
-                  {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
-                </button>
-                <button className="subtle-btn google-export-action" onClick={startGoogleExport}
-                  disabled={exportBusy || busy || !current.slides.length} title="Créer une présentation dans votre Google Drive">
-                  {exportBusy && exportTarget === "google" ? (exportProgress || "Conversion…") : "Exporter vers Google Slides"}
-                </button>
-              </div>
-            </div>
             {externalChanges && <div className="external-banner" role="alert"><strong>Modifications détectées depuis le MCP ou un autre onglet.</strong>
               <span>Conservez votre brouillon local avant de charger la version distante.</span>
               {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
-            {exportPreview&&<details className="export-preflight">
-              <summary>Contrôle avant export : {exportPreview.report.fullyNative} diapo(s) entièrement éditables,
-                {" "+exportPreview.report.mixedEditable} mixtes et {exportPreview.report.rasterOnly} aplatie(s)
-              </summary>
-              <p>Le mode « Visuel fidèle » produit des images. En mode « Objets modifiables »,
-                seuls les effets incompatibles sont isolés, sauf pour les compositions imbriquées.
-                Google Slides peut modifier certains effets PowerPoint au moment de l'importation.</p>
-              <div className="export-preflight-scroll"><table>
-                <thead><tr><th>Diapositive</th><th>Modifiabilité</th><th>Animations au clic</th></tr></thead>
-                <tbody>{exportPreview.report.slides.map((risk,i)=><tr key={i}>
-                  <td>{i+1}</td>
-                  <td>{exportMode==="faithful"?"Image entière":
-                    risk.mode==="raster"?"Composition aplatie":
-                    exportPreview.objects[i]?.native+" / "+exportPreview.objects[i]?.total+" objets natifs"}
-                  </td>
-                  <td>{exportPreview.objects[i]?.animations===0?"Aucune":
-                    exportMode==="faithful"?"Étapes statiques":
-                    exportPreview.objects[i]?.office?"Effets PowerPoint natifs possibles":"Étapes de secours"}
-                  </td>
-                </tr>)}</tbody>
-              </table></div>
-              {exportPreview.report.warnings.length>0&&
-                <p className="export-preflight-disclaimer">{exportPreview.report.warnings.join(" · ")}</p>}
-            </details>}
             {exportReport && <div className="export-report" role="status">
               <strong>PowerPoint prêt : {exportReport.fileName}</strong>
               <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
-              <span>{exportReport.slideCount} diapositive{exportReport.slideCount > 1 ? "s" : ""} · {exportReport.mode === "faithful" ? "Rendu en images" : "Éléments éditables lorsque compatibles"}.</span>
+              <span>{exportReport.slideCount} diapositive{exportReport.slideCount>1?"s":""} ; les objets compatibles restent modifiables.</span>
               {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
                 <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
               </details>}
               <span>Vous pouvez aussi utiliser « Exporter vers Google Slides » pour créer une présentation directement dans votre Drive.</span>
             </div>}
-            {googleReport && <div className="export-report google-success-report" role="status">
-              <strong>Présentation créée dans Google Slides : {googleReport.name}</strong>
-              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir la présentation Google Slides</a>
-              <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"}
-                {revealExportMode === "steps" && googleExportSlideCount !== null
-                  ? " · " + googleExportSlideCount + " diapositives exportées. Le PPTX contient des animations natives quand elles sont compatibles ; Google peut modifier ou supprimer certains effets. Les compositions complexes utilisent des étapes successives."
-                  : " · Export statique sans animations Web."}
-              </span>
+            {googleReport&&<div className="export-report google-success-report" role="status">
+              <strong>Google Slides : {googleReport.name}</strong>
+              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">
+                Ouvrir la présentation Google Slides
+              </a>
+              <span>{googleExportSlideCount} diapositives exportées. Certains effets peuvent être simplifiés par Google.</span>
+            </div>}
+            {htmlExportReport&&<div className="export-report" role="status">
+              <strong>Archive HTML/CSS prête : {htmlExportReport.fileName}</strong>
+              <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>
+                Télécharger à nouveau l'archive
+              </a>
             </div>}
             <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
               {showSlideRail&&<aside className="slide-rail">
@@ -810,16 +832,6 @@ export default function App() {
           </div>
         )}
 
-        {qualityOpen&&current&&<QualityStudio
-          detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
-            {...s,document:draft,notes}:s)}}
-          onClose={()=>setQualityOpen(false)}
-          onFocus={index=>{
-            const next=current.slides[index];
-            if(!next)return;
-            setQualityOpen(false);
-            if(next.id!==slideId)void navigateToSlide(next);
-          }}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
