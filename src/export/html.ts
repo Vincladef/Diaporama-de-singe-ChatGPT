@@ -1,8 +1,8 @@
 import JSZip from "jszip";
 import type {PresentationDetail} from "../lib/api";
-import {renderSlideHtml} from "../engine/render";
-import {safeDownloadName} from "./geometry";
-import {buildPlaybackPlan} from "../animation/timeline";
+import {renderSlideHtml} from "../engine/render.ts";
+import {safeDownloadName} from "./geometry.ts";
+import {buildPlaybackPlan} from "../animation/timeline.ts";
 
 /** Portable HTML deck; source HTML/CSS and the editable JSON are preserved. */
 export async function buildHtmlArchive(deck:PresentationDetail){
