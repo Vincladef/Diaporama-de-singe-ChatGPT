@@ -716,8 +716,8 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
     flex:0 0 auto;
     width:100%;
     min-width:0;
-    height:210px;
-    max-height:34dvh;
+    height:220px;
+    max-height:36dvh;
     padding:6px 10px;
     border-right:0;
     border-bottom:1px solid #e5ebe5;
