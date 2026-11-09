@@ -119,6 +119,11 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
               <label>Adresse de l'image
                 <input type="url" value={selected.src??""} onChange={e=>patchObject({src:e.target.value})}/>
               </label>
+              <label>Description accessible de l'image
+                <input type="text" maxLength={350} value={selected.alt??""}
+                  placeholder="Décrire l'information portée par l'image"
+                  onChange={e=>patchObject({alt:e.target.value})}/>
+              </label>
             </>}
             <div className="property-coordinates">
               {box && coordinate("left","X",box.x)}
