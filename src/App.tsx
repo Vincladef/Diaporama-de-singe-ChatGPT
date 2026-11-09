@@ -49,7 +49,7 @@ export default function App() {
   const [improveOpen,setImproveOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
   const [showSlideRail,setShowSlideRail]=useState(true);
-  const [showInspector,setShowInspector]=useState(true);
+  const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [externalChanges, setExternalChanges] = useState(false);
