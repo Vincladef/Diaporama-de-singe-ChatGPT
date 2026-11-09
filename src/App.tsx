@@ -417,8 +417,12 @@ export default function App() {
       const accessToken = await requestGoogleDriveAccess(clientId);
       setExportProgress("Vérification des diapositives…");
       await verifyExportRevision(deck);
+      // Both destinations receive the same PPTX: native animations on compatible
+      // editable slides, progressive frames only when native conversion is impossible.
+      // Google Drive may still drop some OOXML timing effects during conversion.
+      const pptxReveals = revealExportMode==="steps" && exportMode==="editable" ? "native" : revealExportMode;
       const artifact = await buildPowerPoint(deck, exportMode, ({ completed, total }) =>
-        setExportProgress("Écran " + completed + "/" + total), revealExportMode);
+        setExportProgress("Écran " + completed + "/" + total), pptxReveals);
       setExportProgress("Conversion dans Google Drive…");
       const result = await uploadPowerPointToGoogleSlides(accessToken, artifact.blob, deck.presentation.title);
       setGoogleExportSlideCount(artifact.slideCount);
@@ -562,7 +566,7 @@ export default function App() {
                     <option value="editable">Objets modifiables (recommandé)</option>
                   </select>
                 </label>
-                <label className="reveal-export-toggle" title="PowerPoint modifiable : animations natives au clic pour les objets structurés compatibles. HTML complexe et Google Slides : progression en diapositives successives.">
+                <label className="reveal-export-toggle" title="PPTX et Google Slides utilisent le même fichier. Animations natives pour les objets compatibles ; étapes de repli pour les compositions complexes. Google peut modifier les effets à la conversion.">
                   <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
                     onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
                   Étapes au clic
@@ -595,7 +599,7 @@ export default function App() {
               <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir la présentation Google Slides</a>
               <span>Conversion à partir du PPTX {exportMode === "faithful" ? "visuel fidèle" : "avec objets éditables lorsque compatibles"}
                 {revealExportMode === "steps" && googleExportSlideCount !== null
-                  ? " · " + googleExportSlideCount + " écrans. Les apparitions au clic avancent par diapositives successives ; les fondus et mouvements Web ne sont pas des animations natives Google Slides."
+                  ? " · " + googleExportSlideCount + " diapositives exportées. Le PPTX contient des animations natives quand elles sont compatibles ; Google peut modifier ou supprimer certains effets. Les compositions complexes utilisent des étapes successives."
                   : " · Export statique sans animations Web."}
               </span>
             </div>}
