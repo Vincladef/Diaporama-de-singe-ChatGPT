@@ -15,6 +15,7 @@ import type { ImageCandidate } from "./images/search";
 import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
 import { inspectExport, isNativePptxObject } from "./export/preflight";
+import {makeSmartConnector,refreshSmartConnectors} from "./graphics/connectors";
 import { canUseNativeAnimations } from "./export/nativeAnimations";
 import type { RevealExportMode } from "./export/reveals";
 import {
@@ -231,8 +232,9 @@ export default function App() {
     const time=Date.now(), h=historyRef.current;
     const grouped=/^(text|style-|code-|object)/.test(key)&&key===h.key&&time-h.time<850;
     if(previous&&!grouped){h.undo=[...h.undo.slice(-49),structuredClone(previous)];h.redo=[];}
-    h.key=key;h.time=time;draftRef.current=next;versionRef.current++;
-    setDraft(next);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
+    const prepared=refreshSmartConnectors(next);
+    h.key=key;h.time=time;draftRef.current=prepared;versionRef.current++;
+    setDraft(prepared);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
   function undo(){
     const h=historyRef.current,prior=h.undo.pop(),now=draftRef.current;
@@ -324,6 +326,13 @@ export default function App() {
         ?{...e,groupId:undefined,groupName:undefined}:e)},"layers");
     }
   }
+  function connectSelection(){
+    const doc=draftRef.current;
+    if(!doc||selectedIds.length!==2)return;
+    const connector=makeSmartConnector(doc,selectedIds[0]!,selectedIds[1]!,crypto.randomUUID());
+    editDocument({...doc,elements:[connector,...doc.elements]},"connector");
+    setSelectedIds([connector.id]);
+  }
   function animateSelection(){
     const doc=draftRef.current;
     if(!doc||!selectedIds.length)return;
@@ -340,6 +349,10 @@ export default function App() {
     const doc=draftRef.current;
     if(!doc||!selectedIds.length)return;
     const removed=new Set(selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked));
+    for(const element of doc.elements){
+      if((element.linkFrom&&removed.has(element.linkFrom))||
+        (element.linkTo&&removed.has(element.linkTo)))removed.add(element.id);
+    }
     let changed=true;
     while(changed){
       changed=false;
@@ -748,6 +761,8 @@ export default function App() {
                       <button onClick={()=>setHistoryStudioOpen(true)} title="Afficher l'historique des sauvegardes">Historique</button>
                       <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen} title="Configurer les animations au clic">Animations</button>
                       <button onClick={animateSelection} disabled={!selectedIds.length} title="Ajouter un fondu au clic sur les calques sélectionnés">+ Animer</button>
+                      <button onClick={connectSelection} disabled={selectedIds.length!==2}
+                        title="Créer une flèche liée aux deux objets, qui les suit lors de leur déplacement">Relier →</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
