@@ -142,6 +142,7 @@ async function appendNativeObjects(
   slideW: number, slideH: number,cache:Map<string,Promise<string>>,
 ): Promise<void> {
   for (const element of document.elements) {
+    if(element.hidden)continue;
     const box = geometry(element, document, slideW, slideH);
     const style = element.styles;
     if(!isNativePptxObject(element)){
