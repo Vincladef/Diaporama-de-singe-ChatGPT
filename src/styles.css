@@ -714,14 +714,19 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
   }
   .app-slides-style.is-editing .slide-rail{
     flex:0 0 auto;
-    height:158px;
-    max-height:28dvh;
+    width:100%;
+    min-width:0;
+    height:185px;
+    max-height:31dvh;
     padding:6px 10px;
     border-right:0;
     border-bottom:1px solid #e5ebe5;
   }
   .app-slides-style.is-editing .slide-list{
     display:flex;
+    width:100%;
+    min-width:0;
+    max-width:100%;
     flex-direction:row;
     align-items:flex-start;
     gap:8px;
@@ -736,7 +741,14 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
     margin-bottom:0;
   }
   .app-slides-style.is-editing .rail-heading{margin-bottom:4px;}
-  .app-slides-style.is-editing .rail-tools{display:none;}
+  .app-slides-style.is-editing .rail-tools{
+    display:flex;
+    align-items:center;
+    flex:0 0 auto;
+    gap:8px;
+    padding:4px 1px 0;
+    border-top:0;
+  }
   .app-slides-style.is-editing .editor-main{
     flex:1 1 0;
     min-height:0;
