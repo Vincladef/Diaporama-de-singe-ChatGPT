@@ -41,8 +41,8 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
     if(Math.abs(ratio-expectedRatio)>.002)issues.push("Format différent du premier écran ; adaptation nécessaire.");
     if(mode==="raster")issues.push("Groupes imbriqués : conversion de la page en image de secours.");
     if(isolated && !hasGroups)issues.push(isolated+" objet(s) complexe(s) rendu(s) séparément ; les autres restent modifiables.");
-    if(mode==="mixed")issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
-    if(document.elements.some(x=>x.type==="svg")&&!hasUnsupported)
+    if(document.mode!=="structured"&&hasFree)issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
+    if(document.elements.some(x=>x.type==="svg")&&!hasGroups)
       issues.push("Les tracés SVG sont conservés en image vectorielle indépendante, sans édition des points.");
     if(document.animations.length)issues.push("Apparitions : animations PowerPoint natives pour les objets compatibles ; étapes successives sinon. La conversion Google Slides peut modifier les effets.");
     if(media.some(x=>!x.src))issues.push("Image sans source.");
