@@ -198,6 +198,11 @@ export default async function workspace(request: Request): Promise<Response> {
           "UPDATE public.slides SET document=$2::jsonb, notes=$3, revision=revision+1, updated_at=now() WHERE id=$1::uuid AND revision=$4 RETURNING id::text AS id, revision, updated_at",
           [id, JSON.stringify(doc), notes, revision]);
         if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+        // Keep the home library's "recently edited" sorting in sync with slides.
+        try{
+          await db.query("UPDATE public.presentations SET updated_at=now() "+
+            "WHERE id=(SELECT presentation_id FROM public.slides WHERE id=$1::uuid)",[id]);
+        }catch(e){console.error("Failed to update presentation timestamp",e instanceof Error?e.message:String(e));}
         let historyWarning:string|undefined;
         try{
           await recordSlideHistory([{slideId:id,revision,document:SlideDocumentSchema.parse(before[0].document),
