@@ -130,6 +130,8 @@ export function duplicateElements(doc: SlideDocument, ids: string[], makeId: () 
     id: newIds.get(e.id)!,
     parentId: e.parentId ? newIds.get(e.parentId) ?? e.parentId : undefined,
     groupId:e.groupId?groupIds.get(e.groupId):undefined,
+    linkFrom:e.linkFrom?newIds.get(e.linkFrom)??e.linkFrom:undefined,
+    linkTo:e.linkTo?newIds.get(e.linkTo)??e.linkTo:undefined,
     styles: {
       ...e.styles,
       left: rounded(lengthToPx(e.styles.left,doc.canvas.width) + 30) + "px",
