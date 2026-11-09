@@ -120,6 +120,9 @@ export default function App() {
     if (!await flushPending()) return;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(DECK_KEY);
+    const url=new URL(window.location.href);
+    url.searchParams.delete("deck");url.searchParams.delete("export");
+    window.history.replaceState({},"",url.pathname+url.search+url.hash);
     setToken(""); setDecks([]);setFolders([]); setCurrent(null); setSlideId(null); setDraft(null); draftRef.current=null; setNotes(""); setDirty(false); setSelectedIds([]);
   }
 
