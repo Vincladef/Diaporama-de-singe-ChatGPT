@@ -2,6 +2,7 @@ import pptxgen from "pptxgenjs";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import type { PresentationDetail } from "../lib/api";
 import { captureSlide } from "./capture";
+import { captureObject } from "./captureObject";
 import { captureNativeHtml, type NativeTextRun } from "./nativeHtml";
 import { visibleStructuredElements } from "./nativeSteps";
 import { inspectExport,isNativePptxObject } from "./preflight";
@@ -143,6 +144,11 @@ async function appendNativeObjects(
   for (const element of document.elements) {
     const box = geometry(element, document, slideW, slideH);
     const style = element.styles;
+    if(!isNativePptxObject(element)){
+      const image=await captureObject(document,element);
+      slide.addImage({data:image,...box,objectName:element.id+" · rendu isolé"});
+      continue;
+    }
     if (element.type === "text") {
       const cssFontSize = getNumber(style, "fontSize", document.canvas.width, 64);
       const pt = Math.max(5, Math.min(300, pptxInches(cssFontSize, document.canvas.width, slideW) * 72));
@@ -262,12 +268,14 @@ export async function buildPowerPoint(
       if(document.elements.some(el=>el.styles.textShadow||el.styles.boxShadow)) {
         warnings.push("Diapositive "+number+" : certaines ombres CSS ne sont pas convertibles en objets.");
       }
-      const unsupported = document.elements.some(element => !isNativePptxObject(element));
+      const unsupported = document.elements.some(element =>
+        element.type==="group" || Boolean(element.parentId) ||
+        document.elements.some(child=>child.parentId===element.id));
       if (unsupported) {
         const image = await captureSlide(document,
           frame.revealClickCount === null ? {} : { revealClickCount: frame.revealClickCount });
         slide.addImage({ data: image, x: 0, y: 0, w: slideW, h: slideH });
-        warnings.push("Diapositive " + number + " : objets complexes conservés en image de secours.");
+        warnings.push("Diapositive "+number+" : composition imbriquée non convertible ; image complète de secours.");
       } else {
         const hasFreeform = document.mode !== "structured" && !emptyFreeform(document);
         if (hasFreeform) {
@@ -279,6 +287,9 @@ export async function buildPowerPoint(
           warnings.push("Diapositive " + number +
             " : " + extracted.texts.length + " texte(s) HTML converti(s) en objets modifiables ; photos, diagrammes et effets CSS complexes restent dans le décor.");
         }
+        const fallbacks=document.elements.filter(element=>!isNativePptxObject(element));
+        if(fallbacks.length)warnings.push("Diapositive "+number+" : "+
+          fallbacks.length+" objet(s) à effet complexe converti(s) séparément en images ; les autres restent modifiables.");
         const visible = frame.revealClickCount === null ? document.elements :
           visibleStructuredElements(document, frame.revealClickCount);
         await appendNativeObjects(pptx, slide,
