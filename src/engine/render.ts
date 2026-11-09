@@ -35,6 +35,7 @@ function renderObjects(document: SlideDocument): string {
     return (children.get(parent) ?? []).map(item => {
       if (seen.has(item.id)) return "";
       seen.add(item.id);
+      if(item.hidden)return "";
       const style = cssStyle(item.styles);
       const id = escapeHtml(item.id);
       const inner = walk(item.id, depth + 1);
