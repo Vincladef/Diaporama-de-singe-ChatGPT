@@ -12,6 +12,8 @@ export const SlideElementSchema = z.object({
   locked: z.boolean().optional(),
   groupId: z.string().max(128).optional(),
   groupName: z.string().max(140).optional(),
+  linkFrom: z.string().min(1).max(128).optional(),
+  linkTo: z.string().min(1).max(128).optional(),
   styles: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
 }).strict();
 
