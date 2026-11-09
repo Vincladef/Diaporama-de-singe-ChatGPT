@@ -36,16 +36,17 @@ export async function captureObject(document:SlideDocument,element:SlideElement)
       new Promise<void>(resolve=>window.setTimeout(resolve,3500))]);
     const node=inner.querySelector<HTMLElement>("[data-id]");
     if(!node)throw new Error("Objet introuvable pour la capture.");
-    if(node instanceof HTMLImageElement && !node.complete){
+    const image=node.tagName==="IMG"?node as HTMLImageElement:null;
+    if(image && !image.complete){
       await Promise.race([
         new Promise<void>(resolve=>{
-          node.addEventListener("load",()=>resolve(),{once:true});
-          node.addEventListener("error",()=>resolve(),{once:true});
+          image.addEventListener("load",()=>resolve(),{once:true});
+          image.addEventListener("error",()=>resolve(),{once:true});
         }),
         new Promise<void>(resolve=>window.setTimeout(resolve,5000)),
       ]);
     }
-    if(node instanceof HTMLImageElement && !node.naturalWidth)
+    if(image && !image.naturalWidth)
       throw new Error("Cette photographie n'est pas accessible pour l'export.");
     const rect=node.getBoundingClientRect();
     const w=Math.max(1,Math.ceil(rect.width)),h=Math.max(1,Math.ceil(rect.height));
