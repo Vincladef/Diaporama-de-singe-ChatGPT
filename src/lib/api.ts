@@ -10,12 +10,17 @@ export interface DeckSummary {
   format: "16:9" | "4:3" | "custom";
   updated_at: string;
   slide_count: number;
+  folder_id: string|null;
+}
+export interface FolderSummary{
+ id:string;name:string;parent_id:string|null;created_at:string;presentation_count:number;
 }
 export interface Presentation {
   id: string;
   title: string;
   description: string;
   format: string;
+  folder_id: string|null;
   updated_at: string;
 }
 export interface SlideRecord {
@@ -64,6 +69,12 @@ async function call<T>(token: string, options: { op?: string; id?: string; actio
 }
 export async function listPresentations(token: string): Promise<DeckSummary[]> {
   return (await call<{ presentations: DeckSummary[] }>(token, { op: "list" })).presentations;
+}
+export async function listFolders(token:string):Promise<FolderSummary[]>{
+  return (await call<{folders:FolderSummary[]}>(token,{op:"folders"})).folders;
+}
+export async function readDeckCover(token:string,id:string):Promise<SlideDocument|null>{
+  return (await call<{document:SlideDocument|null}>(token,{op:"cover",id})).document;
 }
 export async function readPresentation(token: string, id: string): Promise<PresentationDetail> {
   return call<PresentationDetail>(token, { op: "presentation", id });
