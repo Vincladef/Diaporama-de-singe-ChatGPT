@@ -8,6 +8,8 @@ import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
 const titleSchema = z.string().trim().min(1).max(180);
+const folderNameSchema=z.string().trim().min(1).max(120);
+const folderIdSchema=z.union([z.uuid(),z.null()]);
 const notesSchema = z.string().max(30000);
 function result(payload: unknown, status = 200): Response {
   return Response.json(payload, { status, headers });
@@ -31,13 +33,27 @@ export default async function workspace(request: Request): Promise<Response> {
       const operation = query.searchParams.get("op") ?? "list";
       if (operation === "list") {
         const presentations = await db.query(
-          "SELECT p.id::text AS id, p.title, p.format, p.updated_at, COUNT(s.id)::int AS slide_count FROM public.presentations p LEFT JOIN public.slides s ON s.presentation_id=p.id GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 200", []);
+          "SELECT p.id::text AS id, p.title, p.format, p.updated_at, p.folder_id::text AS folder_id, COUNT(s.id)::int AS slide_count FROM public.presentations p LEFT JOIN public.slides s ON s.presentation_id=p.id GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 200", []);
         return result({ ok: true, presentations });
+      }
+      if(operation==="folders"){
+        const folders=await db.query(
+          "SELECT f.id::text AS id,f.name,f.parent_id::text AS parent_id,f.created_at,COUNT(p.id)::int AS presentation_count "+
+          "FROM public.folders f LEFT JOIN public.presentations p ON p.folder_id=f.id "+
+          "GROUP BY f.id ORDER BY lower(f.name),f.created_at",[]);
+        return result({ok:true,folders});
+      }
+      if(operation==="cover"){
+        const id=idSchema.parse(query.searchParams.get("id"));
+        const slides=await db.query(
+          "SELECT s.document FROM public.slides s WHERE s.presentation_id=$1::uuid ORDER BY s.position LIMIT 1",[id]);
+        return slides[0]?result({ok:true,document:slides[0].document}):
+          result({ok:true,document:null});
       }
       if (operation === "presentation") {
         const id = idSchema.parse(query.searchParams.get("id"));
         const [p, slides] = await Promise.all([
-          db.query("SELECT id::text AS id, title, description, format, updated_at FROM public.presentations WHERE id = $1::uuid", [id]),
+          db.query("SELECT id::text AS id, title, description, format, folder_id::text AS folder_id, updated_at FROM public.presentations WHERE id = $1::uuid", [id]),
           db.query("SELECT id::text AS id, presentation_id::text AS presentation_id, position, document, notes, revision, updated_at FROM public.slides WHERE presentation_id = $1::uuid ORDER BY position LIMIT 500", [id]),
         ]);
         if (!p[0]) return result({ ok: false, error: "not_found" }, 404);
@@ -85,12 +101,64 @@ export default async function workspace(request: Request): Promise<Response> {
           .min(1).max(40).parse(data.slides);
         return result({ok:true,...await addSlides(id,slides)},201);
       }
+      case "createFolder": {
+        const name=folderNameSchema.parse(data.name);
+        const parentId=folderIdSchema.parse(data.parentId??null);
+        if(parentId){
+          const exists=await db.query("SELECT id FROM public.folders WHERE id=$1::uuid",[parentId]);
+          if(!exists[0])return result({ok:false,error:"folder_not_found"},404);
+        }
+        const rows=await db.query(
+          "INSERT INTO public.folders(name,parent_id) VALUES($1,$2::uuid) "+
+          "RETURNING id::text AS id,name,parent_id::text AS parent_id,created_at",[name,parentId]);
+        return result({ok:true,folder:rows[0]},201);
+      }
+      case "renameFolder": {
+        const id=idSchema.parse(data.id),name=folderNameSchema.parse(data.name);
+        const rows=await db.query(
+          "UPDATE public.folders SET name=$2 WHERE id=$1::uuid "+
+          "RETURNING id::text AS id,name,parent_id::text AS parent_id,created_at",[id,name]);
+        return rows[0]?result({ok:true,folder:rows[0]}):result({ok:false,error:"folder_not_found"},404);
+      }
+      case "deleteFolder": {
+        const id=idSchema.parse(data.id);
+        // Foreign keys move presentations and child folders to the root on deletion.
+        const rows=await db.query(
+          "DELETE FROM public.folders WHERE id=$1::uuid RETURNING id::text AS id",[id]);
+        return rows[0]?result({ok:true,deleted:true}):result({ok:false,error:"folder_not_found"},404);
+      }
+      case "movePresentation": {
+        const id=idSchema.parse(data.id),folderId=folderIdSchema.parse(data.folderId??null);
+        const rows=await db.query(
+          "UPDATE public.presentations SET folder_id=$2::uuid,updated_at=now() "+
+          "WHERE id=$1::uuid AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM public.folders WHERE id=$2::uuid)) "+
+          "RETURNING id::text AS id,folder_id::text AS folder_id",[id,folderId]);
+        return rows[0]?result({ok:true,presentation:rows[0]}):result({ok:false,error:"presentation_or_folder_not_found"},404);
+      }
+      case "moveFolder": {
+        const id=idSchema.parse(data.id),parentId=folderIdSchema.parse(data.parentId??null);
+        if(parentId===id)return result({ok:false,error:"folder_cycle"},400);
+        const rows=await db.query(
+          "WITH RECURSIVE descendants AS "+
+          "(SELECT id FROM public.folders WHERE id=$1::uuid UNION ALL "+
+          "SELECT f.id FROM public.folders f JOIN descendants d ON f.parent_id=d.id) "+
+          "UPDATE public.folders f SET parent_id=$2::uuid WHERE f.id=$1::uuid "+
+          "AND ($2::uuid IS NULL OR (EXISTS (SELECT 1 FROM public.folders WHERE id=$2::uuid) "+
+          "AND NOT EXISTS(SELECT 1 FROM descendants WHERE id=$2::uuid))) "+
+          "RETURNING f.id::text AS id",[id,parentId]);
+        return rows[0]?result({ok:true,moved:true}):result({ok:false,error:"folder_cycle_or_not_found"},400);
+      }
       case "createPresentation": {
         const title = titleSchema.parse(data.title);
+        const folderId=folderIdSchema.parse(data.folderId??null);
+        if(folderId){
+          const folders=await db.query("SELECT id FROM public.folders WHERE id=$1::uuid",[folderId]);
+          if(!folders[0])return result({ok:false,error:"folder_not_found"},404);
+        }
         const empty = JSON.stringify(createEmptySlideDocument());
         const rows = await db.query(
-          "WITH p AS (INSERT INTO public.presentations (title) VALUES ($1) RETURNING id, title, format, updated_at), s AS (INSERT INTO public.slides(presentation_id,position,document) SELECT id, 0, $2::jsonb FROM p RETURNING id) SELECT p.id::text AS id, p.title, p.format, p.updated_at FROM p, s",
-          [title, empty]);
+          "WITH p AS (INSERT INTO public.presentations (title,folder_id) VALUES ($1,$3::uuid) RETURNING id, title, format, folder_id, updated_at), s AS (INSERT INTO public.slides(presentation_id,position,document) SELECT id, 0, $2::jsonb FROM p RETURNING id) SELECT p.id::text AS id, p.title, p.format, p.folder_id::text AS folder_id, p.updated_at FROM p, s",
+          [title, empty,folderId]);
         return result({ ok: true, presentation: rows[0] }, 201);
       }
       case "renamePresentation": {
