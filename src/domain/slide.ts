@@ -6,6 +6,11 @@ export const SlideElementSchema = z.object({
   text: z.string().optional(),
   src: z.url().optional(),
   parentId: z.string().optional(),
+  name: z.string().max(140).optional(),
+  hidden: z.boolean().optional(),
+  locked: z.boolean().optional(),
+  groupId: z.string().max(128).optional(),
+  groupName: z.string().max(140).optional(),
   styles: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
 }).strict();
 
