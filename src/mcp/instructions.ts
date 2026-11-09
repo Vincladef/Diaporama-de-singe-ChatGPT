@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { database } from "./security";
+import { database } from "./security.ts";
 
 const uuid = z.uuid();
 const textSchema = z.string().max(12000);
