@@ -656,78 +656,72 @@ export default function App() {
   );
 
   return (
-    <div className={"app"+(!showDeckSidebar?" deck-sidebar-collapsed":"")}>
-      <aside className="sidebar">
-        <div className="identity"><span className="identity-mark">◆</span><strong>Diaporama<br />de singe</strong></div>
-        <div className="edition">ÉDITION CHATGPT</div>
-        <div className="list-heading"><span>PRÉSENTATIONS</span><button onClick={() => void createDeck()} disabled={busy} title="Nouvelle présentation">+</button></div>
-        <div className="deck-list">
-          {decks.map(deck =>
-            <button key={deck.id} className={"deck-item " + (current?.presentation.id === deck.id ? "active" : "")}
-              onClick={() => void openDeck(deck.id)} disabled={busy}>
-              <span className="deck-name">{deck.title}</span>
-              <small>{deck.slide_count} diapo{deck.slide_count !== 1 ? "s" : ""}</small>
-            </button>
-          )}
-          {decks.length === 0 && <p className="sidebar-hint">Aucune présentation</p>}
-        </div>
-        <div className="sidebar-bottom">
-          <span className="connected-dot" /> Stockage privé
-          <button className="text-btn logout" onClick={() => void logout()}>Quitter</button>
-        </div>
-      </aside>
-
+    <div className="app app-slides-style">
       <main className="workspace">
-        <header className="topbar">
-          <button className="subtle-btn panel-toggle" aria-label={showDeckSidebar?"Masquer la liste des présentations":"Afficher les présentations"}
-            aria-pressed={showDeckSidebar} onClick={()=>setShowDeckSidebar(v=>!v)}>☰</button>
-          <div className="breadcrumb">{current ? current.presentation.title : "Mes présentations"}</div>
-          <button className="subtle-btn import-top-button" onClick={()=>setImportOpen(true)} disabled={busy}>⇧ Importer</button>
-          {current && <div className="header-actions">
-            <button className="subtle-btn" onClick={()=>setImproveOpen(true)} disabled={busy}>✦ Améliorer</button>
-            <button className="subtle-btn" onClick={() => void renameDeck()} disabled={busy}>Renommer</button>
-            <button className="subtle-btn danger-text" onClick={() => void deleteDeck()} disabled={busy}>Supprimer</button>
-          </div>}
+        <header className="topbar slides-header">
+          <button className="app-brand" title="Retour à l'accueil"
+            aria-label="Diaporama de singe : accueil" onClick={()=>void goHome()}>
+            <span className="identity-mark">◆</span>
+            <span>Diaporama de singe</span>
+          </button>
+          <div className="slides-header-current">
+            {current ? <>
+              {editingDeckTitle?
+                <input autoFocus className="inline-deck-title" aria-label="Titre de la présentation"
+                  value={newDeckTitle} maxLength={180}
+                  onChange={e=>setNewDeckTitle(e.target.value)}
+                  onBlur={()=>{if(newDeckTitle.trim()&&newDeckTitle.trim()!==current.presentation.title)
+                    void renameDeck(current.presentation.id,newDeckTitle);setEditingDeckTitle(false);}}
+                  onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();
+                    if(e.key==="Escape"){setNewDeckTitle(current.presentation.title);setEditingDeckTitle(false);}}}/>:
+                <button className="presentation-title" title="Cliquer pour renommer"
+                  onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>
+                  {current.presentation.title} <span>✎</span>
+                </button>}
+              <small className={dirty||externalChanges?"dirty-indicator":"saved-indicator"}
+                aria-live="polite">{externalChanges?"Conflit de version":dirty?"Enregistrement automatique…":"✓ Enregistré"}</small>
+            </> : <span className="library-header-label">Mes présentations</span>}
+          </div>
+          <div className="slides-header-actions">
+            {!current && <button className="subtle-btn" onClick={()=>setImportOpen(true)}
+              disabled={busy}>⇧ Importer</button>}
+            {current&&<>
+              <button className="subtle-btn present-action" onClick={()=>setPresenting(true)}
+                disabled={!current.slides.length}>▶ Présenter</button>
+              <button className="slides-export-primary" onClick={()=>void downloadPowerPoint()}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="pptx"?(exportProgress||"Export en cours…"):"Exporter PowerPoint"}
+              </button>
+              <button className="slides-export-primary slides-export-google" onClick={startGoogleExport}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="google"?(exportProgress||"Conversion…"):"Exporter Google Slides"}
+              </button>
+              <button className="slides-export-html" onClick={()=>void downloadHtml()}
+                disabled={exportBusy||busy||!current.slides.length}>
+                {exportTarget==="html"?(exportProgress||"Préparation…"):"Exporter HTML/CSS"}
+              </button>
+              <details className="slides-extra-actions">
+                <summary title="Autres actions">⋯</summary>
+                <div>
+                  <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
+                  <button onClick={()=>{setImportOpen(true);}}>Importer</button>
+                  <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
+                </div>
+              </details>
+            </>}
+            <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
+          </div>
         </header>
-        <ErrorMessage text={error} clear={() => setError("")} />
+        <ErrorMessage text={error} clear={()=>setError("")}/>
         {!current ? (
-          <section className="home-content">
-            <span className="eyebrow">ATELIER DE CRÉATION · HTML/CSS</span>
-            <h1>Vos présentations.</h1>
-            <p>Créez une présentation, puis composez librement chaque diapositive.</p>
-            <button className="primary" onClick={() => void createDeck()} disabled={busy}>+ Nouvelle présentation</button>
-          </section>
+          <HomeLibrary token={token} decks={decks} folders={folders} busy={busy}
+            onOpen={id=>void openDeck(id)}
+            onCreateDeck={id=>void createDeck(id)}
+            onCreateFolder={createFolder} onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder} onMoveDeck={moveDeck} onMoveFolder={moveFolder}
+            onRenameDeck={renameDeck} onDeleteDeck={deleteDeck}/>
         ) : (
           <div className="editing-area">
-            <div className="editor-topline">
-              <div><strong>{current.presentation.title}</strong><span> {current.slides.length} diapositive{current.slides.length > 1 ? "s" : ""}</span></div>
-              <div className="save-row">
-                <span className={dirty||externalChanges ? "dirty-indicator" : "saved-indicator"}>{statusText}</span>
-                <label className="auto-save-option"><input type="checkbox" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)}/> Auto</label>
-                <button className="primary small-primary" onClick={() => void save()} disabled={!dirty || busy || !active || exportBusy}>Enregistrer</button>
-                <button className="subtle-btn" onClick={()=>setQualityOpen(true)} disabled={!current.slides.length}>✓ Vérifier</button>
-                <button className="subtle-btn present-action" onClick={()=>setPresenting(true)} disabled={!current.slides.length}>▶ Présenter</button>
-                <label className="export-mode-label" htmlFor="export-mode">Export
-                  <select id="export-mode" value={exportMode} disabled={exportBusy || busy}
-                    onChange={e => setExportMode(e.target.value as PowerPointMode)}>
-                    <option value="faithful">Visuel fidèle</option>
-                    <option value="editable">Objets modifiables (recommandé)</option>
-                  </select>
-                </label>
-                <label className="reveal-export-toggle" title="PPTX et Google Slides utilisent le même fichier. Animations natives pour les objets compatibles ; étapes de repli pour les compositions complexes. Google peut modifier les effets à la conversion.">
-                  <input type="checkbox" checked={revealExportMode === "steps"} disabled={exportBusy || busy}
-                    onChange={e => setRevealExportMode(e.target.checked ? "steps" : "static")} />
-                  Étapes au clic
-                </label>
-                <button className="subtle-btn export-action" onClick={() => void downloadPowerPoint()} disabled={exportBusy || busy || !current.slides.length}>
-                  {exportBusy && exportTarget === "pptx" ? (exportProgress || "Export en cours…") : "Télécharger PPTX"}
-                </button>
-                <button className="subtle-btn google-export-action" onClick={startGoogleExport}
-                  disabled={exportBusy || busy || !current.slides.length} title="Créer une présentation dans votre Google Drive">
-                  {exportBusy && exportTarget === "google" ? (exportProgress || "Conversion…") : "Exporter vers Google Slides"}
-                </button>
-              </div>
-            </div>
             {externalChanges && <div className="external-banner" role="alert"><strong>Modifications détectées depuis le MCP ou un autre onglet.</strong>
               <span>Conservez votre brouillon local avant de charger la version distante.</span>
               {dirty&&<button className="subtle-btn" onClick={backupDraft}>Exporter le brouillon JSON</button>}
