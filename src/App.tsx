@@ -629,7 +629,7 @@ export default function App() {
       const writing=!!target?.closest("input, textarea, select, [contenteditable='true']");
       const mod=e.ctrlKey||e.metaKey;
       if(mod&&e.key.toLowerCase()==="s"){e.preventDefault();void save();return;}
-      if(writing)return;
+      if(writing||target?.closest(".slide-list"))return;
       if(mod&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return;}
       if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return;}
       if(mod&&e.key.toLowerCase()==="d"){e.preventDefault();copySelection();return;}
