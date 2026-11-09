@@ -12,7 +12,7 @@ import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { QualityStudio } from "./quality/QualityStudio";
 import type { ImageCandidate } from "./images/search";
-import { alignElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
+import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport, type PowerPointMode } from "./export/pptx";
 import { inspectExport, isNativePptxObject } from "./export/preflight";
 import { canUseNativeAnimations } from "./export/nativeAnimations";
@@ -376,6 +376,10 @@ export default function App() {
   function alignSelection(kind:"left"|"right"|"center"|"top"|"middle"|"bottom") {
     const doc=draftRef.current;
     if(doc)editDocument(alignElements(doc,selectedIds.filter(id=>!doc.elements.find(e=>e.id===id)?.locked),kind),"align");
+  }
+  function distributeSelection(axis:"horizontal"|"vertical"){
+    const doc=draftRef.current;
+    if(doc)editDocument(distributeElements(doc,selectedIds,axis),"distribute");
   }
   function nudgeSelection(dx:number,dy:number){
     const doc=draftRef.current;if(!doc||!selectedIds.length)return;
@@ -754,9 +758,9 @@ export default function App() {
                     </div>
                     <div className="visual-toolbar-group">
                       <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
-                        onChange={e=>{if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
+                        onChange={e=>{if(e.target.value==="distribute-h")distributeSelection("horizontal");else if(e.target.value==="distribute-v")distributeSelection("vertical");else if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
                         <option value="">Aligner</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
-                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option>
+                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option><option value="distribute-h">Répartir horizontalement (3+)</option><option value="distribute-v">Répartir verticalement (3+)</option>
                       </select>
                     </div>
                     <div className="visual-toolbar-group visual-toolbar-zoom">
