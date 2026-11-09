@@ -7,6 +7,7 @@ import { visibleStructuredElements } from "./nativeSteps";
 import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 import { buildExportFrames, type RevealExportMode } from "./reveals";
+import { addNativeAnimationsToPptx, canUseNativeAnimations } from "./nativeAnimations";
 
 export type PowerPointMode = "faithful" | "editable";
 export interface ExportProgress { completed: number; total: number; }
@@ -222,10 +223,16 @@ export async function buildPowerPoint(
   pptx.title = deck.presentation.title;
   pptx.company = "Diaporama de singe";
   const warnings: string[] = [];
-  const frames = buildExportFrames(deck.slides.map(s => s.document), revealMode);
+  const effectiveRevealMode = mode === "faithful" && revealMode === "native" ? "steps" : revealMode;
+  const frames = buildExportFrames(deck.slides.map(s => s.document), effectiveRevealMode);
+  const nativeDocuments: {index:number;document:SlideDocument}[] = [];
   const preflight=inspectExport(deck.slides);
   const imageCache=new Map<string,Promise<string>>();
-  if(preflight.animatedSlides)warnings.push(revealMode === "steps"
+  if(preflight.animatedSlides && effectiveRevealMode === "native") {
+    const nativeCount=deck.slides.filter(s=>canUseNativeAnimations(s.document)).length;
+    warnings.push(nativeCount+" diapositive(s) animées avec des objets PowerPoint natifs ; "+(preflight.animatedSlides-nativeCount)+" diapositive(s) utilisent les étapes de secours pour préserver les animations HTML.");
+  }
+  if(preflight.animatedSlides && effectiveRevealMode !== "native")warnings.push(effectiveRevealMode === "steps"
     ? preflight.animatedSlides + " diapositive(s) animées développées en " + frames.length +
       " écrans successifs au total. En mode modifiable, les textes et objets convertibles restent éditables ; les fondus et déplacements Web ne sont pas des animations natives Google Slides/PowerPoint."
     : preflight.animatedSlides + " diapositive(s) comportent des animations Web ; l'export statique ne conserve pas leurs apparitions au clic.");
@@ -278,6 +285,8 @@ export async function buildPowerPoint(
           { ...document, elements: visible }, slideW, slideH, imageCache);
       }
     }
+    if(effectiveRevealMode === "native" && frame.revealClickCount===null && canUseNativeAnimations(document))
+      nativeDocuments.push({index,document});
     onProgress?.({ completed: index + 1, total: frames.length });
   }
 
@@ -285,9 +294,10 @@ export async function buildPowerPoint(
   // Keep control of the Blob instead of relying on a library's 100ms revoke timer.
   // This also lets us validate the ZIP signature before reporting success.
   const generated = await pptx.write({ outputType: "blob", compression: true });
-  const blob = generated instanceof Blob
+  let blob = generated instanceof Blob
     ? generated
     : new Blob([generated as ArrayBuffer], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  if(nativeDocuments.length) blob = await addNativeAnimationsToPptx(blob,nativeDocuments);
   const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
   if (blob.size < 800 || signature[0] !== 0x50 || signature[1] !== 0x4B) {
     throw new Error("Le fichier PowerPoint généré ne semble pas être une archive PPTX valide.");
