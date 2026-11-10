@@ -46,7 +46,19 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    await waitForPort(port);
    browser=await chromium.launch({headless:true,timeout:20_000});
    const page=await browser.newPage({viewport:{width:1920,height:1080}});
+   page.on("pageerror",error=>console.log("CHROME_PAGEERROR",error.message.slice(0,420)));
+   page.on("console",message=>{
+     if(message.type()==="error")console.log("CHROME_CONSOLE_ERROR",message.text().slice(0,420));
+   });
    await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"domcontentloaded"});
+   for(const path of ["/src/animation/runtime.ts","/src/engine/render.ts","/src/export/pptx.ts"]){
+     const response=await page.request.get("http://127.0.0.1:"+port+path);
+     if(response.status()!==200){
+       const body=await response.text();
+       throw Error("vite_module_http_"+response.status()+": "+path+" "+body.slice(0,650));
+     }
+     console.log("VITE_MODULE_OK",path,(await response.body()).byteLength);
+   }
    const animationChecks=await page.evaluate(async(docs)=>{
      const runtimeUrl="/src/animation/runtime.ts";
      const {SlideAnimationPlayer}=await import(runtimeUrl);
