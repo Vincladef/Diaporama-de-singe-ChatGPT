@@ -54,12 +54,30 @@ async function call<T>(token: string, options: { op?: string; id?: string; actio
   const url = new URL(endpoint, window.location.origin);
   if (options.op) url.searchParams.set("op", options.op);
   if (options.id) url.searchParams.set("id", options.id);
-  const response = await fetch(url, {
-    method: options.action ? "POST" : "GET",
-    cache: "no-store",
-    headers: { Authorization: "Bearer " + token, ...(options.action ? { "Content-Type": "application/json" } : {}) },
-    body: options.action ? JSON.stringify(options.action) : undefined,
-  });
+  let response: Response | undefined;
+  // Network faults can be transient. Retry reads only, never an unconfirmed write.
+  const retries = options.action ? 0 : 2;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      response = await fetch(url, {
+        method: options.action ? "POST" : "GET",
+        cache: "no-store",
+        headers: { Authorization: "Bearer " + token, ...(options.action ? { "Content-Type": "application/json" } : {}) },
+        body: options.action ? JSON.stringify(options.action) : undefined,
+        signal: AbortSignal.timeout(12000),
+      });
+      break;
+    } catch (error) {
+      if (attempt === retries) {
+        const operation = options.op ?? (options.action ? "enregistrement" : "lecture");
+        throw new Error("Connexion à l'espace de travail indisponible (" + operation +
+          "). Vérifiez votre réseau et réessayez. Détail : " +
+          (error instanceof Error ? error.message : String(error)));
+      }
+      await new Promise<void>(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  if (!response) throw new Error("L'espace de travail n'a pas répondu.");
   const payload: unknown = await response.json();
   if (!response.ok) {
     const error = typeof payload === "object" && payload && "error" in payload ? String(payload.error) : "unknown";
