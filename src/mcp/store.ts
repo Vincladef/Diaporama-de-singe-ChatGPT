@@ -185,28 +185,29 @@ export async function listAssets(deckId: string, limit=60) {
   uuid.parse(deckId);
   return database().query("SELECT id::text AS id,url,label,source,rights FROM public.assets WHERE presentation_id=$1::uuid ORDER BY created_at DESC LIMIT $2",[deckId,Math.min(limit,150)]);
 }
-export async function createVariants(slideId: string, variants: {name:string,slide:InitialSlide}[], expectedRevision?:number) {
+export async function createVariants(slideId: string, variants: {name:string,slide:InitialSlide,designContext?:Record<string,unknown>}[], expectedRevision?:number) {
   uuid.parse(slideId);
   if(!variants.length||variants.length>8)throw new Error("invalid_variant_count");
-  const prepared=variants.map(v=>({name:short.parse(v.name),...initialSlide(v.slide)}));
+  const prepared=variants.map(v=>({name:short.parse(v.name),...initialSlide(v.slide),
+    design_context:v.designContext??{}}));
   const rows=await database().query(
-    "WITH source AS(SELECT id FROM public.slides WHERE id=$1::uuid AND ($3::integer IS NULL OR revision=$3)), created AS(INSERT INTO public.slide_variants(slide_id,name,document,notes) SELECT source.id,r.name,r.document,r.notes FROM source,jsonb_to_recordset($2::jsonb) AS r(name text,document jsonb,notes text) RETURNING id,name) SELECT id::text AS id,name FROM created",
+    "WITH source AS(SELECT id FROM public.slides WHERE id=$1::uuid AND ($3::integer IS NULL OR revision=$3)), created AS(INSERT INTO public.slide_variants(slide_id,name,document,notes,design_context) SELECT source.id,r.name,r.document,r.notes,r.design_context FROM source,jsonb_to_recordset($2::jsonb) AS r(name text,document jsonb,notes text,design_context jsonb) RETURNING id,name) SELECT id::text AS id,name FROM created",
     [slideId,JSON.stringify(prepared),expectedRevision??null]);
   if(rows.length!==prepared.length)throw Error(expectedRevision===undefined?"slide_not_found":"revision_conflict");
   return { created:rows.length,variants:rows };
 }
 export async function listVariants(slideId: string, full=false) {
   uuid.parse(slideId);
-  const cols=full?"id::text AS id,name,document,notes,created_at":"id::text AS id,name,created_at";
+  const cols=full?"id::text AS id,name,document,notes,design_context,created_at":"id::text AS id,name,created_at";
   return database().query("SELECT "+cols+" FROM public.slide_variants WHERE slide_id=$1::uuid AND name NOT LIKE 'Historique r%' ORDER BY created_at DESC LIMIT 50",[slideId]);
 }
 
 export async function getVariant(slideId:string,variantId:string){
   uuid.parse(slideId);uuid.parse(variantId);
   const rows=await database().query(
-    "SELECT id::text AS id,slide_id::text AS slide_id,name,document,notes,created_at FROM public.slide_variants WHERE slide_id=$1::uuid AND id=$2::uuid",
+    "SELECT id::text AS id,slide_id::text AS slide_id,name,document,notes,design_context,created_at FROM public.slide_variants WHERE slide_id=$1::uuid AND id=$2::uuid",
     [slideId,variantId]);
-  const row=rows[0] as unknown as {id:string;slide_id:string;name:string;document:SlideDocument;notes:string;created_at:string}|undefined;
+  const row=rows[0] as unknown as {id:string;slide_id:string;name:string;document:SlideDocument;notes:string;design_context:Record<string,unknown>;created_at:string}|undefined;
   if(!row)throw new Error("variant_not_found");
   const parsed={...row,document:SlideDocumentSchema.parse(row.document)};
   return {...parsed,fingerprint:fingerprint(parsed)};
@@ -253,6 +254,15 @@ export async function activateVariant(slideId: string, variantId: string, expect
     console.error("Restore backup unavailable:",error instanceof Error?error.message:String(error));
     checkpointSaved=false;
   }
+  let preferenceRecorded=true;
+  try{
+    const {recordVariantSelection}=await import("./visualPreferences.ts");
+    await recordVariantSelection(slideId,variantId);
+  }catch(error){
+    console.error("Selection memory unavailable:",error instanceof Error?error.message:String(error));
+    preferenceRecorded=false;
+  }
   return {slideId,revision:updated[0].revision,previousVersionSaved:checkpointSaved,
+    preferenceRecorded,
     ...(!checkpointSaved?{warning:"La version a été restaurée mais son état précédent n'a pas pu être archivé."}:{})};
 }

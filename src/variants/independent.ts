@@ -6,6 +6,7 @@ export type IndependentVariantInput={
   name:string;
   designIntent:string;
   referenceObservation?:string;
+  referencesUsed?:Array<{referenceId:string;slideNumber:number}>;
   slide:InitialSlide;
 };
 export type IndependentFinding={
