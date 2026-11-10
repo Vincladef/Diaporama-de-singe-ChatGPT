@@ -37,7 +37,7 @@ export async function composeElkDiagram(raw:Diagram):Promise<SlideDocument>{
    id:n.id,width:n.detail?345:315,height:n.detail?164:145,
  }));
  const elk=new ELK();
- const result=await elk.layout({
+ const result=(await elk.layout({
    id:"science",
    layoutOptions:{
      "elk.algorithm":"layered",
@@ -51,7 +51,7 @@ export async function composeElkDiagram(raw:Diagram):Promise<SlideDocument>{
    },
    children:nodes,
    edges:edges.map((e,i)=>({id:"e"+i,sources:[e.from],targets:[e.to]})),
- });
+ })) as unknown as {width:number;height:number;children?:Node[];edges?:Edge[]};
  if(!Number.isFinite(result.width)||!Number.isFinite(result.height)||
    !result.width||!result.height||!result.children?.length)
    throw Error("elk_invalid_layout");
