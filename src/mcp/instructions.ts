@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { database } from "./security.ts";
+import { listCreationReferences } from "./creationReferences.ts";
 
 const uuid = z.uuid();
 export const creationInstructionsSchema = z.string();
@@ -15,18 +16,23 @@ export function combineCreationInstructions(global: string, presentation: string
 export async function getCreationInstructions(presentationId?: string) {
   if (presentationId) uuid.parse(presentationId);
   const db = database();
-  const [globalRows, presentationRows] = await Promise.all([
+  const [globalRows, presentationRows, references] = await Promise.all([
     db.query("SELECT instructions,updated_at FROM public.slide_creation_instructions WHERE id=1",[]),
     presentationId
       ? db.query("SELECT settings->>'creationInstructions' AS instructions FROM public.presentations WHERE id=$1::uuid",[presentationId])
       : Promise.resolve([]),
+    listCreationReferences(),
   ]);
   if (presentationId && !presentationRows[0]) throw new Error("presentation_not_found");
   const global = String(globalRows[0]?.instructions ?? "");
   const presentation = String(presentationRows[0]?.instructions ?? "");
+  const effective=combineCreationInstructions(global,presentation)+
+    (references.length?"\n\nRÉFÉRENCES DE DIAPORAMAS JOINTES : "+
+      "utiliser les analyses ci-dessous ; pour les images, inspect_creation_reference permet de voir le visuel.\n"+
+      references.map(ref=>"- "+ref.filename+" ["+ref.id+"] : "+ref.analysis.slice(0,1600)).join("\n"):"");
   return {
-    global, presentation,
-    effective: combineCreationInstructions(global, presentation),
+    global, presentation, references,
+    effective,
     precedence: "Les instructions propres à la présentation priment en cas de contradiction.",
     presentationId: presentationId ?? null,
     updatedAt: globalRows[0]?.updated_at ?? null,
