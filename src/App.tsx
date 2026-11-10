@@ -901,7 +901,7 @@ export default function App() {
                   <button aria-pressed={rightPane==="tools"&&!previewVariant} onClick={()=>{if(!variantSwitching){setRightPane("tools");setPreviewVariant(null);}}}>Outils</button>
                 </div>
                 {rightPane==="variants"||previewVariant?
-                  <VariantGallery items={variants.items} original={variants.original} loading={variants.loading} error={variants.error}
+                  <VariantGallery token={token} slideId={slideId} items={variants.items} original={variants.original} loading={variants.loading} error={variants.error}
                     selectedId={previewVariant?.id??draft.variantSelection?.activeId??null}
                     currentDocument={previewVariant?.document??draft} dirty={dirty} disabled={variantSwitching}
                     onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>:
