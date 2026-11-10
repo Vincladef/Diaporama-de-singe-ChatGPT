@@ -23,21 +23,39 @@ function safeNotes(value: string): string { return value.slice(0, 30000); }
 async function fetchImageData(src: string): Promise<string> {
   if (/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src)) return src;
   if (!/^https:\/\//i.test(src)) throw new Error("Seules les images HTTPS ou intégrées en data URL sont prises en charge.");
-  const response = await fetch(src, { mode: "cors", credentials: "omit",
-    signal:AbortSignal.timeout(18000) });
-  if (!response.ok) throw new Error("Impossible de récupérer l'image : HTTP " + response.status);
-  if(Number(response.headers.get("content-length")??0)>18_000_000)
-    throw new Error("Cette image dépasse 18 Mo ; réduisez-la avant l'export.");
-  const type = response.headers.get("content-type")?.split(";")[0] ?? "";
-  if (!/^image\/(?:png|jpe?g|gif|webp)$/i.test(type)) throw new Error("Format d'image non compatible avec PowerPoint : " + type);
-  const blob = await response.blob();
-  if(blob.size>18_000_000)throw new Error("Cette image dépasse 18 Mo ; réduisez-la avant l'export.");
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Image non lisible"));
-    reader.onerror = () => reject(new Error("Image non lisible"));
-    reader.readAsDataURL(blob);
-  });
+  const hostname = new URL(src).hostname;
+  const candidates = [
+    { label: "source", url: src },
+    { label: "relais", url: "/.netlify/functions/export-media?url=" + encodeURIComponent(src) },
+  ];
+  const failures: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate.url, {
+        mode: "cors", credentials: "omit", signal: AbortSignal.timeout(20000),
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      if (Number(response.headers.get("content-length") ?? 0) > 18_000_000)
+        throw new Error("fichier supérieur à 18 Mo");
+      const mime = response.headers.get("content-type")?.split(";")[0]?.toLowerCase() ?? "";
+      if (!/^image\/(?:png|jpe?g|gif|webp)$/.test(mime))
+        throw new Error("type de fichier incompatible : " + (mime || "inconnu"));
+      const blob = await response.blob();
+      if (blob.size > 18_000_000) throw new Error("fichier supérieur à 18 Mo");
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Image non lisible"));
+        reader.onerror = () => reject(new Error("Image non lisible"));
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      failures.push(candidate.label + " : " + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+  throw new Error(
+    "Photo inaccessible pour l'export (" + hostname + "). " +
+    "Essais direct et relais échoués. " + failures.join(" ; ")
+  );
 }
 
 async function imageToDataUrl(src:string,cache:Map<string,Promise<string>>):Promise<string>{
