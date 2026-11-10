@@ -92,7 +92,7 @@ export function VariantSwitcher({items,original,loading,selectedId,onSelect,onCo
         </button>;
       })}
     </div>
-    <button className="variant-compare-button" type="button" disabled={disabled} onClick={onCompare}>▦ Comparer les 3</button>
+    <button className="variant-compare-button" type="button" disabled={disabled} onClick={onCompare}>▦ Comparer les variantes</button>
     {items.length>2&&<button className="variant-more-button" type="button" onClick={onCompare}>+{items.length-2}</button>}
   </div>;
 }
