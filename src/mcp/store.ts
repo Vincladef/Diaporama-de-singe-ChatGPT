@@ -185,13 +185,14 @@ export async function listAssets(deckId: string, limit=60) {
   uuid.parse(deckId);
   return database().query("SELECT id::text AS id,url,label,source,rights FROM public.assets WHERE presentation_id=$1::uuid ORDER BY created_at DESC LIMIT $2",[deckId,Math.min(limit,150)]);
 }
-export async function createVariants(slideId: string, variants: {name:string,slide:InitialSlide}[]) {
+export async function createVariants(slideId: string, variants: {name:string,slide:InitialSlide}[], expectedRevision?:number) {
   uuid.parse(slideId);
   if(!variants.length||variants.length>8)throw new Error("invalid_variant_count");
   const prepared=variants.map(v=>({name:short.parse(v.name),...initialSlide(v.slide)}));
   const rows=await database().query(
-    "WITH source AS(SELECT id FROM public.slides WHERE id=$1::uuid), created AS(INSERT INTO public.slide_variants(slide_id,name,document,notes) SELECT source.id,r.name,r.document,r.notes FROM source,jsonb_to_recordset($2::jsonb) AS r(name text,document jsonb,notes text) RETURNING id,name) SELECT id::text AS id,name FROM created",
-    [slideId,JSON.stringify(prepared)]);
+    "WITH source AS(SELECT id FROM public.slides WHERE id=$1::uuid AND ($3::integer IS NULL OR revision=$3)), created AS(INSERT INTO public.slide_variants(slide_id,name,document,notes) SELECT source.id,r.name,r.document,r.notes FROM source,jsonb_to_recordset($2::jsonb) AS r(name text,document jsonb,notes text) RETURNING id,name) SELECT id::text AS id,name FROM created",
+    [slideId,JSON.stringify(prepared),expectedRevision??null]);
+  if(rows.length!==prepared.length)throw Error(expectedRevision===undefined?"slide_not_found":"revision_conflict");
   return { created:rows.length,variants:rows };
 }
 export async function listVariants(slideId: string, full=false) {
