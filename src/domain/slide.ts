@@ -46,6 +46,11 @@ export const SlideDocumentSchema = z.object({
   elements: z.array(SlideElementSchema).max(1000),
   freeform: z.object({ html: z.string(), css: z.string() }).strict().optional(),
   animations: z.array(AnimationStepSchema).max(1000),
+  /** Stable variant selection; saved with the slide so exports use the selected composition. */
+  variantSelection: z.object({
+    originalId: z.uuid(),
+    activeId: z.uuid(),
+  }).strict().optional(),
 }).strict();
 
 export type SlideDocument = z.infer<typeof SlideDocumentSchema>;
