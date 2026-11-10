@@ -6,6 +6,12 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions.image-inspect]
+  external_node_modules = ["sharp"]
+
+[functions.mcp]
+  external_node_modules = ["sharp"]
+
 [functions.visual-capture]
   external_node_modules = ["@sparticuz/chromium", "playwright-core"]
 

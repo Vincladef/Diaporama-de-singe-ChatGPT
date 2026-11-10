@@ -2,6 +2,7 @@ import { useEffect,useState } from "react";
 import type { ImageCandidate, ImageSearchResult, ImageSource } from "../images/search";
 import type { SlideElement } from "../domain/slide";
 import { directImageUrl } from "../images/direct";
+import type {PhotoInspection} from "../images/inspection";
 
 type Props={
   token:string;
@@ -28,6 +29,10 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
   const [error,setError]=useState("");
   const [manual,setManual]=useState("");
   const [chosen,setChosen]=useState<ImageCandidate|null>(null);
+  const [inspection,setInspection]=useState<PhotoInspection|null>(null);
+  const [inspectBusy,setInspectBusy]=useState(false);
+  const [inspectError,setInspectError]=useState("");
+  const [cropMode,setCropMode]=useState<"center"|"attention"|"entropy">("center");
 
   useEffect(()=>{
     let active=true;
@@ -43,6 +48,28 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
       }).catch(()=>{});
     return()=>{active=false;};
   },[token]);
+  useEffect(()=>{
+    if(!chosen){setInspection(null);setInspectError("");return;}
+    const controller=new AbortController();
+    setInspection(null);setInspectError("");setInspectBusy(true);setCropMode("center");
+    const w=Math.max(200,Math.min(2560,Number.parseInt(String(selectedImage?.styles.width??"1200"))||1200));
+    const h=Math.max(150,Math.min(1600,Number.parseInt(String(selectedImage?.styles.height??"675"))||675));
+    void fetch("/.netlify/functions/image-inspect",{
+      method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
+      body:JSON.stringify({url:chosen.imageUrl,target:{width:w,height:h}}),
+      signal:controller.signal,cache:"no-store",
+    }).then(async response=>{
+      const result=await response.json();
+      if(!response.ok)throw Error(result.error??"Photo inaccessible");
+      setInspection(result.inspection as PhotoInspection);
+    }).catch(e=>{
+      if(!controller.signal.aborted)setInspectError(
+        String(e instanceof Error?e.message:e)==="unsupported_image_host"
+          ?"Ce fournisseur ne permet pas encore une inspection serveur ; vérifie manuellement sa résolution et ses droits."
+          :"Impossible de vérifier ce fichier. L'image pourrait être absente ou protégée.");
+    }).finally(()=>{if(!controller.signal.aborted)setInspectBusy(false);});
+    return()=>controller.abort();
+  },[chosen?.imageUrl,token,selectedImage?.styles.width,selectedImage?.styles.height]);
   useEffect(()=>{
     const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
     window.addEventListener("keydown",close);
@@ -116,7 +143,30 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
             <div><strong>{chosen.title}</strong><p>{chosen.attribution||chosen.provider} ; {chosen.license}</p>
               <a href={chosen.pageUrl} target="_blank" rel="noopener noreferrer">Voir la source et les droits ↗</a>
             </div>
-            <button className="primary" onClick={()=>onPick(chosen)}>{selectedImage?"Remplacer l'image":"Insérer cette image"}</button>
+            <button className="primary" onClick={()=>onPick({...chosen,...(inspection?{
+              focalX:inspection.crops.find(c=>c.id===cropMode)?.focalX??50,
+              focalY:inspection.crops.find(c=>c.id===cropMode)?.focalY??50
+            }:{})})}>{selectedImage?"Remplacer l'image":"Insérer cette image"}</button>
+          </div>}
+          {chosen&&<div className="image-crop-panel">
+            <div className="image-crop-heading">
+              <strong>Vérification et cadrages</strong>
+              {inspectBusy&&<span>Analyse de l'image…</span>}
+              {inspection&&<span>{inspection.width} × {inspection.height} px ·
+                {inspection.resolution==="adequate"?" résolution adaptée":inspection.resolution==="limited"?" définition limitée":" résolution insuffisante"}</span>}
+            </div>
+            {inspection?.warning&&<p role="status" className="image-crop-warning">{inspection.warning}</p>}
+            {inspectError&&<p className="image-crop-warning">{inspectError}</p>}
+            {inspection&&<div className="image-crop-grid">
+              {inspection.crops.map(crop=><button type="button" key={crop.id}
+                aria-pressed={cropMode===crop.id}
+                className={"image-crop-choice"+(cropMode===crop.id?" selected":"")}
+                onClick={()=>setCropMode(crop.id)}>
+                <img alt={crop.label+" · prévisualisation"} src={"data:"+crop.mimeType+";base64,"+crop.previewBase64}/>
+                <span>{crop.label} · point focal {crop.focalX}% / {crop.focalY}%</span>
+              </button>)}
+            </div>}
+            <small>Prévisualisations Sharp réelles. Le cadrage retenu reste modifiable ; source et licence conservées.</small>
           </div>}
           <div className="studio-pagination">
             <button disabled={!result||page===1||loading} onClick={()=>void search(page-1)}>← Précédentes</button>

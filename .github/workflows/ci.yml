@@ -18,6 +18,8 @@ jobs:
       - run: npm run check
       - run: npm run test
       - run: npm run build
+      - name: Verify editable PowerPoint export with real PPTX ZIP
+        run: npm run test:export
       - name: Install Chromium for real screenshot verification
         run: npx playwright install --with-deps chromium
       - name: Validate two real slide screenshots

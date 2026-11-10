@@ -44,6 +44,11 @@ export function inspectExport(slides:{document:SlideDocument;notes?:string}[]):E
     if(document.mode!=="structured"&&hasFree)issues.push("Mode modifiable : textes HTML convertis ; décor CSS complexe conservé en image, objets structurés indépendants.");
     if(document.elements.some(x=>x.type==="svg")&&!hasGroups)
       issues.push("Les tracés SVG sont conservés en image vectorielle indépendante, sans édition des points.");
+    if(document.elements.some(x=>x.id.startsWith("elk-route-")))
+      issues.push("Schéma ELK : étiquettes et nœuds natifs éditables ; chaque liaison SVG reste vectorielle, mais ses points ne sont pas modifiables dans PowerPoint.");
+    if(media.some(x=>typeof x.styles.objectPosition==="string"&&
+       !["50% 50%","center","center center"].includes(x.styles.objectPosition.trim())))
+      issues.push("Point focal personnalisé : le mode PowerPoint modifiable peut recadrer différemment ; utiliser l'export fidèle si le cadrage est prioritaire.");
     if(document.animations.length)issues.push("Apparitions : animations PowerPoint natives pour les objets compatibles ; étapes successives sinon. La conversion Google Slides peut modifier les effets.");
     if(media.some(x=>!x.src))issues.push("Image sans source.");
     if(remote)issues.push("Les images distantes nécessitent un accès CORS pour la capture/export dans ce navigateur.");
