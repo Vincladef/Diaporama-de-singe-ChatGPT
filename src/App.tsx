@@ -809,6 +809,7 @@ export default function App() {
                         <div className="editor-more-menu">
                           <button onClick={()=>{setRightPane("tools");setShowInspector(true);}}>Propriétés des objets</button>
                           <button onClick={()=>setHistoryStudioOpen(true)}>Historique</button>
+                          <button onClick={()=>setShowInspector(v=>!v)}>{showInspector?"Masquer le panneau latéral":"Afficher le panneau latéral"}</button>
                           <button disabled={!selectedIds.length} onClick={animateSelection}>+ Animer la sélection</button>
                           <button disabled={selectedIds.length!==2} onClick={connectSelection}>Relier les objets →</button>
                           <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
@@ -819,7 +820,6 @@ export default function App() {
                           <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
                         </div>
                       </details>
-                      <button onClick={()=>setShowInspector(v=>!v)} title="Afficher ou masquer le panneau latéral">{showInspector?"Masquer panneau":"Afficher panneau"}</button>
                     </div>
                   </div>
                   <VariantSwitcher items={variants.items} loading={variants.loading} selectedId={previewVariant?.id??null}
