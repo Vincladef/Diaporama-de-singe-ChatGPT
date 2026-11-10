@@ -83,7 +83,7 @@ export function rankReferencePages(
       let difference=0,compared=0;
       for(let i=0;i<Math.min(page.layout.geometrySignature.length,input.geometrySignature.length);i++){
         const a=page.layout.geometrySignature[i],b=input.geometrySignature[i];
-        if(Number.isFinite(a)&&Number.isFinite(b)){difference+=Math.abs(a-b);compared++;}
+        if(a!==undefined&&b!==undefined&&Number.isFinite(a)&&Number.isFinite(b)){difference+=Math.abs(a-b);compared++;}
       }
       score+=compared?Math.max(0,35-(difference/compared*100)):0;
     }else score+=page.layout.imageCoverage*8;
