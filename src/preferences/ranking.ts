@@ -26,10 +26,19 @@ export function rankVisualPreferences(
    .sort((a,b)=>preferenceRank(b,kind,presentationId)-preferenceRank(a,kind,presentationId)||
      b.updatedAt.localeCompare(a.updatedAt));
 }
-export function summarizeVisualPreferenceGuide(entries:PreferenceView[],kind?:VisualKind,presentationId?:string){
+export function effectiveVisualSignals(entries:PreferenceView[],kind?:VisualKind,presentationId?:string){
  const ranked=rankVisualPreferences(entries,kind,presentationId);
- const positives=ranked.filter(p=>p.kind==="saved"||p.kind==="selected").slice(0,5);
- const negatives=ranked.filter(p=>p.kind==="disliked").slice(0,4);
+ const negativeVariants=new Set(ranked.filter(p=>p.kind==="disliked").map(p=>p.variantId));
+ return {
+   positives:ranked.filter(p=>(p.kind==="saved"||p.kind==="selected")&&
+     !negativeVariants.has(p.variantId)),
+   negatives:ranked.filter(p=>p.kind==="disliked"),
+ };
+}
+export function summarizeVisualPreferenceGuide(entries:PreferenceView[],kind?:VisualKind,presentationId?:string){
+ const signals=effectiveVisualSignals(entries,kind,presentationId);
+ const positives=signals.positives.slice(0,5);
+ const negatives=signals.negatives.slice(0,4);
  if(!positives.length&&!negatives.length)return "";
  const describe=(p:PreferenceView)=>[
     p.scope==="global"?"toutes présentations":"présentation concernée",
