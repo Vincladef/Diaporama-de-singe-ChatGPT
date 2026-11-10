@@ -7,7 +7,7 @@ import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
-import { VariantDock, type VariantChoice } from "./editor/VariantDock";
+import { VariantSwitcher, VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
@@ -55,6 +55,7 @@ export default function App() {
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
   const [showSlideRail,setShowSlideRail]=useState(true);
   const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
+  const [rightPane,setRightPane]=useState<"variants"|"tools">("variants");
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [externalChanges, setExternalChanges] = useState(false);
@@ -81,6 +82,9 @@ export default function App() {
   const [newDeckTitle,setNewDeckTitle]=useState("");
   const [googleReport, setGoogleReport] = useState<GoogleSlidesResult | null>(null);
   const [googleExportSlideCount, setGoogleExportSlideCount] = useState<number | null>(null);
+  const variants=useSlideVariants(token,slideId,variantRefreshKey);
+  useVariantKeyboard(variants.items,selectVariant);
+  useEffect(()=>{if(selectedIds.length)setRightPane("tools");},[selectedIds]);
 
   useEffect(()=>{
     if(!token)return;
@@ -132,7 +136,7 @@ export default function App() {
   }
 
   function pickSlide(slide?: SlideRecord) {
-    setPreviewVariant(null);
+    setPreviewVariant(null);setRightPane("variants");setZoom(1);
     setSlideId(slide?.id ?? null);
     const next=slide ? structuredClone(slide.document):null;
     draftRef.current=next;
@@ -345,6 +349,15 @@ export default function App() {
         rights:photo.attribution+" ; "+photo.license,
       }]}).catch(()=>setError("Image insérée, mais sa référence n'a pas pu être ajoutée au catalogue."));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
+  }
+  function selectVariant(variant:VariantChoice|null){
+    setPreviewVariant(variant?{...variant,document:structuredClone(variant.document)}:null);
+    setRightPane("variants");
+  }
+  function usePreviewVariant(){
+    if(!previewVariant)return;
+    if(dirty&&!window.confirm("Utiliser cette composition remplacera les modifications non enregistrées. Continuer ?"))return;
+    applyVariant(structuredClone(previewVariant.document),previewVariant.notes);
   }
   function applyVariant(document:SlideDocument,variantNotes:string){
     setPreviewVariant(null);
@@ -698,18 +711,17 @@ export default function App() {
             {current&&<>
               <button className="subtle-btn present-action" onClick={()=>setPresenting(true)}
                 disabled={!current.slides.length}>▶ Présenter</button>
-              <button className="slides-export-primary" onClick={()=>void downloadPowerPoint()}
-                disabled={exportBusy||busy||!current.slides.length}>
-                {exportTarget==="pptx"?(exportProgress||"Export en cours…"):"Exporter PowerPoint"}
-              </button>
-              <button className="slides-export-primary slides-export-google" onClick={startGoogleExport}
-                disabled={exportBusy||busy||!current.slides.length}>
-                {exportTarget==="google"?(exportProgress||"Conversion…"):"Exporter Google Slides"}
-              </button>
-              <button className="slides-export-html" onClick={()=>void downloadHtml()}
-                disabled={exportBusy||busy||!current.slides.length}>
-                {exportTarget==="html"?(exportProgress||"Préparation…"):"Exporter HTML/CSS"}
-              </button>
+              <details className="slides-export-menu">
+                <summary>↓ Exporter</summary>
+                <div className="slides-export-options">
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void downloadPowerPoint();}}
+                    disabled={exportBusy||busy||!current.slides.length}>PowerPoint (.pptx)</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");startGoogleExport();}}
+                    disabled={exportBusy||busy||!current.slides.length}>Google Slides</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void downloadHtml();}}
+                    disabled={exportBusy||busy||!current.slides.length}>HTML / CSS</button>
+                </div>
+              </details>
               <details className="slides-extra-actions">
                 <summary title="Autres actions">⋯</summary>
                 <div>
@@ -740,26 +752,19 @@ export default function App() {
               <button className="subtle-btn" onClick={()=>{if(window.confirm("Recharger la version distante ? Les modifications locales non enregistrées seront perdues.")){setExternalChanges(false);void loadDeck(current.presentation.id,slideId??undefined);}}}>Charger la version distante</button>
             </div>}
             {exportReport && <div className="export-report" role="status">
-              <strong>PowerPoint prêt : {exportReport.fileName}</strong>
-              <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>Enregistrer le fichier PowerPoint</a>
-              <span>{exportReport.slideCount} diapositive{exportReport.slideCount>1?"s":""} ; les objets compatibles restent modifiables.</span>
-              {exportReport.warnings.length > 0 && <details><summary>{exportReport.warnings.length} précision{exportReport.warnings.length > 1 ? "s" : ""} sur la compatibilité</summary>
-                <ul>{exportReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+              <div><strong>PowerPoint prêt</strong><button type="button" aria-label="Fermer" onClick={()=>setExportReport(null)}>×</button></div>
+              <a className="export-download-link" href={exportReport.downloadUrl} download={exportReport.fileName}>↓ Télécharger · {exportReport.slideCount} diapositive{exportReport.slideCount>1?"s":""}</a>
+              {!!exportReport.warnings.length&&<details><summary>{exportReport.warnings.length} précisions de compatibilité</summary>
+                <ul>{exportReport.warnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>
               </details>}
-              <span>Vous pouvez aussi utiliser « Exporter vers Google Slides » pour créer une présentation directement dans votre Drive.</span>
             </div>}
-            {googleReport&&<div className="export-report google-success-report" role="status">
-              <strong>Google Slides : {googleReport.name}</strong>
-              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">
-                Ouvrir la présentation Google Slides
-              </a>
-              <span>{googleExportSlideCount} diapositives exportées. Certains effets peuvent être simplifiés par Google.</span>
+            {googleReport&&<div className="export-report" role="status">
+              <div><strong>Google Slides prêt</strong><button aria-label="Fermer" onClick={()=>setGoogleReport(null)}>×</button></div>
+              <a href={googleReport.url} target="_blank" rel="noopener noreferrer">Ouvrir dans Google Slides</a>
             </div>}
             {htmlExportReport&&<div className="export-report" role="status">
-              <strong>Archive HTML/CSS prête : {htmlExportReport.fileName}</strong>
-              <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>
-                Télécharger à nouveau l'archive
-              </a>
+              <div><strong>Archive HTML/CSS prête</strong><button aria-label="Fermer" onClick={()=>setHtmlExportReport(null)}>×</button></div>
+              <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>↓ Télécharger le fichier</a>
             </div>}
             <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
               {showSlideRail&&<aside className="slide-rail">
@@ -783,19 +788,11 @@ export default function App() {
               </aside>}
               <section className="editor-main">
                 {draft ? <>
-                  <div className="visual-toolbar" style={previewVariant?{pointerEvents:"none",opacity:.45}:undefined}>
+                  <div className="visual-toolbar" style={previewVariant?{pointerEvents:"none",opacity:.55}:undefined}>
                     <div className="visual-toolbar-group">
-                      <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"Masquer les diapos":"Diapos"}</button>
-                      <button onClick={()=>{setShowInspector(true);setTab("layers");}} title="Gérer les calques">Calques</button>
-                      <button onClick={()=>setShowInspector(v=>!v)} title="Afficher ou masquer l'inspecteur">{showInspector?"Masquer les outils":"Outils"}</button>
+                      <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"☰ Diapos":"☰ Pages"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
-                      <button onClick={()=>setImageStudioOpen(true)} title="Rechercher dans les photothèques">+ Image</button>
-                      <button onClick={()=>setVariantsStudioOpen(true)} title="Comparer plusieurs compositions">Variantes</button>
-                      <button onClick={()=>setHistoryStudioOpen(true)} title="Afficher l'historique des sauvegardes">Historique</button>
-                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen} title="Configurer les animations au clic">Animations</button>
-                      <button onClick={animateSelection} disabled={!selectedIds.length} title="Ajouter un fondu au clic sur les calques sélectionnés">+ Animer</button>
-                      <button onClick={connectSelection} disabled={selectedIds.length!==2}
-                        title="Créer une flèche liée aux deux objets, qui les suit lors de leur déplacement">Relier →</button>
+                      <button onClick={()=>setImageStudioOpen(true)} title="Rechercher des photographies">+ Image</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
@@ -805,51 +802,72 @@ export default function App() {
                       <button onClick={removeSelection} disabled={!selectedIds.length} title="Supprimer (Suppr)">⌫</button>
                     </div>
                     <div className="visual-toolbar-group">
-                      <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
-                        onChange={e=>{if(e.target.value==="distribute-h")distributeSelection("horizontal");else if(e.target.value==="distribute-v")distributeSelection("vertical");else if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
-                        <option value="">Aligner</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
-                        <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option><option value="distribute-h">Répartir horizontalement (3+)</option><option value="distribute-v">Répartir verticalement (3+)</option>
-                      </select>
+                      <button onClick={()=>{setRightPane("tools");setShowInspector(true);setTab("layers");}} title="Afficher les calques">Calques</button>
+                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen}>Animations</button>
+                      <details className="editor-more">
+                        <summary>Autres outils ▾</summary>
+                        <div className="editor-more-menu">
+                          <button onClick={()=>{setRightPane("tools");setShowInspector(true);}}>Propriétés des objets</button>
+                          <button onClick={()=>setHistoryStudioOpen(true)}>Historique</button>
+                          <button disabled={!selectedIds.length} onClick={animateSelection}>+ Animer la sélection</button>
+                          <button disabled={selectedIds.length!==2} onClick={connectSelection}>Relier les objets →</button>
+                          <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
+                            onChange={e=>{if(e.target.value==="distribute-h")distributeSelection("horizontal");else if(e.target.value==="distribute-v")distributeSelection("vertical");else if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
+                            <option value="">Aligner les objets</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
+                            <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option><option value="distribute-h">Répartir horizontalement</option><option value="distribute-v">Répartir verticalement</option>
+                          </select>
+                          <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
+                        </div>
+                      </details>
+                      <button onClick={()=>setShowInspector(v=>!v)} title="Afficher ou masquer le panneau latéral">{showInspector?"Masquer panneau":"Afficher panneau"}</button>
                     </div>
-                    <div className="visual-toolbar-group visual-toolbar-zoom">
-                      <button aria-label="Réduire le zoom" onClick={()=>setZoom(z=>Math.max(.5,Math.round((z-.1)*10)/10))}>−</button>
-                      <button onClick={()=>setZoom(1)} title="Ajuster à la fenêtre">Ajuster</button>
-                      <span title="Zoom par rapport au format ajusté">{Math.round(zoom*100)} % ajusté</span>
-                      <button onClick={()=>{
-                        const width=document.querySelector<HTMLElement>(".visual-viewport")?.clientWidth??840;
-                        if(draft)setZoom(draft.canvas.width/Math.max(width-2,250));
-                      }} title="Afficher les pixels à leur taille réelle">100 % réel</button>
-                      <button aria-label="Augmenter le zoom" onClick={()=>setZoom(z=>Math.min(5,Math.round((z+.1)*10)/10))}>+</button>
+                  </div>
+                  <VariantSwitcher items={variants.items} loading={variants.loading} selectedId={previewVariant?.id??null}
+                    onSelect={selectVariant} onCompare={()=>setVariantsStudioOpen(true)} onApply={usePreviewVariant}/>
+                  <div className="canvas-stage-shell">
+                    <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
+                      onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
+                  </div>
+                  <div className="canvas-statusbar">
+                    <span>Diapositive {current.slides.findIndex(slide=>slide.id===slideId)+1} / {current.slides.length} · {draft.canvas.width} × {draft.canvas.height}
+                    {previewVariant?" · Aperçu non destructif":""}</span>
+                    <div className="canvas-zoom-controls">
+                      <button type="button" aria-label="Réduire le zoom" onClick={()=>setZoom(v=>Math.max(.25,Math.round((v-.1)*100)/100))}>−</button>
+                      <button type="button" onClick={()=>setZoom(1)} aria-pressed={zoom===1}>Ajuster</button>
+                      <span>{Math.round(zoom*100)} %</span>
+                      <button type="button" aria-label="Augmenter le zoom" onClick={()=>setZoom(v=>Math.min(8,Math.round((v+.1)*100)/100))}>+</button>
+                      <button type="button" onClick={()=>{
+                        const w=document.querySelector<HTMLElement>(".visual-viewport")?.clientWidth??800;
+                        const h=document.querySelector<HTMLElement>(".visual-viewport")?.clientHeight??450;
+                        const fit=Math.min(Math.max(40,w-40)/draft.canvas.width,Math.max(40,h-40)/draft.canvas.height);
+                        setZoom(Math.min(8,Math.max(.25,1/fit)));
+                      }}>100 % réel</button>
                     </div>
                   </div>
-                  <div className="section-caption"><span>DIAPOSITIVE · {draft.canvas.width} × {draft.canvas.height}</span>
-                    <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
-                  </div>
-                  <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
-                    onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
-                  <VariantDock key={slideId??"no-slide"} token={token} slideId={slideId!}
-                    currentDocument={draft} dirty={dirty} refreshKey={variantRefreshKey}
-                    onPreview={setPreviewVariant} onApply={applyVariant} onManage={()=>setVariantsStudioOpen(true)}/>
-                  <div className="canvas-footer">{previewVariant
-                    ?"Aperçu en lecture seule : choisissez « Utiliser cette composition » dans la barre A/B/C pour la modifier."
-                    :"Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments."}</div>
-                  {animationPanelOpen&&!previewVariant&&<AnimationTimeline document={draft} selectedIds={selectedIds}
-                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/>}
-                  <div className="notes-row">
-                    <label htmlFor="slide-notes">{previewVariant?"Notes de la composition en aperçu":"Notes du présentateur"}</label>
-                    <textarea id="slide-notes" rows={3} value={previewVariant?.notes??notes} readOnly={Boolean(previewVariant)} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
-                  </div>
+                  {animationPanelOpen&&!previewVariant&&<div className="editor-animation-drawer"><AnimationTimeline document={draft} selectedIds={selectedIds}
+                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/></div>}
+                  <details className="notes-drawer">
+                    <summary>Notes du présentateur {notes?"●":""}</summary>
+                    <textarea id="slide-notes" rows={3} aria-label="Notes du présentateur" value={previewVariant?.notes??notes} readOnly={Boolean(previewVariant)}
+                      onChange={e=>{versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true);}}
+                      placeholder="Notes facultatives…"/>
+                  </details>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft && showInspector && (previewVariant
-                ? <aside className="variant-preview-inspector"><strong>Aperçu de composition</strong>
-                    <p>Vous examinez une autre version ; la composition A est conservée.</p>
-                    <p>Pour pouvoir modifier cette version, sélectionnez « Utiliser cette composition » dans la barre A/B/C.</p>
-                  </aside>
-                : <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
+              {draft&&showInspector&&<section className="editor-sidebar">
+                <div className="editor-sidebar-tabs" role="group" aria-label="Panneau latéral">
+                  <button aria-pressed={rightPane==="variants"||Boolean(previewVariant)} onClick={()=>setRightPane("variants")}>◆ Variantes</button>
+                  <button aria-pressed={rightPane==="tools"&&!previewVariant} onClick={()=>{setRightPane("tools");if(previewVariant)selectVariant(null);}}>Outils</button>
+                </div>
+                {rightPane==="variants"||previewVariant?
+                  <VariantGallery items={variants.items} loading={variants.loading} error={variants.error}
+                    selectedId={previewVariant?.id??null} currentDocument={draft} dirty={dirty}
+                    onSelect={selectVariant} onCompare={()=>setVariantsStudioOpen(true)} onApply={usePreviewVariant}/>:
+                  <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                     onChange={editDocument} tab={tab} onTabChange={setTab}
                     onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                    onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>)}
+                    onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
+              </section>}
             </div>
           </div>
         )}
