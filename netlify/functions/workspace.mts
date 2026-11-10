@@ -261,6 +261,60 @@ export default async function workspace(request: Request): Promise<Response> {
         const variants=await listVariants(slideId,true);
         return result({ok:true,variants});
       }
+      case "switchVariant": {
+        // Switch the active slide immediately. Archive the former A/B/C before leaving it.
+        const slideId=idSchema.parse(data.slideId);
+        const requested=z.union([idSchema,z.null()]).parse(data.variantId);
+        const revision=z.number().int().min(1).parse(data.revision);
+        const originalName="A · Original (automatique)";
+        const before=await db.query(
+          "SELECT document,notes,revision FROM public.slides WHERE id=$1::uuid AND revision=$2",
+          [slideId,revision]);
+        if(!before[0])return result({ok:false,error:"revision_conflict"},409);
+        const previous=SlideDocumentSchema.parse(before[0].document);
+        const choices=await listVariants(slideId,true);
+        const existingOriginal=choices.find(x=>x.id===previous.variantSelection?.originalId)
+          ??choices.find(x=>x.name===originalName);
+        const currentSelection=previous.variantSelection?.activeId??existingOriginal?.id??null;
+        const targetId=requested??existingOriginal?.id??null;
+        if(!targetId||targetId===currentSelection){
+          return result({ok:true,unchanged:true,slide:{
+            revision,document:previous,notes:String(before[0].notes??""),updated_at:null,
+          }});
+        }
+        const target=choices.find(x=>x.id===targetId);
+        if(!target)return result({ok:false,error:"variant_not_found"},404);
+        const sourceDocument=structuredClone(previous);
+        delete sourceDocument.variantSelection;
+        let originalId=existingOriginal?.id;
+        if(!originalId){
+          const backup=await db.query(
+            "INSERT INTO public.slide_variants(slide_id,name,document,notes) VALUES($1::uuid,$2,$3::jsonb,$4) RETURNING id::text AS id",
+            [slideId,originalName,JSON.stringify(sourceDocument),String(before[0].notes??"")]);
+          originalId=backup[0]?.id;
+        }
+        if(!originalId)throw new Error("original_variant_backup_failed");
+        const selected=SlideDocumentSchema.parse({
+          ...target.document,variantSelection:{originalId,activeId:targetId},
+        });
+        const previousId=previous.variantSelection?.activeId??originalId;
+        // CAS and the previous variant's update are committed in one SQL statement.
+        const rows=await db.query(
+          "WITH switched AS (UPDATE public.slides SET document=$3::jsonb,notes=$4,revision=revision+1,updated_at=now() "+
+          "WHERE id=$1::uuid AND revision=$2 RETURNING id,presentation_id,revision,updated_at), "+
+          "archived AS (UPDATE public.slide_variants SET document=$6::jsonb,notes=$7 WHERE id=$5::uuid "+
+          "AND slide_id=$1::uuid AND EXISTS(SELECT 1 FROM switched) RETURNING id), "+
+          "touched AS (UPDATE public.presentations SET updated_at=now() "+
+          "WHERE id IN (SELECT presentation_id FROM switched) RETURNING id) "+
+          "SELECT revision,updated_at,(SELECT count(*)::int FROM archived) AS previous_saved FROM switched",
+          [slideId,revision,JSON.stringify(selected),String(target.notes??""),
+            previousId,JSON.stringify(sourceDocument),String(before[0].notes??"")]);
+        if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+        return result({ok:true,slide:{
+          revision:rows[0].revision,updated_at:rows[0].updated_at,
+          document:selected,notes:String(target.notes??""),
+        },previousSaved:Number(rows[0].previous_saved)>0});
+      }
       case "saveAssets": {
         const id=idSchema.parse(data.presentationId);
         const assets=z.array(z.object({url:z.url(),label:z.string().max(140).optional(),
