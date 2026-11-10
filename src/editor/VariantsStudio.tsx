@@ -4,6 +4,7 @@ import { proposeGraphicVariants,type ProposedVariant } from "../variants/propose
 import { compareOneVariant } from "../variants/compare";
 import { SlideThumbnail } from "./SlideThumbnail";
 import { command } from "../lib/api";
+import {VariantFeedbackActions,useVisualFeedback} from "./VariantFeedback";
 
 type StoredVariant={id:string;name:string;document:SlideDocument;notes:string;created_at:string};
 type Props={
@@ -22,6 +23,7 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onSel
   const [error,setError]=useState("");
   const [choosing,setChoosing]=useState<string|null>(null);
   const [copied,setCopied]=useState(false);
+  const feedback=useVisualFeedback(token,slideId);
 
   const refresh=useCallback(async()=>{
     const data=await command<{variants:StoredVariant[]}>(token,{action:"listVariants",slideId});
@@ -119,13 +121,18 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onSel
             <div className="variant-preview"><SlideThumbnail document={document} index={0}/></div>
             <div className="variant-description"><strong>Version actuelle</strong><p>La composition ouverte dans l'éditeur.</p></div>
           </div>
-          {candidates.map((candidate,i)=><button key={candidate.id} className={"variant-card selectable"+(choosing===candidate.id?" selected":"")}
+          {candidates.map((candidate,i)=><div key={candidate.id} className="variant-comparison-entry">
+            <button className={"variant-card selectable"+(choosing===candidate.id?" selected":"")}
             disabled={Boolean(choosing)||loading} onClick={()=>void choose(candidate)}>
               <div className="variant-preview"><SlideThumbnail document={candidate.document} index={i+1}/></div>
               <div className="variant-description"><strong>{candidate.name}</strong><p>{candidate.description}</p>
                 <span>{candidate.stored?"Enregistrée":"Proposition locale"} · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.imageCount} image(s) · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.warnings} alerte(s)</span>
               </div>
-            </button>)}
+            </button>
+            {candidate.stored&&<VariantFeedbackActions token={token} slideId={slideId}
+              variantId={candidate.id} selected={document.variantSelection?.activeId===candidate.id}
+              preferences={feedback.preferences} onUpdated={feedback.reload} disabled={Boolean(choosing)||loading}/>}
+          </div>)}
           {candidates.length===0&&<div className="studio-empty">Les propositions créées par ChatGPT apparaîtront ici. Pour lancer une génération originale, copie la commande ci-dessus dans ta conversation ChatGPT.</div>}
         </div>
         <footer className="studio-variant-footer">
