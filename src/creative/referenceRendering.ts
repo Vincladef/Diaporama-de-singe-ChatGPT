@@ -1,4 +1,6 @@
 import {convertPptxToPng} from "pptx-glimpse";
+import JSZip from "jszip";
+import {assertPowerPointArchiveBudget} from "../import/parse.ts";
 import {extractPowerPointGeometry} from "./referenceGeometry.ts";
 import {classifyReferenceSlide,type VisualLayout} from "./referenceLibrary.ts";
 
@@ -26,6 +28,8 @@ export async function renderPptxReferenceBatch(
   if(bytes.byteLength<100||bytes.byteLength>MAX_REFERENCE_BYTES)throw Error("invalid_reference_file");
   if(!Number.isInteger(start)||start<1||!Number.isInteger(count)||count<1||count>RENDER_BATCH_SIZE)
     throw Error("invalid_reference_batch");
+  const archive=await JSZip.loadAsync(bytes);
+  assertPowerPointArchiveBudget(archive);
   const geometry=await extractPowerPointGeometry(bytes,MAX_REFERENCE_SLIDES);
   if(geometry.slideCount<1||geometry.slideCount>MAX_REFERENCE_SLIDES)
     throw Error("invalid_reference_slide_count");
