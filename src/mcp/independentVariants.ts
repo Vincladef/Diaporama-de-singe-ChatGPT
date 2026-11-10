@@ -4,6 +4,7 @@ import {getCreationInstructions} from "./instructions.ts";
 import {generateVisualReferencePages,readVisualReferenceImage,searchVisualReferencePages} from "./referencePages.ts";
 import {prepareIndependentVariants,type IndependentVariantInput} from "../variants/independent.ts";
 import {inferPurpose} from "../preferences/profile.ts";
+import {listRelevantVisualPreferences,VisualReferenceUsedSchema} from "./visualPreferences.ts";
 
 
 export async function prepareIndependentVariantBrief(slideId:string,loadReferences=true){
@@ -11,6 +12,7 @@ export async function prepareIndependentVariantBrief(slideId:string,loadReferenc
   if(!("document" in slide))throw Error("slide_not_found");
   const instructions=await getCreationInstructions(slide.presentation_id);
   const purpose=inferPurpose(slide.document,slide.notes);
+  const preferences=await listRelevantVisualPreferences(slide.presentation_id,purpose.kind,true);
   let references=await searchVisualReferencePages({limit:7,kind:purpose.kind});
   const warnings:string[]=[];
   if(loadReferences&&!references.pages.length){
@@ -40,12 +42,14 @@ export async function prepareIndependentVariantBrief(slideId:string,loadReferenc
     slideId, presentationId:slide.presentation_id,revision:slide.revision,
     source:{document:slide.document,notes:slide.notes,semanticPurpose:purpose},
     globalAndLocalInstructions:instructions.effective,
+    visualPreferenceMemory:preferences,
     visualReferences:chosen.map(p=>({referenceId:p.referenceId,slideNumber:p.slideNumber,
       visualKind:p.visualKind,composition:p.layout.composition,score:p.score})),
     previewImages:selectedImages.filter(x=>x!==null),
     steps:[
       "Analyser la fonction pédagogique et les règles générales et locales.",
-      "Observer les images des pages de référence ; réutiliser la grammaire graphique sans recopier texte ni contenu.",
+      "Observer les pages de référence et les favoris visuels ; ne jamais recopier leur contenu scientifique.",
+      "Tenir compte des préférences classées par fonction pédagogique ; les choix isolés ne sont pas des règles et les variantes non choisies ne sont pas des rejets.",
       "Inventer indépendamment trois directions graphiques liées à ce contenu précis, sans trois styles fixes.",
       "Créer trois documents HTML/CSS/SVG complets, avec cadres et images utiles ; préserver le sens scientifique.",
       "Transmettre les trois documents à create_independent_variants, avec leur justification.",
@@ -68,7 +72,16 @@ export async function saveIndependentVariants(
     return {saved:false,reason:"variants_not_independent",
       ...prepared.report,created:0,variants:[]};
   }
-  const saved=await createVariants(slideId,prepared.variants,expectedRevision);
+  const purpose=inferPurpose(slide.document,slide.notes);
+  const saved=await createVariants(slideId,prepared.variants.map((candidate,index)=>({
+    ...candidate,
+    designContext:{
+      designIntent:variants[index]!.designIntent,
+      referenceObservation:variants[index]!.referenceObservation??"",
+      referencesUsed:VisualReferenceUsedSchema.parse(variants[index]!.referencesUsed??[]),
+      visualKind:purpose.kind,
+    },
+  })),expectedRevision);
   return {saved:true,...saved,report:prepared.report,sourceRevision:expectedRevision,
     activeSlideUnchanged:true};
 }
