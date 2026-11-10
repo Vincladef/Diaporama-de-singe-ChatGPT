@@ -2,6 +2,7 @@ import {useEffect,useState} from "react";
 import type {SlideDocument} from "../domain/slide";
 import {command} from "../lib/api";
 import {SlideThumbnail} from "./SlideThumbnail";
+import {VariantFeedbackActions,useVisualFeedback} from "./VariantFeedback";
 
 export type VariantChoice={
   id:string;
@@ -97,8 +98,9 @@ export function VariantSwitcher({items,original,loading,selectedId,onSelect,onCo
   </div>;
 }
 
-type GalleryProps=ControlsProps&{currentDocument:SlideDocument;error:string;dirty:boolean;};
-export function VariantGallery({items,original,loading,selectedId,onSelect,currentDocument,error,dirty,disabled}:GalleryProps){
+type GalleryProps=ControlsProps&{currentDocument:SlideDocument;error:string;dirty:boolean;token:string;slideId:string;};
+export function VariantGallery({items,original,loading,selectedId,onSelect,currentDocument,error,dirty,disabled,token,slideId}:GalleryProps){
+  const feedback=useVisualFeedback(token,slideId);
   const source=original??{id:"original",name:"A · Originale",document:currentDocument,notes:""};
   const visible=[source,...items];
   return <aside className="variant-gallery" aria-label="Galerie des compositions">
@@ -111,18 +113,24 @@ export function VariantGallery({items,original,loading,selectedId,onSelect,curre
       {visible.map((item,index)=>{
         const chosen=index===0?(!selectedId||selectedId===original?.id):selectedId===item.id;
         const view=chosen?currentDocument:item.document;
-        return <button className={"variant-gallery-card"+(chosen?" is-current":"")} type="button"
-          disabled={disabled} key={item.id} aria-pressed={chosen} onClick={()=>onSelect(index===0?original:item)}>
+        return <div className="variant-gallery-entry" key={item.id}>
+          <button className={"variant-gallery-card"+(chosen?" is-current":"")} type="button"
+          disabled={disabled} aria-pressed={chosen} onClick={()=>onSelect(index===0?original:item)}>
           <span className="variant-gallery-image"><SlideThumbnail document={view} index={index+1}/></span>
           <span className="variant-gallery-label"><b>{letters[index]} · {index===0?"Originale":shortName(item.name)}</b>{chosen&&<span>✓</span>}</span>
           {chosen&&dirty&&<small>Enregistrement automatique en cours</small>}
-        </button>;
+          </button>
+          {item.id!=="original"&&<VariantFeedbackActions
+            token={token} slideId={slideId} variantId={item.id} selected={chosen}
+            preferences={feedback.preferences} onUpdated={feedback.reload} disabled={disabled}/>}
+        </div>;
       })}
       {loading&&<p className="variant-gallery-hint">Chargement des variantes…</p>}
       {!loading&&items.length===0&&<p className="variant-gallery-hint">Les nouvelles variantes créées via ChatGPT apparaîtront ici.</p>}
     </div>
     <footer className="variant-gallery-actions">
       {error&&<small role="status">Chargement impossible : {error}</small>}
+      {feedback.error&&<small role="status">Mémoire graphique indisponible : {feedback.error}</small>}
     </footer>
   </aside>;
 }
