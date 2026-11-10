@@ -48,8 +48,10 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    const page=await browser.newPage({viewport:{width:1920,height:1080}});
    await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"domcontentloaded"});
    const animationChecks=await page.evaluate(async(docs)=>{
-     const {SlideAnimationPlayer}=await import("/src/animation/runtime.ts");
-     const {renderSlideHtml}=await import("/src/engine/render.ts");
+     const runtimeUrl="/src/animation/runtime.ts";
+     const {SlideAnimationPlayer}=await import(runtimeUrl);
+     const renderUrl="/src/engine/render.ts";
+     const {renderSlideHtml}=await import(renderUrl);
      const results=[];
      for(const doc of docs){
        const frame=document.createElement("iframe");
@@ -86,7 +88,8 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    await mkdir("artifacts/integration",{recursive:true});
    for(const mode of ["editable","faithful"] as const){
      const result=await page.evaluate(async({inputDeck,exportMode})=>{
-       const exporter=await import("/src/export/pptx.ts");
+       const exporterUrl="/src/export/pptx.ts";
+       const exporter=await import(exporterUrl);
        const output=await exporter.buildPowerPoint(inputDeck as any,exportMode,undefined,"static");
        const buf=await output.blob.arrayBuffer();
        const bytes=new Uint8Array(buf);
