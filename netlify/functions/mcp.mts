@@ -64,7 +64,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.13.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.13.1",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
@@ -83,6 +83,16 @@ function createServer(request: Request): McpServer {
       };
       try {
         const payload = slim(await handler(args));
+        if(name==="inspect_creation_reference"&&Array.isArray(payload.previewImages)){
+          const {previewImages,...metadata}=payload;
+          const images=previewImages.filter((x):x is {base64:string;mimeType:string;slideNumber:number}=>
+            !!x&&typeof x==="object"&&typeof x.base64==="string"&&
+            typeof x.mimeType==="string"&&x.mimeType.startsWith("image/"));
+          return {content:[
+            {type:"text" as const,text:JSON.stringify(metadata)},
+            ...images.slice(0,4).map(x=>({type:"image" as const,data:x.base64,mimeType:x.mimeType}))
+          ],structuredContent:metadata};
+        }
         if((name==="inspect_creation_reference"||name==="inspect_reference_page")&&typeof payload.base64==="string"){
           const {base64,...metadata}=payload;
           const imageMime=String(payload.mimeType??"");
@@ -108,8 +118,8 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.13.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.13.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.13.1",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.13.1",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
       capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library"]}));
@@ -126,14 +136,23 @@ function createServer(request: Request): McpServer {
     async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
 
   register("inspect_creation_reference","Examiner un exemple visuel joint",
-    "Read a saved design reference for the global creation instructions. Photos/screenshots are returned as images. PPTX references return style information and per-slide DrawingML geometry (not rendered screenshots); HTML and PDF return a summary. PDF pages are not visually rendered. Reference IDs come from get_creation_instructions.",
+    "Read a saved design reference. For PPTX with cached previews, return up to four actual rendered slide images along with style and geometry information; unrendered PPTX return geometry only. For all slides use inspect_reference_page. PDF pages are not rendered. Reference IDs come from get_creation_instructions.",
     {id:uuid},false,async a=>{
       const file=await getCreationReferenceFile(a.id);
       if(!file)throw new Error("reference_not_found");
       const geometry=file.mimeType.includes("presentationml.presentation")
         ? await extractPowerPointGeometry(Buffer.from(file.base64,"base64")).catch(()=>null) : null;
+      const selectedPages=file.mimeType.includes("presentationml.presentation")
+        ? await listVisualReferencePages(a.id).then(result=>result.pages.filter(p=>p.selected).slice(0,4))
+          .catch(()=>[]) : [];
+      const previewImages=await Promise.all(selectedPages.map(p=>
+        readVisualReferenceImage(a.id,p.slideNumber)
+          .then(image=>({slideNumber:p.slideNumber,mimeType:image.mimeType,base64:image.base64}))
+          .catch(()=>null)));
       return {id:a.id,filename:file.filename,mimeType:file.mimeType,analysis:file.analysis,
         ...(geometry?{drawingMlGeometry:geometry}:{}),
+        ...(selectedPages.length?{selectedSlideNumbers:selectedPages.map(p=>p.slideNumber),
+          previewImages:previewImages.filter(v=>v!==null)}:{}),
         ...(file.mimeType.startsWith("image/")?{base64:file.base64}:{})};
     });
 
