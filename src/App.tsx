@@ -334,11 +334,14 @@ export default function App() {
       if(new URL(photo.imageUrl).protocol!=="https:")throw Error("L'image doit utiliser une adresse HTTPS.");
       const single=selectedIds.length===1?doc.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined;
       const id=single?.id??crypto.randomUUID();
+      const focalPosition=photo.focalX!==undefined&&photo.focalY!==undefined
+        ?Math.round(photo.focalX)+"% "+Math.round(photo.focalY)+"%":undefined;
       const next:SlideDocument=single?
-        {...doc,elements:doc.elements.map(e=>e.id===id?{...e,src:photo.imageUrl}:e)}:
+        {...doc,elements:doc.elements.map(e=>e.id===id?{...e,src:photo.imageUrl,
+          styles:{...e.styles,...(focalPosition?{objectPosition:focalPosition}:{})}}:e)}:
         {...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,
           elements:[...doc.elements,{id,type:"image",src:photo.imageUrl,
-            styles:{left:"120px",top:"210px",width:"1000px",height:"600px",objectFit:"cover",objectPosition:"50% 50%"}}]};
+            styles:{left:"120px",top:"210px",width:"1000px",height:"600px",objectFit:"cover",objectPosition:focalPosition??"50% 50%"}}]};
       editDocument(next,"photo");
       setSelectedIds([id]);setTab("design");setImageStudioOpen(false);
       if(photo.provider==="unsplash"&&photo.downloadLocation){
