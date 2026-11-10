@@ -65,3 +65,18 @@ test("isolated photo filter preserves editable text on the same slide",()=>{
  assert.equal(report.mixedEditable,1);
  assert.ok(report.warnings.some(x=>x.includes("séparément")));
 });
+
+test("ELK connectors and manually chosen photo crops produce explicit export caveats",()=>{
+ const doc=createEmptySlideDocument();
+ doc.elements=[
+  {id:"diagram-node-a",type:"text",text:"Attente",styles:{left:"80px",top:"90px"}},
+  {id:"elk-route-0",type:"svg",text:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M10 10 L20 20"/></svg>',styles:{}},
+  {id:"photo",type:"image",src:"https://images.unsplash.com/example.jpg",
+    styles:{objectPosition:"72% 35%",objectFit:"cover"}},
+ ];
+ const report=inspectExport([{document:doc,notes:"Source : étude originale"}]);
+ assert.equal(report.slides[0]?.mode,"native");
+ assert.ok(report.warnings.some(w=>w.includes("Schéma ELK")));
+ assert.ok(report.warnings.some(w=>w.includes("Point focal personnalisé")));
+ assert.equal(report.slides[0]?.notesPresent,true);
+});
