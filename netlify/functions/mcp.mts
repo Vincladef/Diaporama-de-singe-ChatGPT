@@ -87,6 +87,16 @@ function createServer(request: Request): McpServer {
       };
       try {
         const payload = slim(await handler(args));
+        if(name==="inspect_photo_candidates"&&Array.isArray(payload.previewImages)){
+          const {previewImages,...metadata}=payload;
+          const images=previewImages.filter((x):x is {mimeType:string;base64:string}=>!!x&&
+            typeof x==="object"&&typeof x.base64==="string"&&
+            typeof x.mimeType==="string"&&x.mimeType.startsWith("image/"));
+          return {content:[
+            {type:"text" as const,text:JSON.stringify(metadata)},
+            ...images.slice(0,9).map(x=>({type:"image" as const,data:x.base64,mimeType:x.mimeType}))
+          ],structuredContent:metadata};
+        }
         if((name==="inspect_visual_render"||name==="read_visual_capture")&&
            typeof payload.base64==="string"&&payload.mimeType==="image/png"){
           const {base64,referenceImages,...metadata}=payload;
@@ -551,6 +561,34 @@ function createServer(request: Request): McpServer {
     "List usable providers, missing API keys without revealing secrets, and the external Google Images option.",{},false,
     async()=>({sources:getSourceStatuses()}));
 
+
+  register("inspect_photo_candidates","Examiner les photographies et trois cadrages Sharp",
+    "After searching and curating, inspect up to three actual photos. Return real decoded Sharp crops (center, attention, entropy), source dimensions, adequacy, failures and original licensing metadata. Never automatically select the first hit. Available only for allowlisted public HTTPS image hosts; a picture is never evidence for scientific findings.",
+    {candidates:z.array(z.object({
+       url:z.url().max(2500),title:z.string().max(200).default(""),
+       credit:z.string().max(300).default(""),license:z.string().max(140).default(""),
+       sourcePage:z.url().max(2500).optional()
+     }).strict()).min(1).max(3),
+     target:z.object({width:z.number().int().min(200).max(2560).default(1200),
+       height:z.number().int().min(150).max(1600).default(675)}).strict().default({width:1200,height:675})},
+    false,async a=>{
+      const inspected=await Promise.all(a.candidates.map(async candidate=>{
+        try{
+          const data=await inspectPhotoUrl({url:candidate.url,target:a.target});
+          return {candidate,ok:true,inspection:data};
+        }catch(error){
+          return {candidate,ok:false,error:error instanceof Error?error.message.slice(0,130):"unknown"};
+        }
+      }));
+      const previewImages=inspected.flatMap((photo,index)=>photo.ok&&photo.inspection
+        ?photo.inspection.crops.map(crop=>({base64:crop.previewBase64,
+            mimeType:crop.mimeType,index,crop:crop.id})) :[]);
+      return {photos:inspected.map(photo=>({...photo,inspection:photo.inspection?{
+        ...photo.inspection,
+        crops:photo.inspection.crops.map(({previewBase64,...crop})=>crop)
+      }:undefined})),previewImages,
+        note:"Sharp checks pixels and crop feasibility, not semantic truth, aesthetic quality or copyright clearance."};
+    });
 
   register("curate_images","Rechercher et sélectionner des photographies multisources",
     "Search up to four queries in parallel across Openverse, Wikimedia, Pexels, Unsplash and Google Images (SerpApi when configured). Return a compact deduplicated shortlist ranked by topic, dimensions, orientation and provider diversity, with license and source links. Ranking does not imply copyright clearance.",
