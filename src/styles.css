@@ -1029,3 +1029,83 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
   .variant-gallery-card{grid-template-columns:130px 1fr}
   .app-slides-style.is-editing .footer{display:none}
 }
+
+
+/* Refined variant distinction and draggable speaker notes (November 2026). */
+.app-slides-style.is-editing .editor-sidebar{
+  background:#f1f3f4;border-left-color:#d0d9d4;
+}
+.app-slides-style.is-editing .editor-sidebar-tabs{
+  background:#e9eeeb;border-bottom-color:#d6dfd9;
+}
+.app-slides-style.is-editing .variant-gallery{
+  background:#f1f3f4;
+}
+.app-slides-style.is-editing .variant-gallery-header{
+  padding-top:14px;
+}
+.app-slides-style.is-editing .variant-gallery-list{
+  padding-top:8px;gap:11px;
+}
+.app-slides-style.is-editing .variant-gallery-card{
+  background:#fff;border-color:#d6dfd9;
+  box-shadow:0 1px 3px #0e33200b;
+}
+.app-slides-style.is-editing .variant-gallery-card:hover{
+  border-color:#86ad94;background:#fff;
+}
+.app-slides-style.is-editing .variant-gallery-card.is-current{
+  background:#e9f2eb;border-color:#28734b;
+  box-shadow:0 0 0 1px #28734b16;
+}
+.app-slides-style.is-editing .variant-gallery-actions{
+  padding:4px 12px;border-top-color:#d6dfd9;background:#f1f3f4;
+}
+.speaker-notes-pane{
+  flex:none;display:flex;flex-direction:column;min-height:36px;
+  max-height:60%;width:100%;position:relative;overflow:hidden;
+  background:#fff;border-top:1px solid #cdd8d0;
+  box-shadow:0 -1px 2px #133b1d08;
+}
+.speaker-notes-handle{
+  height:14px;min-height:14px;flex:none;display:flex;align-items:center;
+  justify-content:center;touch-action:none;cursor:ns-resize;background:#f8faf8;
+  user-select:none;border-bottom:1px solid #edf1ed;
+}
+.speaker-notes-handle:hover,.speaker-notes-handle:focus-visible{
+  background:#e9f1eb;
+}
+.speaker-notes-handle:focus-visible{outline:2px solid #398a5b;outline-offset:-2px}
+.speaker-notes-grip{
+  width:46px;height:4px;border-radius:9px;background:#a4b1a7;
+  transition:background .14s;
+}
+.speaker-notes-handle:hover .speaker-notes-grip{background:#477e5d}
+.speaker-notes-heading{
+  display:flex;align-items:center;justify-content:space-between;
+  min-height:21px;padding:1px 11px;gap:10px;flex:none;
+}
+.speaker-notes-heading strong{
+  font-size:11px;color:#486251;font-weight:690;line-height:1.25;
+}
+.speaker-notes-heading button{
+  border:0;background:transparent;font-size:10px;color:#6d8573;
+  padding:2px 5px;border-radius:4px;
+}
+.speaker-notes-heading button:hover{background:#edf3ee;color:#27603e}
+.speaker-notes-pane textarea{
+  flex:1 1 0;min-height:0;display:block;width:100%;border:0;
+  border-top:1px solid #edf0ed;border-radius:0;resize:none;
+  outline:none;background:#fff;overflow-y:auto;overscroll-behavior:contain;
+  font-size:12px;line-height:1.55;padding:12px 16px;color:#31483a;
+}
+.speaker-notes-pane textarea:focus{
+  outline:none;box-shadow:inset 0 2px 0 #5b9e6c;
+}
+.app-slides-style.is-editing .canvas-stage-shell{
+  min-height:100px;
+}
+@media(max-width:760px){
+  .speaker-notes-heading strong{font-size:10px}
+  .speaker-notes-heading button{font-size:9px}
+}
