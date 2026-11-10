@@ -7,6 +7,7 @@ import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
+import { VariantDock, type VariantChoice } from "./editor/VariantDock";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
@@ -44,6 +45,8 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
+  const [previewVariant,setPreviewVariant]=useState<VariantChoice|null>(null);
+  const [variantRefreshKey,setVariantRefreshKey]=useState(0);
   const [historyStudioOpen,setHistoryStudioOpen]=useState(false);
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
@@ -129,6 +132,7 @@ export default function App() {
   }
 
   function pickSlide(slide?: SlideRecord) {
+    setPreviewVariant(null);
     setSlideId(slide?.id ?? null);
     const next=slide ? structuredClone(slide.document):null;
     draftRef.current=next;
@@ -343,6 +347,7 @@ export default function App() {
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
   function applyVariant(document:SlideDocument,variantNotes:string){
+    setPreviewVariant(null);
     editDocument(document,"variant");notesRef.current=variantNotes;setNotes(variantNotes);setSelectedIds([]);
   }
   function updateObject(id: string, patch: Partial<SlideElement>) {
@@ -778,7 +783,7 @@ export default function App() {
               </aside>}
               <section className="editor-main">
                 {draft ? <>
-                  <div className="visual-toolbar">
+                  <div className="visual-toolbar" style={previewVariant?{pointerEvents:"none",opacity:.45}:undefined}>
                     <div className="visual-toolbar-group">
                       <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"Masquer les diapos":"Diapos"}</button>
                       <button onClick={()=>{setShowInspector(true);setTab("layers");}} title="Gérer les calques">Calques</button>
@@ -820,20 +825,31 @@ export default function App() {
                   <div className="section-caption"><span>DIAPOSITIVE · {draft.canvas.width} × {draft.canvas.height}</span>
                     <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
                   </div>
-                  <VisualCanvas document={draft} selectedIds={selectedIds} onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid}/>
-                  <div className="canvas-footer">Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments.</div>
-                  {animationPanelOpen&&<AnimationTimeline document={draft} selectedIds={selectedIds}
+                  <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
+                    onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
+                  <VariantDock key={slideId??"no-slide"} token={token} slideId={slideId!}
+                    currentDocument={draft} dirty={dirty} refreshKey={variantRefreshKey}
+                    onPreview={setPreviewVariant} onApply={applyVariant} onManage={()=>setVariantsStudioOpen(true)}/>
+                  <div className="canvas-footer">{previewVariant
+                    ?"Aperçu en lecture seule : choisissez « Utiliser cette composition » dans la barre A/B/C pour la modifier."
+                    :"Sélectionnez un élément, faites-le glisser ou redimensionnez-le. Double-cliquez sur un texte pour l'éditer. Maj + clic pour sélectionner plusieurs éléments."}</div>
+                  {animationPanelOpen&&!previewVariant&&<AnimationTimeline document={draft} selectedIds={selectedIds}
                     onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/>}
                   <div className="notes-row">
-                    <label htmlFor="slide-notes">Notes du présentateur</label>
-                    <textarea id="slide-notes" rows={3} value={notes} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
+                    <label htmlFor="slide-notes">{previewVariant?"Notes de la composition en aperçu":"Notes du présentateur"}</label>
+                    <textarea id="slide-notes" rows={3} value={previewVariant?.notes??notes} readOnly={Boolean(previewVariant)} onChange={e => { versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true); }} placeholder="Notes facultatives…" />
                   </div>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft && showInspector && <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onChange={editDocument} tab={tab} onTabChange={setTab}
-                onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
+              {draft && showInspector && (previewVariant
+                ? <aside className="variant-preview-inspector"><strong>Aperçu de composition</strong>
+                    <p>Vous examinez une autre version ; la composition A est conservée.</p>
+                    <p>Pour pouvoir modifier cette version, sélectionnez « Utiliser cette composition » dans la barre A/B/C.</p>
+                  </aside>
+                : <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
+                    onChange={editDocument} tab={tab} onTabChange={setTab}
+                    onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
+                    onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>)}
             </div>
           </div>
         )}
@@ -853,7 +869,7 @@ export default function App() {
           onRestored={async()=>{await loadDeck(current.presentation.id,slideId);await refreshList();}}/>}
         {variantsStudioOpen&&token&&slideId&&draft&&<VariantsStudio key={slideId} token={token}
           slideId={slideId} document={draft} notes={notes} dirty={dirty} onApply={applyVariant}
-          onClose={()=>setVariantsStudioOpen(false)}/>}
+          onClose={()=>{setVariantsStudioOpen(false);setVariantRefreshKey(x=>x+1);}}/>}
         {presenting&&current&&current.slides.length>0&&<PresenterStudio
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
             {...s,document:draft,notes}:s)}}
