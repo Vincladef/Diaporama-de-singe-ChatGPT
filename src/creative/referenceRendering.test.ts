@@ -24,6 +24,19 @@ test("renders a genuine PPTX page to PNG with image dimensions and layout metada
   assert.ok(result.pages[0]?.png.subarray(0,4).every((b,i)=>b===[137,80,78,71][i]));
   assert.ok(result.pages[0]?.layout.textCount);
 });
+test("renders a requested later slide without losing the source slide number",async()=>{
+  const presentation=new pptxgen();
+  presentation.layout="LAYOUT_WIDE";
+  presentation.addSlide().addText("Première page",{x:1,y:1,w:5,h:1,fontSize:22});
+  presentation.addSlide().addText("Seconde page",{x:1,y:1,w:5,h:1,fontSize:22});
+  const bytes=new Uint8Array(await presentation.write({outputType:"nodebuffer"}) as Buffer);
+  const result=await renderPptxReferenceBatch(bytes,2,1);
+  assert.equal(result.totalSlides,2);
+  assert.equal(result.pages.length,1);
+  assert.equal(result.pages[0]?.slideNumber,2);
+  assert.ok(result.pages[0]?.png.byteLength);
+});
+
 test("rejects invalid PowerPoint preview batches",async()=>{
   await assert.rejects(()=>renderPptxReferenceBatch(new Uint8Array(),1,1),/invalid_reference_file/);
   await assert.rejects(()=>renderPptxReferenceBatch(new Uint8Array(200),1,4),/invalid_reference_batch/);
