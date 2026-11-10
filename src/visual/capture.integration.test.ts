@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {mkdir,writeFile} from "node:fs/promises";
 import {createEmptySlideDocument} from "../domain/slide.ts";
 import {captureSlidePixels} from "./capture.ts";
+import {DiagramSchema} from "../graphics/diagrams.ts";
+import {composeElkDiagram} from "../graphics/elkLayout.ts";
 
 // This test really launches a Chromium browser in GitHub Actions (not a static audit).
 process.env.VISUAL_USE_LOCAL_CHROMIUM="1";
@@ -41,4 +43,32 @@ test("captures actual Chromium pixels from two independent presentation composit
     writeFile("artifacts/visual-capture-diagnostics.json",JSON.stringify({
       cognitive:first.diagnostics,editorial:second.diagnostics},null,2)),
   ]);
+});
+
+test("captures actual scientific causal network with ELK via Chromium",{timeout:120_000},async()=>{
+ const spec=DiagramSchema.parse({
+   kind:"causal",title:"Maintien de l'anxiété sociale",
+   subtitle:"Modèle conceptuel de Clark et Wells (1995)",
+   nodes:[
+     {id:"attention",label:"Attention centrée sur soi"},
+     {id:"images",label:"Image négative de soi"},
+     {id:"securite",label:"Comportements de sécurité"},
+     {id:"peur",label:"Maintien de la peur",emphasis:true}
+   ],
+   edges:[
+     {from:"attention",to:"images",label:"renforce"},
+     {from:"images",to:"securite"},
+     {from:"securite",to:"peur"},
+     {from:"peur",to:"attention"}
+   ],notes:"Schéma de concepts théoriques, pas preuve causale."
+ });
+ const document=await composeElkDiagram(spec);
+ const rendered=await captureSlidePixels(document);
+ assert.equal(rendered.diagnostics.pixelWidth,1920);
+ assert.equal(rendered.diagnostics.pixelHeight,1080);
+ assert.equal(rendered.diagnostics.missingImages,0);
+ assert.ok(rendered.png.length>9000);
+ assert.equal(document.elements.filter(e=>e.type==="text"&&e.id.startsWith("diagram-node-")).length,4);
+ await mkdir("artifacts",{recursive:true});
+ await writeFile("artifacts/visual-elk-clark-wells.png",rendered.png);
 });
