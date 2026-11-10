@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { combineCreationInstructions } from "./instructions.ts";
+import { combineCreationInstructions, creationInstructionsSchema } from "./instructions.ts";
 
 test("les règles globales sont utilisées seules sans instruction locale",()=>{
   assert.equal(combineCreationInstructions("Images nombreuses",""),"Images nombreuses");
@@ -13,4 +13,9 @@ test("les instructions locales ont une priorité déclarée et préservent le gl
 });
 test("une consigne locale seule est valable",()=>{
   assert.equal(combineCreationInstructions("","Animations au clic"),"Animations au clic");
+});
+
+test("les consignes de plus de 12 000 caractères sont acceptées intégralement",()=>{
+  const content="A".repeat(50_000);
+  assert.equal(creationInstructionsSchema.parse(content),content);
 });

@@ -4,7 +4,7 @@ import { z, ZodError } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/slide";
 import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets, activateVariant } from "../../src/mcp/store";
 import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
-import { getCreationInstructions, saveCreationInstructions } from "../../src/mcp/instructions";
+import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -94,7 +94,7 @@ export default async function workspace(request: Request): Promise<Response> {
     switch (data.action) {
       case "saveCreationInstructions":{
         const scope=z.enum(["global","presentation"]).parse(data.scope);
-        const instructions=z.string().max(12000).parse(data.instructions);
+        const instructions=creationInstructionsSchema.parse(data.instructions);
         const presentationId=data.presentationId===undefined?undefined:idSchema.parse(data.presentationId);
         if(scope==="presentation"&&!presentationId)return result({error:"invalid_presentation_id"},400);
         return result(await saveCreationInstructions(scope,instructions,presentationId));

@@ -61,10 +61,10 @@ export function CreationInstructionsStudio({
             </div>
             <p>Définis ici ton style préféré, les images, les animations et les règles de conception. Tu peux écrire un prompt complet.</p>
             <label htmlFor="creation-global">Instructions globales</label>
-            <textarea id="creation-global" value={global} maxLength={12000} rows={12}
+            <textarea id="creation-global" value={global} rows={12}
               onChange={e=>{setGlobal(e.target.value);setSuccess("");}}
               spellCheck autoComplete="off" placeholder="Ex. : grandes photographies, compositions éditoriales, schémas qui apparaissent au clic…" />
-            <small>{global.length.toLocaleString("fr-FR")} / 12 000 caractères</small>
+            <small>{global.length.toLocaleString("fr-FR")} caractères</small>
           </div>
           {presentationId && <div className="creation-settings-section">
             <div className="creation-settings-heading">
@@ -73,10 +73,10 @@ export function CreationInstructionsStudio({
             </div>
             <p>Ces consignes complètent les préférences générales. En cas de contradiction, elles sont prioritaires.</p>
             <label htmlFor="creation-local">Instructions particulières</label>
-            <textarea id="creation-local" value={local} maxLength={12000} rows={6}
+            <textarea id="creation-local" value={local} rows={6}
               onChange={e=>{setLocal(e.target.value);setSuccess("");}}
               placeholder="Ex. : palette archive et illustrations historiques ; animations en étapes." />
-            <div className="creation-settings-local-footer"><small>{local.length.toLocaleString("fr-FR")} / 12 000 caractères</small>
+            <div className="creation-settings-local-footer"><small>{local.length.toLocaleString("fr-FR")} caractères</small>
               <button type="button" className="text-btn" disabled={!local.length}
                 onClick={()=>{setLocal("");setSuccess("");}}>Effacer la consigne locale</button></div>
           </div>}

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { database } from "./security.ts";
 
 const uuid = z.uuid();
-const textSchema = z.string().max(12000);
+export const creationInstructionsSchema = z.string();
 
 export function combineCreationInstructions(global: string, presentation: string): string {
   if (!presentation.trim()) return global;
@@ -36,7 +36,7 @@ export async function getCreationInstructions(presentationId?: string) {
 export async function saveCreationInstructions(
   scope: "global" | "presentation", instructions: string, presentationId?: string
 ) {
-  const value=textSchema.parse(instructions);
+  const value=creationInstructionsSchema.parse(instructions);
   const db=database();
   if (scope==="global") {
     await db.query(

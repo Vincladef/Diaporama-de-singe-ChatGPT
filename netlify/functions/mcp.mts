@@ -6,7 +6,7 @@ import { DiagramSchema, composeDiagram, type Diagram } from "../../src/graphics/
 import { compareOneVariant } from "../../src/variants/compare";
 import { fingerprint } from "../../src/mcp/fingerprint";
 import { listSlideHistory } from "../../src/mcp/history";
-import { getCreationInstructions, saveCreationInstructions } from "../../src/mcp/instructions";
+import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -106,7 +106,7 @@ function createServer(request: Request): McpServer {
 
   register("update_creation_instructions","Enregistrer les instructions de création",
     "Update persistent creation instructions (global or for one presentation). An empty presentation-specific value clears its override, restoring global rules. The instructions are shared with the Web editor.",
-    {scope:z.enum(["global","presentation"]),instructions:z.string().max(12000),
+    {scope:z.enum(["global","presentation"]),instructions:creationInstructionsSchema,
       presentationId:uuid.optional()},true,
     async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
 
