@@ -5,6 +5,7 @@ import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/
 import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets, activateVariant } from "../../src/mcp/store";
 import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
+import {listSlidePreferences,saveVariantPreference,recordVariantSelection} from "../../src/mcp/visualPreferences";
 import { addCreationReference, removeCreationReference, getCreationReferenceFile, MAX_REFERENCE_SIZE } from "../../src/mcp/creationReferences";
 import {listVisualReferencePages,generateVisualReferencePages,readVisualReferenceImage,
   updateVisualReferenceSelection,updateVisualReferenceKind,kindSchema} from "../../src/mcp/referencePages";
@@ -39,6 +40,10 @@ export default async function workspace(request: Request): Promise<Response> {
         const presentations = await db.query(
           "SELECT p.id::text AS id, p.title, p.format, p.updated_at, p.folder_id::text AS folder_id, COUNT(s.id)::int AS slide_count FROM public.presentations p LEFT JOIN public.slides s ON s.presentation_id=p.id GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 200", []);
         return result({ ok: true, presentations });
+      }
+      if(operation==="variantPreferences"){
+        const slideId=idSchema.parse(query.searchParams.get("id"));
+        return result({ok:true,...await listSlidePreferences(slideId)});
       }
       if(operation==="creationInstructions"){
         const id=query.searchParams.get("id")||undefined;
@@ -318,6 +323,15 @@ export default async function workspace(request: Request): Promise<Response> {
         const variants=await listVariants(slideId,true);
         return result({ok:true,variants});
       }
+      case "setVariantPreference": {
+        const slideId=idSchema.parse(data.slideId);
+        const variantId=idSchema.parse(data.variantId);
+        const kind=z.enum(["selected","disliked","saved"]).parse(data.kind);
+        const scope=z.enum(["global","presentation"]).parse(data.scope);
+        const active=z.boolean().default(true).parse(data.active);
+        const comment=z.string().max(1200).optional().parse(data.comment);
+        return result(await saveVariantPreference({slideId,variantId,kind,scope,active,comment}));
+      }
       case "switchVariant": {
         // Switch the active slide immediately. Archive the former A/B/C before leaving it.
         const slideId=idSchema.parse(data.slideId);
@@ -367,10 +381,16 @@ export default async function workspace(request: Request): Promise<Response> {
           [slideId,revision,JSON.stringify(selected),String(target.notes??""),
             previousId,JSON.stringify(sourceDocument),String(before[0].notes??"")]);
         if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+        let preferenceRecorded=true;
+        try{await recordVariantSelection(slideId,targetId);}
+        catch(error){
+          preferenceRecorded=false;
+          console.error("Variant preference could not be recorded",error instanceof Error?error.message:String(error));
+        }
         return result({ok:true,slide:{
           revision:rows[0].revision,updated_at:rows[0].updated_at,
           document:selected,notes:String(target.notes??""),
-        },previousSaved:Number(rows[0].previous_saved)>0});
+        },preferenceRecorded,previousSaved:Number(rows[0].previous_saved)>0});
       }
       case "saveAssets": {
         const id=idSchema.parse(data.presentationId);
