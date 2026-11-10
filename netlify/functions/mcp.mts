@@ -8,6 +8,7 @@ import { fingerprint } from "../../src/mcp/fingerprint";
 import { listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
 import { getCreationReferenceFile } from "../../src/mcp/creationReferences";
+import { extractPowerPointGeometry } from "../../src/creative/referenceGeometry";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -62,7 +63,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
     name: "diaporama-de-singe-chatgpt", version: "0.12.1",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For PPTX visual references, inspect_creation_reference provides inferred DrawingML positions, NOT screenshots. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -123,11 +124,14 @@ function createServer(request: Request): McpServer {
     async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
 
   register("inspect_creation_reference","Examiner un exemple visuel joint",
-    "Read a saved design reference for the global creation instructions. Photos/screenshots are returned as images; PPTX, HTML and PDF return an extracted style summary. PDF pages are not visually rendered. Reference IDs come from get_creation_instructions.",
+    "Read a saved design reference for the global creation instructions. Photos/screenshots are returned as images. PPTX references return style information and per-slide DrawingML geometry (not rendered screenshots); HTML and PDF return a summary. PDF pages are not visually rendered. Reference IDs come from get_creation_instructions.",
     {id:uuid},false,async a=>{
       const file=await getCreationReferenceFile(a.id);
       if(!file)throw new Error("reference_not_found");
+      const geometry=file.mimeType.includes("presentationml.presentation")
+        ? await extractPowerPointGeometry(Buffer.from(file.base64,"base64")).catch(()=>null) : null;
       return {id:a.id,filename:file.filename,mimeType:file.mimeType,analysis:file.analysis,
+        ...(geometry?{drawingMlGeometry:geometry}:{}),
         ...(file.mimeType.startsWith("image/")?{base64:file.base64}:{})};
     });
 
