@@ -853,15 +853,16 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                  <VariantSwitcher items={variants.items} loading={variants.loading} selectedId={previewVariant?.id??null}
-                    onSelect={selectVariant} onCompare={()=>setVariantsStudioOpen(true)} onApply={usePreviewVariant}/>
+                  <VariantSwitcher items={variants.items} original={variants.original} loading={variants.loading}
+                    selectedId={previewVariant?.id??draft.variantSelection?.activeId??null} disabled={variantSwitching}
+                    onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>
                   <div className="canvas-stage-shell">
                     <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
                       onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
                   </div>
                   <div className="canvas-statusbar">
                     <span>Diapositive {current.slides.findIndex(slide=>slide.id===slideId)+1} / {current.slides.length} · {draft.canvas.width} × {draft.canvas.height}
-                    {previewVariant?" · Aperçu non destructif":""}</span>
+                    {variantSwitching?" · Enregistrement du choix…":""}</span>
                     <div className="canvas-zoom-controls">
                       <button type="button" aria-label="Réduire le zoom" onClick={()=>setZoom(v=>Math.max(.25,Math.round((v-.1)*100)/100))}>−</button>
                       <button type="button" onClick={()=>setZoom(1)} aria-pressed={zoom===1}>Ajuster</button>
@@ -877,23 +878,20 @@ export default function App() {
                   </div>
                   {animationPanelOpen&&!previewVariant&&<div className="editor-animation-drawer"><AnimationTimeline document={draft} selectedIds={selectedIds}
                     onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/></div>}
-                  <details className="notes-drawer">
-                    <summary>Notes du présentateur {notes?"●":""}</summary>
-                    <textarea id="slide-notes" rows={3} aria-label="Notes du présentateur" value={previewVariant?.notes??notes} readOnly={Boolean(previewVariant)}
-                      onChange={e=>{versionRef.current++;notesRef.current=e.target.value;setNotes(e.target.value);dirtyRef.current=true;setDirty(true);}}
-                      placeholder="Notes facultatives…"/>
-                  </details>
+                  <SpeakerNotesPane value={previewVariant?.notes??notes} readOnly={variantSwitching}
+                    onChange={value=>{versionRef.current++;notesRef.current=value;setNotes(value);dirtyRef.current=true;setDirty(true);}}/>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
               {draft&&showInspector&&<section className="editor-sidebar">
                 <div className="editor-sidebar-tabs" role="group" aria-label="Panneau latéral">
                   <button aria-pressed={rightPane==="variants"||Boolean(previewVariant)} onClick={()=>setRightPane("variants")}>◆ Variantes</button>
-                  <button aria-pressed={rightPane==="tools"&&!previewVariant} onClick={()=>{setRightPane("tools");if(previewVariant)selectVariant(null);}}>Outils</button>
+                  <button aria-pressed={rightPane==="tools"&&!previewVariant} onClick={()=>{if(!variantSwitching){setRightPane("tools");setPreviewVariant(null);}}}>Outils</button>
                 </div>
                 {rightPane==="variants"||previewVariant?
-                  <VariantGallery items={variants.items} loading={variants.loading} error={variants.error}
-                    selectedId={previewVariant?.id??null} currentDocument={draft} dirty={dirty}
-                    onSelect={selectVariant} onCompare={()=>setVariantsStudioOpen(true)} onApply={usePreviewVariant}/>:
+                  <VariantGallery items={variants.items} original={variants.original} loading={variants.loading} error={variants.error}
+                    selectedId={previewVariant?.id??draft.variantSelection?.activeId??null}
+                    currentDocument={previewVariant?.document??draft} dirty={dirty} disabled={variantSwitching}
+                    onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>:
                   <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                     onChange={editDocument} tab={tab} onTabChange={setTab}
                     onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
