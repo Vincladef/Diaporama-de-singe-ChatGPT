@@ -1168,3 +1168,31 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 .quick-variant-content p{width:100%;font-size:11px;color:#738276;margin:0}
 .quick-variant-content button{border:1px solid #cbd8ce;background:#f7faf8;color:#395f47;border-radius:6px;padding:7px 11px;cursor:pointer}
 .quick-variant-content button:disabled{opacity:.5;cursor:default}
+
+/* Photo evaluation before insertion, keeping source credits in the existing library. */
+.image-crop-panel{margin-top:12px;padding:12px;border:1px solid #dce5dc;border-radius:8px}
+.image-crop-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px;color:#334c3c;font-size:12px}
+.image-crop-heading span{color:#6a7e70;font-size:11px}
+.image-crop-warning{color:#985d31;font-size:12px;margin:8px 0}
+.image-crop-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.image-crop-choice{padding:5px;border:2px solid transparent;border-radius:5px;background:#f5f7f3;text-align:left;cursor:pointer}
+.image-crop-choice.selected{border-color:#368253;background:#ebf5eb}
+.image-crop-choice img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:3px}
+.image-crop-choice span{display:block;color:#536b5b;font-size:11px;padding:7px 3px}
+.image-crop-panel small{color:#768878;font-size:11px;line-height:1.45}
+/* Scientific network composition: editable nodes, not a second graph editor. */
+.diagram-studio{max-width:880px}
+.diagram-form{overflow:auto;padding:18px 22px 23px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.diagram-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#46634e;min-width:0}
+.diagram-form label:nth-child(n+3){grid-column:1/-1}
+.diagram-form label span{color:#8b9a8d;font-size:11px}
+.diagram-form input,.diagram-form select,.diagram-form textarea{width:100%;padding:10px;border:1px solid #cddbd0;border-radius:5px;background:#fff;color:#20352a;font:13px/1.4 Arial,sans-serif}
+.diagram-form textarea{resize:vertical}
+.diagram-form-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;grid-column:1/-1}
+.diagram-form-actions button{padding:10px 14px;border:1px solid #aebfaf;border-radius:5px;cursor:pointer}
+.diagram-form-actions button:disabled{opacity:.45;cursor:default}
+.diagram-form .error-line,.diagram-form>small{grid-column:1/-1}
+.diagram-form>small{font-size:11px;color:#879586;line-height:1.5}
+.diagram-preview{width:640px;height:360px;max-width:100%;overflow:hidden;grid-column:1/-1;background:#f6f4ed;border:1px solid #ced9ce}
+.diagram-preview iframe{display:block;transform:scale(.333333);transform-origin:top left;border:0;pointer-events:none}
+@media(max-width:700px){.diagram-form{grid-template-columns:1fr}.diagram-form label,.diagram-form label:nth-child(n+3){grid-column:1}.image-crop-grid{grid-template-columns:1fr}.diagram-preview{width:100%;height:auto;aspect-ratio:16/9}}
