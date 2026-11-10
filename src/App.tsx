@@ -8,6 +8,7 @@ import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
 import { VariantSwitcher, VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
+import { SpeakerNotesPane } from "./editor/SpeakerNotesPane";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
 import { ImprovementStudio } from "./improve/ImprovementStudio";
@@ -47,6 +48,8 @@ export default function App() {
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
   const [previewVariant,setPreviewVariant]=useState<VariantChoice|null>(null);
   const [variantRefreshKey,setVariantRefreshKey]=useState(0);
+  const [variantSwitching,setVariantSwitching]=useState(false);
+  const switchingRef=useRef(false);
   const [historyStudioOpen,setHistoryStudioOpen]=useState(false);
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
@@ -350,14 +353,42 @@ export default function App() {
       }]}).catch(()=>setError("Image insérée, mais sa référence n'a pas pu être ajoutée au catalogue."));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
-  function selectVariant(variant:VariantChoice|null){
+  async function selectVariant(variant:VariantChoice|null):Promise<boolean>{
+    if(switchingRef.current||!slideId)return false;
+    const currentId=slideId;
+    const choiceId=variant?.id??variants.original?.id??null;
+    const chosen=draftRef.current?.variantSelection?.activeId??null;
+    if(choiceId===chosen||(!choiceId&&!chosen)){setRightPane("variants");return true;}
+    if(!choiceId)return false;
+    switchingRef.current=true;setVariantSwitching(true);
     setPreviewVariant(variant?{...variant,document:structuredClone(variant.document)}:null);
     setRightPane("variants");
-  }
-  function usePreviewVariant(){
-    if(!previewVariant)return;
-    if(dirty&&!window.confirm("Utiliser cette composition remplacera les modifications non enregistrées. Continuer ?"))return;
-    applyVariant(structuredClone(previewVariant.document),previewVariant.notes);
+    try{
+      if(!await flushPending())throw new Error("Sauvegarde incomplète : le changement de variante a été interrompu.");
+      const source=currentRef.current?.slides.find(item=>item.id===currentId);
+      if(!source)throw new Error("Diapositive introuvable.");
+      const output=await command<{unchanged?:boolean;slide:{
+        revision:number;updated_at:string|null;document:SlideDocument;notes:string;
+      }}>(token,{action:"switchVariant",slideId:currentId,variantId:choiceId,revision:source.revision});
+      if(!output.unchanged){
+        const changed={...source,revision:output.slide.revision,
+          updated_at:output.slide.updated_at??source.updated_at,
+          document:output.slide.document,notes:output.slide.notes};
+        const detail=currentRef.current;
+        if(detail){
+          const updated={...detail,slides:detail.slides.map(item=>item.id===currentId?changed:item)};
+          currentRef.current=updated;setCurrent(updated);
+        }
+        pickSlide(changed);
+      }else setPreviewVariant(null);
+      setVariantRefreshKey(k=>k+1);
+      return true;
+    }catch(error){
+      setPreviewVariant(null);
+      if(error instanceof ApiError&&error.status===409)setExternalChanges(true);
+      setError(error instanceof Error?error.message:String(error));
+      return false;
+    }finally{switchingRef.current=false;setVariantSwitching(false);}
   }
   function applyVariant(document:SlideDocument,variantNotes:string){
     setPreviewVariant(null);
