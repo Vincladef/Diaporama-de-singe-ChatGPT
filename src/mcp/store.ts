@@ -207,7 +207,7 @@ export async function getVariant(slideId:string,variantId:string){
   const rows=await database().query(
     "SELECT id::text AS id,slide_id::text AS slide_id,name,document,notes,design_context,created_at FROM public.slide_variants WHERE slide_id=$1::uuid AND id=$2::uuid",
     [slideId,variantId]);
-  const row=rows[0] as unknown as {id:string;slide_id:string;name:string;document:SlideDocument;notes:string;created_at:string}|undefined;
+  const row=rows[0] as unknown as {id:string;slide_id:string;name:string;document:SlideDocument;notes:string;design_context:Record<string,unknown>;created_at:string}|undefined;
   if(!row)throw new Error("variant_not_found");
   const parsed={...row,document:SlideDocumentSchema.parse(row.document)};
   return {...parsed,fingerprint:fingerprint(parsed)};
@@ -254,6 +254,15 @@ export async function activateVariant(slideId: string, variantId: string, expect
     console.error("Restore backup unavailable:",error instanceof Error?error.message:String(error));
     checkpointSaved=false;
   }
+  let preferenceRecorded=true;
+  try{
+    const {recordVariantSelection}=await import("./visualPreferences.ts");
+    await recordVariantSelection(slideId,variantId);
+  }catch(error){
+    console.error("Selection memory unavailable:",error instanceof Error?error.message:String(error));
+    preferenceRecorded=false;
+  }
   return {slideId,revision:updated[0].revision,previousVersionSaved:checkpointSaved,
+    preferenceRecorded,
     ...(!checkpointSaved?{warning:"La version a été restaurée mais son état précédent n'a pas pu être archivé."}:{})};
 }
