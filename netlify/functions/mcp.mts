@@ -8,6 +8,8 @@ import { fingerprint } from "../../src/mcp/fingerprint";
 import { listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
 import { getCreationReferenceFile } from "../../src/mcp/creationReferences";
+import {listVisualReferencePages,generateVisualReferencePages,readVisualReferenceImage,
+  searchVisualReferencePages,kindSchema} from "../../src/mcp/referencePages";
 import { extractPowerPointGeometry } from "../../src/creative/referenceGeometry";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
@@ -62,8 +64,8 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.12.1",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For PPTX visual references, inspect_creation_reference provides inferred DrawingML positions, NOT screenshots. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.13.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -81,7 +83,7 @@ function createServer(request: Request): McpServer {
       };
       try {
         const payload = slim(await handler(args));
-        if(name==="inspect_creation_reference"&&typeof payload.base64==="string"){
+        if((name==="inspect_creation_reference"||name==="inspect_reference_page")&&typeof payload.base64==="string"){
           const {base64,...metadata}=payload;
           const imageMime=String(payload.mimeType??"");
           if(imageMime.startsWith("image/")){
@@ -106,11 +108,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.12.1",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.12.1",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.13.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.13.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library"]}));
 
   register("get_creation_instructions","Lire les instructions de création",
     "MANDATORY before creating, improving or restyling slides: read the persistent artistic and animation instructions. Pass presentationId when working on an existing presentation. Presentation-specific instructions take precedence over global rules in case of conflict.",
@@ -134,6 +136,27 @@ function createServer(request: Request): McpServer {
         ...(geometry?{drawingMlGeometry:geometry}:{}),
         ...(file.mimeType.startsWith("image/")?{base64:file.base64}:{})};
     });
+
+  register("list_reference_pages","Bibliothèque des pages de référence",
+    "Return a PPTX reference's slide thumbnails metadata, individual layouts, visual types, and selected state. The images are PRIVATE: view them through inspect_reference_page. A PPTX without previews must be rendered first.",
+    {id:uuid},false,async a=>listVisualReferencePages(a.id));
+
+  register("render_reference_pages","Créer des miniatures PowerPoint réelles",
+    "Render up to three saved PPTX slides to PNG using pptx-glimpse and store their previews in Neon. For larger presentations repeat with start=1,4,7,...; use list_reference_pages to find missing pages. The rendering engine is approximate, not Microsoft PowerPoint itself.",
+    {id:uuid,start:z.number().int().min(1).max(100),count:z.number().int().min(1).max(3).default(3)},
+    true,async a=>generateVisualReferencePages(a.id,a.start,a.count));
+
+  register("search_reference_compositions","Chercher des compositions visuelles",
+    "Rank only user-selected reference slides by graphic function and geometry. This is not text-based retrieval or image embedding similarity. Always call inspect_reference_page on selected results to SEE the design before making a new slide. Never copy reference slide text.",
+    {kind:kindSchema.optional(),imageDominant:z.boolean().optional(),
+      geometrySignature:z.array(z.number().min(0).max(1)).max(20).optional(),
+      referenceId:uuid.optional(),limit:z.number().int().min(1).max(30).default(8)},
+    false,async a=>searchVisualReferencePages(a));
+
+  register("inspect_reference_page","Voir une vraie diapositive de référence",
+    "Return an actual rendered PNG for one saved PPTX reference slide, together with classification and geometry. Inspect its visual composition as an image. If no preview exists, first call render_reference_pages.",
+    {id:uuid,slideNumber:z.number().int().min(1).max(100)},false,
+    async a=>readVisualReferenceImage(a.id,a.slideNumber));
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
