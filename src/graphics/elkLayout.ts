@@ -87,6 +87,7 @@ export async function composeElkDiagram(raw:Diagram):Promise<SlideDocument>{
  });
  const accent=spec.accent??colorByTheme[spec.theme];
  const root=result.edges??[];
+ const usedLabels:Array<{x:number;y:number;w:number;h:number}>=[];
  root.forEach((edge,i)=>{
    const pathParts=(edge as Edge).sections??[];
    if(!pathParts.length)return;
@@ -104,14 +105,42 @@ export async function composeElkDiagram(raw:Diagram):Promise<SlideDocument>{
        '<path d="'+safe(svgPath)+'" stroke="'+accent+'" stroke-width="4" fill="none" marker-end="url(#elk-arrow-'+i+')"/></svg>',
    });
    if(edges[i]?.label){
-     const segment=pathParts[0]!;
-     const mid=at(segment.bendPoints?.[Math.floor((segment.bendPoints?.length??1)/2)]??
-       {x:(segment.startPoint.x+segment.endPoint.x)/2,y:(segment.startPoint.y+segment.endPoint.y)/2},scale,dx,dy);
-     elements.push({id:"elk-edge-label-"+i,type:"text",text:edges[i]!.label,
-       name:"Étiquette de relation "+(i+1),styles:{position:"absolute",
-         left:px(mid.x-110),top:px(mid.y-23),width:"220px",height:"48px",
-         color:accent,fontSize:"22px",fontFamily:"Arial, sans-serif",
-         background:"rgba(250,250,248,.92)",textAlign:"center"}});
+     const label=edges[i]!.label!;
+     const width=Math.max(106,Math.min(240,label.length*13+28)),height=42;
+     const segments=pathParts.flatMap(section=>{
+       const pts=[section.startPoint,...(section.bendPoints??[]),section.endPoint]
+         .map(p=>at(p,scale,dx,dy));
+       return pts.slice(1).map((to,j)=>({from:pts[j]!,to}));
+     }).sort((a,b)=>
+       Math.hypot(b.to.x-b.from.x,b.to.y-b.from.y)-
+       Math.hypot(a.to.x-a.from.x,a.to.y-a.from.y));
+     const intersects=(one:{x:number;y:number;w:number;h:number},
+       two:{x:number;y:number;w:number;h:number})=>
+       Math.max(0,Math.min(one.x+one.w,two.x+two.w)-Math.max(one.x,two.x))*
+       Math.max(0,Math.min(one.y+one.h,two.y+two.h)-Math.max(one.y,two.y));
+     const candidates=segments.flatMap((seg,j)=>{
+       const center={x:(seg.from.x+seg.to.x)/2,y:(seg.from.y+seg.to.y)/2};
+       const horizontal=Math.abs(seg.to.x-seg.from.x)>=Math.abs(seg.to.y-seg.from.y);
+       return [0,-54,54].map(shift=>{
+         const box={x:Math.round(center.x-width/2+(horizontal?0:shift)),
+           y:Math.round(center.y-height/2+(horizontal?shift:0)),w:width,h:height};
+         let score=j*25;
+         for(const nodeBox of boxes.values())score+=intersects(box,nodeBox)*4;
+         for(const other of usedLabels)score+=intersects(box,other)*5;
+         if(box.x<110||box.y<area.y-20||box.x+box.w>1810||box.y+box.h>1035)
+           score+=10_000;
+         return {box,score};
+       });
+     }).sort((a,b)=>a.score-b.score);
+     const chosen=candidates[0]?.box;
+     if(chosen){
+       usedLabels.push(chosen);
+       elements.push({id:"elk-edge-label-"+i,type:"text",text:label,
+         name:"Étiquette de relation "+(i+1),styles:{position:"absolute",
+           left:px(chosen.x),top:px(chosen.y),width:px(chosen.w),height:px(chosen.h),
+           color:accent,fontSize:"22px",fontFamily:"Arial, sans-serif",
+           background:"rgba(250,250,248,.96)",textAlign:"center"}});
+     }
    }
  });
  if(originalConnector&&!root.length)elements.push(originalConnector);
