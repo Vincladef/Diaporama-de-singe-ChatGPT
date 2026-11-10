@@ -27,12 +27,22 @@ function triplet(text:string,firstCss="body{display:grid;grid-template-columns:2
 }
 test("accepts independently authored layouts and preserves scientific notes",()=>{
   const source=made("<h1>Relations sociales</h1>","h1{color:red}",true);
-  const checked=prepareIndependentVariants({document:source,notes:"Source : article scientifique.\nEffet original."},triplet("Relations sociales"));
+  const options=triplet("Relations sociales");
+  for(const candidate of options) candidate.slide.document!.animations=[
+    {id:"reveal-new",targetSelector:"h1",order:0,trigger:"click",effect:"appear",durationMs:250}
+  ];
+  const checked=prepareIndependentVariants({document:source,notes:"Source : article scientifique.\nEffet original."},options);
   assert.equal(checked.report.independent,true);
   assert.equal(checked.variants.length,3);
   assert.ok(checked.variants.every(x=>x.slide.notes?.includes("Source : article scientifique.")));
-  assert.ok(checked.report.findings.some(x=>x.code==="animations_need_review"));
+  assert.equal(checked.report.findings.some(x=>x.code==="animations_not_preserved"),false);
   assert.equal(new Set(checked.variants.map(x=>layoutSignature(x.slide.document!))).size,3);
+});
+test("rejects losing the source's click animations",()=>{
+  const source=made("<h1>Modèle de maintien</h1>","h1{padding:100px}",true);
+  const result=prepareIndependentVariants({document:source,notes:""},triplet("Modèle de maintien"));
+  assert.equal(result.report.independent,false);
+  assert.equal(result.report.findings.filter(x=>x.code==="animations_not_preserved").length,3);
 });
 test("rejects palette/font-only restyling with the exact same geometry",()=>{
   const variants=triplet("Anxiété sociale");
