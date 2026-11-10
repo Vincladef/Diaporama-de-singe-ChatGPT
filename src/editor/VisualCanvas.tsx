@@ -169,7 +169,14 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
 
   return (
     <div className={"visual-viewport"+(zoom>1?" is-zoomed":"")} ref={wrapperRef}
-      aria-label="Surface d'édition graphique">
+      aria-label="Surface d'édition graphique"
+      onPointerDown={e=>{
+        if(readOnly||editingHtml)return;
+        // The gray pasteboard is part of the editing surface: clicking it must
+        // clear both native-object and freeform-HTML selections.
+        if((e.target as HTMLElement).closest(".visual-artboard"))return;
+        onSelect([]);setEditId(null);freeRef.current?.clear();
+      }}>
       <div className="visual-stage" style={{minWidth:Math.max(viewport.width,displayWidth+40),
         minHeight:Math.max(viewport.height,displayHeight+40)}}>
       <div className="visual-scale-bounds" style={{width:displayWidth,height:displayHeight}}>
