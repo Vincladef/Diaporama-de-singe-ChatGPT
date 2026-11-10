@@ -1109,3 +1109,27 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
   .speaker-notes-heading strong{font-size:10px}
   .speaker-notes-heading button{font-size:9px}
 }
+
+
+/* Références visuelles durables, attachées aux instructions globales. */
+.creation-references{display:flex;flex-direction:column;gap:10px;padding:15px;border:1px solid #d9e5dc;border-radius:9px;background:#f8faf8}
+.creation-references-title{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.creation-references-title>div{display:flex;flex-direction:column;gap:4px}
+.creation-references-title strong{font-size:13px;color:#274432}
+.creation-references-title span{font-size:11px;color:#728879;line-height:1.4}
+.creation-references-title>span{flex:none;font-size:11px;font-weight:700;color:#567262}
+.creation-reference-list{display:flex;flex-direction:column;gap:6px}
+.creation-reference-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #dfebe2;border-radius:7px;background:#fff}
+.creation-reference-icon{display:grid;place-items:center;width:27px;height:31px;color:#497055;background:#edf4ee;border-radius:5px;flex:none}
+.creation-reference-name{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:1;min-width:0;background:transparent;border:0;padding:0;color:#315a40;text-align:left;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.creation-reference-name:hover{text-decoration:underline}
+.creation-reference-name small{flex:none;white-space:nowrap;font-size:10px;color:#839185}
+.creation-reference-remove{background:transparent;border:0;border-radius:5px;padding:2px 7px;font-size:19px;color:#768b7c;flex:none}
+.creation-reference-remove:hover{background:#fbeae9;color:#a3413d}
+.creation-reference-upload{position:relative;display:inline-flex;align-items:center;align-self:flex-start;padding:8px 12px;border:1px dashed #7caa89;border-radius:7px;color:#2c7149;background:#edf6ef;cursor:pointer;font-size:12px;font-weight:750}
+.creation-reference-upload:hover{background:#e2f0e5}
+.creation-reference-upload.is-disabled{opacity:.6;pointer-events:none}
+.creation-reference-upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.creation-reference-upload:focus-within{outline:2px solid #397653;outline-offset:2px}
+.creation-references>small{text-align:left;font-size:11px;color:#829287;line-height:1.5}
+@media(max-width:760px){.creation-references{padding:11px}.creation-reference-name{flex-wrap:wrap}.creation-reference-name small{margin-left:auto}}
