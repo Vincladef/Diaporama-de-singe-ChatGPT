@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { extractPowerPointGeometry, summarizePowerPointGeometry } from "../creative/referenceGeometry.ts";
 import { z } from "zod";
 import { database } from "./security.ts";
 
@@ -55,6 +56,9 @@ export async function analyzeCreationReference(filename:string,mimeType:string,b
         .sort((a,b)=>Number(a.match(/slide(\d+)/)?.[1]??0)-Number(b.match(/slide(\d+)/)?.[1]??0));
       const colors:string[]=[],fonts:string[]=[],samples:string[]=[],photos:number[]=[];
       const theme=await zip.file("ppt/theme/theme1.xml")?.async("string");
+      const layoutSummary=await extractPowerPointGeometry(bytes)
+        .then(geometry=>summarizePowerPointGeometry(geometry,1800))
+        .catch(()=>"Géométrie des pages indisponible pour cette archive.");
       for(const source of [theme??"",...await Promise.all(paths.slice(0,30).map(path=>zip.file(path)!.async("string")))]){
         colors.push(...[...source.matchAll(/<(?:a:)?srgbClr[^>]*\bval=["']([0-9a-f]{6})["']/gi)]
           .map(match=>"#"+match[1]!.toUpperCase()));
@@ -67,6 +71,7 @@ export async function analyzeCreationReference(filename:string,mimeType:string,b
       }
       return [
         "PowerPoint de référence : "+paths.length+" diapositives.",
+        layoutSummary,
         "Images intégrées aux "+Math.min(paths.length,30)+" premières diapositives : "+photos.reduce((a,b)=>a+b,0)+".",
         colors.length?"Palette fréquente : "+frequent(colors,9).join(", ")+".":"",
         fonts.length?"Typographies déclarées : "+frequent(fonts,6).join(", ")+".":"",
