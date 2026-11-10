@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createEmptySlideDocument, SlideDocumentSchema, type SlideDocument, type SlideElement } from "../domain/slide.ts";
 import { auditSlide } from "../quality/audit.ts";
+import {inspectMarkupMedia} from "../quality/markupMedia.ts";
 
 /** Deterministic scene composition. These presets never require pixel coordinates from the AI. */
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -179,6 +180,7 @@ export function reviewDocument(document: SlideDocument, slideIndex = 0): { issue
   }));
   const texts = doc.elements.filter(e=>e.type==="text" && (e.text??"").trim());
   const images = doc.elements.filter(e=>e.type==="image");
+  const embedded=inspectMarkupMedia(doc);
   for (const el of texts) {
     const box=rect(el), size=numeric(el.styles.fontSize);
     if (!box) continue;
@@ -199,7 +201,8 @@ export function reviewDocument(document: SlideDocument, slideIndex = 0): { issue
         message:"Deux zones de texte paraissent se recouvrir.",suggestion:"Contrôler l'empilement et espacer les blocs."});
   }
   return {issues,metrics:{
-    textBlocks:texts.length,imageCount:images.length,editableObjects:doc.elements.length,
+    textBlocks:texts.length+embedded.htmlTextBlocks,
+    imageCount:images.length+embedded.imageCount,editableObjects:doc.elements.length,
     animations:doc.animations.length,canvasWidth:doc.canvas.width,canvasHeight:doc.canvas.height,
   },methodology:"Analyse statique des objets et dimensions ; la prévisualisation dans le navigateur est nécessaire pour vérifier les pixels, les polices et les images distantes."};
 }
