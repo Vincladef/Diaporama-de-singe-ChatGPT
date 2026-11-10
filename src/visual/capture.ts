@@ -37,11 +37,11 @@ async function createBrowser():Promise<{browser:Browser;userDataDir?:string}>{
   return {browser,userDataDir};
 }
 
-export async function captureSlidePixels(document:SlideDocument):Promise<CapturedSlide>{
-  const width=document.canvas.width,height=document.canvas.height;
+export async function captureSlidePixels(slideDoc:SlideDocument):Promise<CapturedSlide>{
+  const width=slideDoc.canvas.width,height=slideDoc.canvas.height;
   if(width>MAX_SIDE||height>MAX_SIDE||width*height>MAX_TOTAL_PIXELS)
     throw Error("capture_canvas_too_large");
-  const html=renderSlideHtml(document);
+  const html=renderSlideHtml(slideDoc);
   const {browser,userDataDir}=await createBrowser();
   try{
     const context=await browser.newContext({
