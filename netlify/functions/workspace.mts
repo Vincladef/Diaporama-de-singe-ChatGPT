@@ -5,6 +5,7 @@ import { createEmptySlideDocument, SlideDocumentSchema } from "../../src/domain/
 import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAssets, activateVariant } from "../../src/mcp/store";
 import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
+import { addCreationReference, removeCreationReference, getCreationReferenceFile, MAX_REFERENCE_SIZE } from "../../src/mcp/creationReferences";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -41,6 +42,16 @@ export default async function workspace(request: Request): Promise<Response> {
         const id=query.searchParams.get("id")||undefined;
         if(id)idSchema.parse(id);
         return result(await getCreationInstructions(id));
+      }
+      if(operation==="creationReferenceFile"){
+        const id=idSchema.parse(query.searchParams.get("id"));
+        const file=await getCreationReferenceFile(id);
+        if(!file)return result({error:"not_found"},404);
+        const safeName=file.filename.replace(/["\r\n]/g,"_");
+        return new Response(Buffer.from(file.base64,"base64"),{status:200,headers:{
+          ...headers,"Content-Type":"application/octet-stream",
+          "Content-Disposition":'attachment; filename="'+safeName+'"',
+        }});
       }
       if(operation==="folders"){
         const folders=await db.query(
@@ -82,6 +93,16 @@ export default async function workspace(request: Request): Promise<Response> {
       return result({ ok: false, error: "unknown_operation" }, 400);
     }
     if (request.method !== "POST") return result({ ok: false, error: "method_not_allowed" }, 405);
+    if((request.headers.get("content-type")??"").startsWith("multipart/form-data")){
+      const declared=Number(request.headers.get("content-length")||"0");
+      if(declared>MAX_REFERENCE_SIZE+500_000)return result({error:"payload_too_large"},413);
+      const form=await request.formData();
+      if(form.get("action")!=="uploadCreationReference")return result({error:"unknown_action"},400);
+      const file=form.get("file");
+      if(!file||typeof file==="string")return result({error:"invalid_reference_file"},400);
+      if(file.size>MAX_REFERENCE_SIZE||file.size===0)return result({error:"payload_too_large"},413);
+      return result({ok:true,reference:await addCreationReference(file.name,new Uint8Array(await file.arrayBuffer()))},201);
+    }
     const body = await request.text();
     if (body.length > 1800000) return result({ ok: false, error: "payload_too_large" }, 413);
     let data: Record<string, unknown>;
@@ -92,6 +113,10 @@ export default async function workspace(request: Request): Promise<Response> {
     } catch { return result({ ok: false, error: "invalid_json" }, 400); }
 
     switch (data.action) {
+      case "removeCreationReference":{
+        const id=idSchema.parse(data.id);
+        return result({ok:true,removed:await removeCreationReference(id)});
+      }
       case "saveCreationInstructions":{
         const scope=z.enum(["global","presentation"]).parse(data.scope);
         const instructions=creationInstructionsSchema.parse(data.instructions);
