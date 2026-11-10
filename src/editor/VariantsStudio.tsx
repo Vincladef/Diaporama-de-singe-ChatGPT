@@ -13,14 +13,14 @@ type Props={
   notes:string;
   dirty:boolean;
   onClose:()=>void;
-  onApply:(document:SlideDocument,notes:string)=>void;
+  onSelectStored:(variant:{id:string;name:string;document:SlideDocument;notes:string})=>Promise<boolean>;
 };
-export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApply}:Props){
+export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onSelectStored}:Props){
   const [alternatives,setAlternatives]=useState<StoredVariant[]>([]);
   const [proposals,setProposals]=useState<ProposedVariant[]>([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
-  const [selected,setSelected]=useState<string|null>(null);
+  const [choosing,setChoosing]=useState<string|null>(null);
 
   const refresh=useCallback(async()=>{
     const data=await command<{variants:StoredVariant[]}>(token,{action:"listVariants",slideId});
@@ -36,7 +36,7 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
   },[refresh,onClose]);
   function generate(){
     setProposals(proposeGraphicVariants(document,6));
-    setSelected(null);
+
   }
   async function persist(){
     if(!proposals.length)return;
@@ -53,12 +53,22 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
     ...proposals.map((v,i)=>({id:"proposal-"+i,name:v.name,document:v.document,notes,description:v.description,stored:false})),
     ...alternatives.map(v=>({id:v.id,name:v.name,document:v.document,notes:v.notes,description:"Variante enregistrée et accessible depuis le MCP",stored:true})),
   ];
-  const picked=candidates.find(v=>v.id===selected);
-  function apply(){
-    if(!picked)return;
-    if(dirty&&!window.confirm("Appliquer cette variante remplacera les modifications non enregistrées. Continuer ?"))return;
-    onApply(structuredClone(picked.document),picked.notes);
-    onClose();
+  async function choose(candidate:(typeof candidates)[number]){
+    if(loading||choosing)return;
+    setChoosing(candidate.id);setError("");
+    try{
+      let target:{id:string;name:string;document:SlideDocument;notes:string}=candidate;
+      if(!candidate.stored){
+        const saved=await command<{variants:{id:string;name:string}[]}>(token,{
+          action:"createVariants",slideId,
+          variants:[{name:candidate.name,slide:{document:candidate.document,notes:candidate.notes}}],
+        });
+        if(!saved.variants?.[0]?.id)throw new Error("Enregistrement de la variante impossible.");
+        target={...candidate,id:saved.variants[0].id};
+      }
+      if(await onSelectStored(target))onClose();
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setChoosing(null);}
   }
   return (
     <div className="studio-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
@@ -80,8 +90,8 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
             <div className="variant-preview"><SlideThumbnail document={document} index={0}/></div>
             <div className="variant-description"><strong>Version actuelle</strong><p>La composition ouverte dans l'éditeur.</p></div>
           </div>
-          {candidates.map((candidate,i)=><button key={candidate.id} className={"variant-card selectable"+(selected===candidate.id?" selected":"")}
-            onClick={()=>setSelected(candidate.id)}>
+          {candidates.map((candidate,i)=><button key={candidate.id} className={"variant-card selectable"+(choosing===candidate.id?" selected":"")}
+            disabled={Boolean(choosing)||loading} onClick={()=>void choose(candidate)}>
               <div className="variant-preview"><SlideThumbnail document={candidate.document} index={i+1}/></div>
               <div className="variant-description"><strong>{candidate.name}</strong><p>{candidate.description}</p>
                 <span>{candidate.stored?"Enregistrée":"Proposition locale"} · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.imageCount} image(s) · {compareOneVariant({name:"Actuelle",document,notes},candidate).indicators.warnings} alerte(s)</span>
@@ -90,9 +100,8 @@ export function VariantsStudio({token,slideId,document,notes,dirty,onClose,onApp
           {candidates.length===0&&<div className="studio-empty">Crée six directions graphiques pour cette diapositive, puis compare-les côte à côte. Les contenus restent modifiables.</div>}
         </div>
         <footer className="studio-variant-footer">
-          <span>{candidates.length} proposition{candidates.length>1?"s":""} disponibles</span>
-          <button onClick={onClose}>Fermer</button>
-          <button className="primary" onClick={apply} disabled={!picked}>Appliquer la variante choisie</button>
+          <span>{choosing?"Enregistrement du choix…":candidates.length+" proposition"+(candidates.length>1?"s":"")+" disponibles"} · Un clic pour choisir</span>
+          <button onClick={onClose} disabled={Boolean(choosing)}>Fermer</button>
         </footer>
       </section>
     </div>
