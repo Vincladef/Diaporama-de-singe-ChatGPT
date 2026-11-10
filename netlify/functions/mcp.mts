@@ -7,6 +7,7 @@ import { compareOneVariant } from "../../src/variants/compare";
 import { fingerprint } from "../../src/mcp/fingerprint";
 import { listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
+import { getCreationReferenceFile } from "../../src/mcp/creationReferences";
 import { curateCandidates } from "../../src/images/curate";
 import { editImageStyles } from "../../src/images/edit";
 import { trackUnsplashDownload } from "../../src/images/track";
@@ -60,7 +61,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.12.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.12.1",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, generate_variants, compare_variants, revise_variant and curate_images. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
@@ -79,6 +80,17 @@ function createServer(request: Request): McpServer {
       };
       try {
         const payload = slim(await handler(args));
+        if(name==="inspect_creation_reference"&&typeof payload.base64==="string"){
+          const {base64,...metadata}=payload;
+          const imageMime=String(payload.mimeType??"");
+          if(imageMime.startsWith("image/")){
+            return {content:[
+              {type:"text" as const,text:JSON.stringify(metadata)},
+              {type:"image" as const,data:base64,mimeType:imageMime}
+            ],structuredContent:metadata};
+          }
+          return {content:[{type:"text" as const,text:JSON.stringify(metadata)}],structuredContent:metadata};
+        }
         return { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload };
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown_error";
@@ -93,11 +105,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.12.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.12.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.12.1",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.12.1",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads"]}));
 
   register("get_creation_instructions","Lire les instructions de création",
     "MANDATORY before creating, improving or restyling slides: read the persistent artistic and animation instructions. Pass presentationId when working on an existing presentation. Presentation-specific instructions take precedence over global rules in case of conflict.",
@@ -109,6 +121,15 @@ function createServer(request: Request): McpServer {
     {scope:z.enum(["global","presentation"]),instructions:creationInstructionsSchema,
       presentationId:uuid.optional()},true,
     async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
+
+  register("inspect_creation_reference","Examiner un exemple visuel joint",
+    "Read a saved design reference for the global creation instructions. Photos/screenshots are returned as images; PPTX, HTML and PDF return an extracted style summary. PDF pages are not visually rendered. Reference IDs come from get_creation_instructions.",
+    {id:uuid},false,async a=>{
+      const file=await getCreationReferenceFile(a.id);
+      if(!file)throw new Error("reference_not_found");
+      return {id:a.id,filename:file.filename,mimeType:file.mimeType,analysis:file.analysis,
+        ...(file.mimeType.startsWith("image/")?{base64:file.base64}:{})};
+    });
 
   register("list_presentations","Lister les présentations",
     "Fast paginated list; title and slide counts only. Use before requesting full HTML.",
