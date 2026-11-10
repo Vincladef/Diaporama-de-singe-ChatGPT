@@ -2,7 +2,7 @@ import {z} from "zod";
 import {database} from "./security.ts";
 
 import {designProfile,inferPurpose} from "../preferences/profile.ts";
-import {rankVisualPreferences,summarizeVisualPreferenceGuide,
+import {effectiveVisualSignals,summarizeVisualPreferenceGuide,
  type PreferenceKind,type PreferenceScope,type PreferenceView} from "../preferences/ranking.ts";
 import type {VisualKind} from "../creative/referenceLibrary.ts";
 
@@ -47,9 +47,9 @@ export async function listRelevantVisualPreferences(
   "OR ($1::uuid IS NOT NULL AND scope='presentation' AND presentation_id=$1::uuid) "+
   "ORDER BY updated_at DESC LIMIT 180",[presentationId??null]);
  const entries=rows.map(row=>mapped(row,includeExamples));
- const ranked=rankVisualPreferences(entries,kind,presentationId);
- const positive=ranked.filter(p=>p.kind==="selected"||p.kind==="saved").slice(0,7);
- const negative=ranked.filter(p=>p.kind==="disliked").slice(0,5);
+ const signals=effectiveVisualSignals(entries,kind,presentationId);
+ const positive=signals.positives.slice(0,7);
+ const negative=signals.negatives.slice(0,5);
  const examples=positive.filter(p=>p.kind==="saved"&&p.documentSnapshot)
   .slice(0,2).map(p=>({
     id:p.id,name:p.variantName,slideKind:p.slideKind,
@@ -77,8 +77,14 @@ export async function saveVariantPreference(input:SavePreferenceInput){
  const slide=await getSlide(slideId,"full");
  if(!("document" in slide))throw Error("slide_not_found");
  if(kind==="selected"&&!input.incrementSelection&&
-   slide.document.variantSelection?.activeId!==variantId)
-   throw Error("only_active_variant_can_receive_selection_comment");
+   slide.document.variantSelection?.activeId!==variantId){
+   // Comments may clarify a previously chosen variant, but cannot forge a selection.
+   const prior=await database().query(
+     "SELECT id FROM public.slide_visual_preferences WHERE slide_id=$1::uuid "+
+     "AND variant_id=$2::uuid AND kind='selected' AND scope=$3 LIMIT 1",
+     [slideId,variantId,scope]);
+   if(!prior.length)throw Error("selection_comment_requires_prior_choice");
+ }
  const variant=await getVariant(slideId,variantId);
  const db=database();
  if(!active){
