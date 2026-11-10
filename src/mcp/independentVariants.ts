@@ -3,30 +3,8 @@ import {getSlide,createVariants} from "./store.ts";
 import {getCreationInstructions} from "./instructions.ts";
 import {generateVisualReferencePages,readVisualReferenceImage,searchVisualReferencePages} from "./referencePages.ts";
 import {prepareIndependentVariants,type IndependentVariantInput} from "../variants/independent.ts";
-import type {VisualKind} from "../creative/referenceLibrary.ts";
+import {inferPurpose} from "../preferences/profile.ts";
 
-function inferPurpose(doc:SlideDocument,notes:string):{kind:VisualKind;reason:string;excerpt:string}{
-  const prose=[...doc.elements.filter(e=>e.type==="text").map(e=>e.text??""),
-    (doc.freeform?.html??"").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"").replace(/<[^>]*>/g," ")].join(" ")
-    .replace(/\s+/g," ").trim();
-  const content=prose+" "+notes.slice(0,500);
-  const hasImage=doc.elements.some(e=>e.type==="image")||
-    /<img\b|background-image\s*:|url\(/i.test((doc.freeform?.html??"")+" "+(doc.freeform?.css??""));
-  const hasDiagram=doc.elements.some(e=>!!e.linkFrom||!!e.linkTo||e.type==="svg")||
-    /<svg\b|→|⇒|cause|boucle|mécanisme/i.test(content);
-  const isData=/%|\b(?:résultats?|données?|effectifs?|échantillon|figure|graphique|tableau)\b/i.test(content);
-  const isComparison=/\b(?:comparaison|versus|contre|différences?|deux conditions|vs\.?|avantages?|inconvénients?)\b/i.test(content);
-  const isQuote=/^\s*[«“]|citation|témoignage/i.test(prose);
-  const kind:VisualKind=isData?"graphique":hasDiagram?"schématique":
-    isComparison?"comparatif":isQuote?"typographique":hasImage?"photographique":"mixte";
-  const reason=kind==="graphique"?"Les données doivent être représentées sans valeurs inventées.":
-    kind==="schématique"?"Une relation ou un mécanisme est présent.":
-    kind==="comparatif"?"Le contenu oppose ou rapproche des situations.":
-    kind==="photographique"?"La source possède un rôle photographique.":
-    kind==="typographique"?"Le texte constitue le centre pédagogique.":"La fonction visuelle reste à interpréter par l'IA.";
-  return {kind,reason,excerpt:prose.slice(0,1800)};
-}
 
 export async function prepareIndependentVariantBrief(slideId:string,loadReferences=true){
   const slide=await getSlide(slideId,"full");
