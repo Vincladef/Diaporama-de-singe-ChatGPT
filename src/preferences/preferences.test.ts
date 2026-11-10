@@ -54,3 +54,13 @@ test("visual kind and style profile are derived without touching scientific text
  assert.equal(profile.counts.image,1);
  assert.equal(profile.animationCount,0);
 });
+
+test("a later explicit rejection overrides an earlier selection for the same design",()=>{
+ const earlier=make("same","selected","presentation","schématique");
+ const rejected={...make("new","disliked","presentation","schématique",
+   "Texte trop dense"),variantId:earlier.variantId};
+ const guide=summarizeVisualPreferenceGuide([earlier,rejected],"schématique",presentation);
+ assert.ok(guide.includes("Texte trop dense"));
+ assert.ok(!guide.includes("Signaux positifs"));
+ assert.ok(guide.includes("Rejets explicites"));
+});
