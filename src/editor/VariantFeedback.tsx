@@ -31,12 +31,14 @@ export function VariantFeedbackActions({
  const [error,setError]=useState("");
  const [notice,setNotice]=useState("");
  const relevant=preferences.filter(p=>p.variantId===variantId);
- const saved=relevant.some(p=>p.kind==="saved");
- const disliked=relevant.some(p=>p.kind==="disliked");
- const commentScope=scopeOverride??"presentation";
+ const savedScope=scopeOverride??"global";
+ const dislikedScope=scopeOverride??"presentation";
+ const saved=relevant.some(p=>p.kind==="saved"&&p.scope===savedScope);
+ const disliked=relevant.some(p=>p.kind==="disliked"&&p.scope===dislikedScope);
+ const commentScope=scopeOverride??relevant.find(p=>p.kind==="saved"||p.kind==="disliked")?.scope??"presentation";
  const chosenFeedback=relevant.find(p=>p.scope===commentScope&&
    (p.kind==="saved"||p.kind==="disliked"||p.kind==="selected"));
- const selectedInMemory=selected||relevant.some(p=>p.kind==="selected");
+ const selectedInMemory=selected;
  async function submit(kind:PreferenceKind,active=true,commentValue?:string,forcedScope?:PreferenceScope){
    if(busy||disabled)return;
    const scope=scopeOverride??forcedScope??(kind==="saved"?"global":"presentation");
@@ -59,14 +61,12 @@ export function VariantFeedbackActions({
    <div className="variant-feedback-buttons">
      <button type="button" aria-pressed={disliked} disabled={busy||disabled}
        title="Indiquer un rejet explicite, sans juger les autres variantes"
-       onClick={()=>void submit("disliked",!disliked,undefined,
-         relevant.find(p=>p.kind==="disliked")?.scope??"presentation")}>
+       onClick={()=>void submit("disliked",!disliked,comment.trim()||undefined,dislikedScope)}>
        {disliked?"✕ Avis négatif enregistré":"Je n'aime pas"}
      </button>
      <button type="button" aria-pressed={saved} disabled={busy||disabled}
        title="Garder cette composition comme exemple graphique pour de futures créations"
-       onClick={()=>void submit("saved",!saved,undefined,
-         relevant.find(p=>p.kind==="saved")?.scope??"global")}>
+       onClick={()=>void submit("saved",!saved,comment.trim()||undefined,savedScope)}>
        {saved?"★ Référence enregistrée":"☆ Enregistrer comme référence"}
      </button>
    </div>
