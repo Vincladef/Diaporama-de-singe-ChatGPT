@@ -7,6 +7,7 @@ export interface ImageCandidate {
   id:string; provider:ImageSource; title:string; alt:string; previewUrl:string; imageUrl:string;
   pageUrl:string; creator:string; license:string; attribution:string; width:number; height:number;
   downloadLocation?:string; // Unsplash API requires a download-tracking request when selected.
+  focalX?:number;focalY?:number; // Chosen crop placement from Sharp, never source metadata.
 }
 export interface ImageSearchRequest {
   query:string; sources:ImageSource[]; page:number; perSource:number; orientation:"any"|"landscape"|"portrait"|"square";
