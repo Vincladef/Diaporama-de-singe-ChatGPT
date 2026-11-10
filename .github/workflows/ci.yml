@@ -21,6 +21,7 @@ jobs:
       - name: Install Chromium for real screenshot verification
         run: npx playwright install --with-deps chromium
       - name: Validate two real slide screenshots
+        timeout-minutes: 3
         run: npm run test:visual
       - name: Upload captured slide evidence
         uses: actions/upload-artifact@v4
