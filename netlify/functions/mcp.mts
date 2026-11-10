@@ -17,6 +17,7 @@ import { trackUnsplashDownload } from "../../src/images/track";
 import { searchImages, getSourceStatuses, ImageSourceSchema } from "../../src/images/search";
 import { proposeGraphicVariants } from "../../src/variants/propose";
 import { prepareIndependentVariantBrief, saveIndependentVariants } from "../../src/mcp/independentVariants";
+import {inspectVisualRender,readVisualCapture,applyVisualCorrection} from "../../src/mcp/visualReview";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
 import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
@@ -65,8 +66,8 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.14.0",
-  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For any request for three AI variants, FIRST call prepare_independent_variants (which reads instructions, sources and reference pixels), author THREE separate complete HTML/CSS/SVG slide documents, then call create_independent_variants. NEVER use generate_variants, proposeGraphicVariants or compose_slides to simulate original AI variants. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
+    name: "diaporama-de-singe-chatgpt", version: "0.15.0",
+  }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. Prefer create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. For any request for three AI variants, FIRST call prepare_independent_variants (which reads instructions, sources and reference pixels), author THREE separate complete HTML/CSS/SVG slide documents, then call create_independent_variants. BEFORE presenting a generated slide as visually checked, call inspect_visual_render to receive actual Chromium screenshot pixels as an image, examine their appearance together with reference images and DOM diagnostics, then if needed call apply_visual_correction and repeat inspect_visual_render with the same sessionId (max 3 screenshot passes and 2 corrections). Never claim aesthetic review without viewing screenshot pixels. Do not alter scientific content or citations in CSS fixes. NEVER use generate_variants, proposeGraphicVariants or compose_slides to simulate original AI variants. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
   function register(name: string, title: string, description: string, schema: ToolSchema, write: boolean,
@@ -84,6 +85,19 @@ function createServer(request: Request): McpServer {
       };
       try {
         const payload = slim(await handler(args));
+        if((name==="inspect_visual_render"||name==="read_visual_capture")&&
+           typeof payload.base64==="string"&&payload.mimeType==="image/png"){
+          const {base64,referenceImages,...metadata}=payload;
+          const extra=Array.isArray(referenceImages)?referenceImages.slice(0,2):[];
+          return {content:[
+            {type:"text" as const,text:JSON.stringify(metadata)},
+            {type:"image" as const,data:base64,mimeType:"image/png" as const},
+            ...extra.filter((x):x is {base64:string;mimeType:string}=>
+              !!x&&typeof x==="object"&&typeof x.base64==="string"&&
+              typeof x.mimeType==="string"&&x.mimeType.startsWith("image/"))
+              .map(x=>({type:"image" as const,data:x.base64,mimeType:x.mimeType})),
+          ],structuredContent:metadata};
+        }
         if(name==="prepare_independent_variants"&&Array.isArray(payload.previewImages)){
           const {previewImages,...metadata}=payload;
           const images=previewImages.filter((item):item is {base64:string;mimeType:string}=>
@@ -129,11 +143,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.14.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.14.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.15.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.15.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library","three_independent_ai_variants"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library","three_independent_ai_variants","chromium_pixel_capture","bounded_multimodal_visual_revision"]}));
 
   register("get_creation_instructions","Lire les instructions de création",
     "MANDATORY before creating, improving or restyling slides: read the persistent artistic and animation instructions. Pass presentationId when working on an existing presentation. Presentation-specific instructions take precedence over global rules in case of conflict.",
@@ -622,6 +636,29 @@ function createServer(request: Request): McpServer {
         assets,tracking,...(metadataWarning?{warning:metadataWarning}:{}),
         rightsNotice:"Image usage permissions must still be verified on each publisher's source page."};
     });
+
+  register("inspect_visual_render","Examiner un vrai rendu Chromium",
+    "REQUIRED after authoring a visual variant before claiming visual review. Renders actual slide HTML/CSS in server Chromium, waits for fonts/images, captures real PNG pixels and DOM issues, then sends the screenshot image to ChatGPT. Also sends an optional selected reference page. Session has at most 3 captures and 2 targeted fixes within 24h. Call apply_visual_correction for issues, then inspect again with the same sessionId.",
+    {slideId:uuid,variantId:uuid.optional(),sessionId:uuid.optional(),includeReference:z.boolean().default(true)},
+    true,async a=>inspectVisualRender(a.slideId,a.variantId,a.sessionId,a.includeReference));
+
+  register("read_visual_capture","Relire une capture visuelle archivée",
+    "Return a real Chromium PNG and its diagnostics from a previous review, stored privately for up to 24 hours. Reading does not consume an additional screenshot pass.",
+    {sessionId:uuid,pass:z.number().int().min(1).max(3).optional()},
+    false,async a=>readVisualCapture(a.sessionId,a.pass));
+
+  register("apply_visual_correction","Corriger le rendu après examen visuel",
+    "Apply targeted CSS or editable element geometry/style changes to a SAVED variant after personally examining the latest Chromium screenshot from inspect_visual_render. Preserves slide scientific HTML/text, notes and citations. Session permits 2 corrections at most. Call inspect_visual_render again with the SAME sessionId after each correction. No automatic LLM call is made by this backend.",
+    {sessionId:uuid,expectedFingerprint:z.string().regex(/^[0-9a-f]{64}$/),
+      correction:z.object({
+        reason:z.string().trim().min(10).max(1200),
+        appendCss:z.string().max(9000).optional(),
+        elementStyles:z.array(z.object({
+          id:z.string().min(1).max(128),
+          styles:z.record(z.string(),z.union([z.string(),z.number()]))
+        }).strict()).max(12).optional()
+      }).strict()},true,
+    async a=>applyVisualCorrection(a.sessionId,a.expectedFingerprint,a.correction));
 
   register("prepare_independent_variants","Préparer trois variantes originales par IA",
     "MANDATORY first step for creative alternatives. Reads exact source slide, presenter notes, all persistent instructions, semantic purpose and visual reference PNGs. Automatically creates the first 3 previews if no images are cached; returns up to 3 ACTUAL images for the model to inspect. ChatGPT must then AUTHOR three independent HTML/CSS/SVG documents and save them using create_independent_variants. The server does not pretend to run an LLM.",

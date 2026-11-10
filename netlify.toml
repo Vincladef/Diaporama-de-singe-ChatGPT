@@ -6,6 +6,9 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions.visual-capture]
+  external_node_modules = ["@sparticuz/chromium", "playwright-core"]
+
 [[headers]]
   for = "/*"
   [headers.values]
