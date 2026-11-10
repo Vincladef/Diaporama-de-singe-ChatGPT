@@ -18,13 +18,13 @@ export type CapturedSlide={png:Buffer;diagnostics:CaptureDiagnostics};
 const MAX_SIDE=2560;
 const MAX_TOTAL_PIXELS=3_700_000;
 const MAX_PNG_BYTES=3_500_000;
-const LOAD_LIMIT_MS=18_000;
+const LOAD_LIMIT_MS=9_000;
 const screenshotOptions={type:"png" as const,animations:"disabled" as const};
 
 async function createBrowser():Promise<{browser:Browser;userDataDir?:string}>{
   // CI provides an installed Playwright Chromium; Netlify bundles Sparticuz Chromium.
   if(process.env.VISUAL_USE_LOCAL_CHROMIUM==="1"){
-    const browser=await playwright.launch({headless:true,timeout:20_000});
+    const browser=await playwright.launch({headless:true,timeout:16_000});
     return {browser};
   }
   const chromium=(await import("@sparticuz/chromium")).default;
@@ -32,7 +32,7 @@ async function createBrowser():Promise<{browser:Browser;userDataDir?:string}>{
   const browser=await playwright.launch({
     args:[...chromium.args,"--user-data-dir="+userDataDir],
     executablePath:await chromium.executablePath(),
-    headless:true,timeout:24_000,
+    headless:true,timeout:18_000,
   });
   return {browser,userDataDir};
 }
@@ -46,7 +46,7 @@ export async function captureSlidePixels(slideDoc:SlideDocument):Promise<Capture
   try{
     const context=await browser.newContext({
       viewport:{width,height},deviceScaleFactor:1,
-      javaScriptEnabled:false,acceptDownloads:false,
+      javaScriptEnabled:true,acceptDownloads:false,
       serviceWorkers:"block",colorScheme:"light",
     });
     const page=await context.newPage();
@@ -83,7 +83,7 @@ export async function captureSlidePixels(slideDoc:SlideDocument):Promise<Capture
         failed.push("HTTP "+response.status()+": "+response.url().slice(0,180));
     });
     await page.setContent(html,{waitUntil:"domcontentloaded",timeout:LOAD_LIMIT_MS});
-    const resources=await page.evaluate(async()=>{
+    const resources=await Promise.race([page.evaluate(async()=>{
       const timeout=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
       const fonts=await Promise.race([
         document.fonts.ready.then(()=>true).catch(()=>false),
@@ -124,10 +124,11 @@ export async function captureSlidePixels(slideDoc:SlideDocument):Promise<Capture
         missingImages:failures.length,
         backgroundImageCount:bgs,issues:issues.slice(0,32),
       };
-    });
+    }),new Promise<never>((_,reject)=>setTimeout(
+      ()=>reject(Error("visual_dom_inspection_timeout")),16_000))]);
     // CSS transitions and animation are disabled in the capture, not in the actual slide.
     await page.addStyleTag({content:"*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}"});
-    const png=await page.screenshot(screenshotOptions);
+    const png=await page.screenshot({...screenshotOptions,timeout:9_000});
     if(png.length>MAX_PNG_BYTES)throw Error("capture_png_too_large");
     const ratio=width/height;
     const warnings=[
