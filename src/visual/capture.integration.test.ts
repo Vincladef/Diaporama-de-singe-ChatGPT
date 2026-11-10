@@ -13,7 +13,9 @@ test("captures actual Chromium pixels from two independent presentation composit
     html:'<main class="stage"><div class="eyebrow">MODÈLE COGNITIF</div><h1>Ce qui entretient la peur</h1><p>Attention sur soi · sécurité · rumination</p><svg viewBox="0 0 600 350"><circle cx="260" cy="180" r="105" fill="#c8ac87"/><circle cx="260" cy="180" r="170" stroke="#6f846f" stroke-width="5" fill="none"/><text x="260" y="188" text-anchor="middle" font-size="30" fill="#152a25">Anxiété</text></svg></main>',
     css:"html,body{background:#ecebe3;color:#162a24;font-family:Georgia,serif}.stage{padding:90px;position:relative;width:100%;height:100%}.eyebrow{font:20px Arial;letter-spacing:4px}h1{font-size:115px;width:900px;line-height:1.05;margin:90px 0 40px}p{font-size:36px}svg{position:absolute;right:80px;bottom:80px;width:720px;height:500px}",
   };
+  console.log("REAL_CHROMIUM_TEST: starting first capture");
   const first=await captureSlidePixels(base);
+  console.log("REAL_CHROMIUM_TEST: first capture bytes",first.png.byteLength);
   assert.equal(first.diagnostics.browser,"Chromium");
   assert.equal(first.diagnostics.pixelWidth,1920);
   assert.equal(first.diagnostics.pixelHeight,1080);
@@ -26,7 +28,9 @@ test("captures actual Chromium pixels from two independent presentation composit
     html:'<main class="editorial"><aside><h1>Une boucle<br>qui se répète</h1></aside><section><h2>Attention sur soi</h2><p>Les protections empêchent de constater que la conversation se déroule autrement.</p><div class="rule"></div></section></main>',
     css:"html,body{background:#203d35;color:#f0ece1;font-family:Georgia,serif}.editorial{display:grid;grid-template-columns:52% 48%;height:100%;width:100%}.editorial aside{padding:150px 80px}h1{font-size:105px;line-height:1.02;font-weight:normal}.editorial section{background:#e7cdb0;color:#283930;padding:200px 90px}h2{font-size:66px}p{font-size:36px;line-height:1.4}.rule{border-top:5px solid #5d7866;margin-top:90px}",
   };
+  console.log("REAL_CHROMIUM_TEST: starting second capture");
   const second=await captureSlidePixels(alternate);
+  console.log("REAL_CHROMIUM_TEST: second capture bytes",second.png.byteLength);
   assert.ok(second.png.byteLength>8000);
   assert.notDeepEqual(first.png,second.png);
   assert.equal(second.diagnostics.missingImages,0);
