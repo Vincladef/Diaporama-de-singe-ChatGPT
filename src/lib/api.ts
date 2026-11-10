@@ -92,6 +92,10 @@ export interface CreationInstructions {
   presentationId:string|null;
   precedence:string;
   updatedAt:string|null;
+  references:CreationReference[];
+}
+export interface CreationReference {
+  id:string;filename:string;mimeType:string;sizeBytes:number;analysis:string;createdAt:string;
 }
 export async function readCreationInstructions(token:string,presentationId?:string):Promise<CreationInstructions>{
   return call<CreationInstructions>(token,{op:"creationInstructions",id:presentationId});
@@ -100,6 +104,39 @@ export async function writeCreationInstructions(
   token:string,scope:"global"|"presentation",instructions:string,presentationId?:string
 ):Promise<CreationInstructions>{
   return call<CreationInstructions>(token,{action:{action:"saveCreationInstructions",scope,instructions,presentationId}});
+}
+
+export async function uploadCreationReference(token:string,file:File):Promise<CreationReference>{
+  const form=new FormData();
+  form.set("action","uploadCreationReference");
+  form.set("file",file,file.name);
+  const response=await fetch(endpoint,{
+    method:"POST",headers:{Authorization:"Bearer "+token},body:form,
+    cache:"no-store",signal:AbortSignal.timeout(60000),
+  });
+  const payload=await response.json() as {error?:string;reference?:CreationReference};
+  if(!response.ok||!payload.reference){
+    if(payload.error==="payload_too_large")throw new Error("Le fichier dépasse 4 Mo.");
+    if(payload.error==="invalid_reference_file")throw new Error("Fichier invalide ou format non accepté.");
+    if(payload.error==="maximum_references_reached")throw new Error("La limite de huit exemples est atteinte.");
+    throw new Error("L’envoi du fichier a échoué : "+(payload.error??response.status));
+  }
+  return payload.reference;
+}
+export async function deleteCreationReference(token:string,id:string):Promise<void>{
+  await command(token,{action:"removeCreationReference",id});
+}
+export async function downloadCreationReference(token:string,reference:CreationReference):Promise<void>{
+  const url=new URL(endpoint,window.location.origin);
+  url.searchParams.set("op","creationReferenceFile");
+  url.searchParams.set("id",reference.id);
+  const response=await fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+  if(!response.ok)throw new Error("Impossible de récupérer le fichier.");
+  const objectUrl=URL.createObjectURL(await response.blob());
+  const link=document.createElement("a");
+  link.href=objectUrl;link.download=reference.filename;
+  document.body.append(link);link.click();link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
 }
 
 export async function listPresentations(token: string): Promise<DeckSummary[]> {
