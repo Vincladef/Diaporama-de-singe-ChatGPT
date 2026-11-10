@@ -33,7 +33,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   const frameRef = useRef<HTMLIFrameElement>(null);
   const freeRef = useRef<FreeformHandle>(null);
   const [editingHtml,setEditingHtml]=useState(false);
-  const [width, setWidth] = useState(840);
+  const [viewport, setViewport] = useState({width:840,height:460});
   const [live, setLive] = useState<Record<string, Box>>({});
   const gesture = useRef<Gesture | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -46,7 +46,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   useEffect(() => {
     const div=wrapperRef.current;
     if (!div) return;
-    const measure=()=>setWidth(Math.max(250, div.clientWidth - 2));
+    const measure=()=>{
+      const next={width:Math.max(1,div.clientWidth),height:Math.max(1,div.clientHeight)};
+      setViewport(old=>old.width===next.width&&old.height===next.height?old:next);
+    };
     measure();
     const observer=new ResizeObserver(measure);
     observer.observe(div);
@@ -57,7 +60,13 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     setLive({});
     setEditId(null);
   },[doc.canvas.width,doc.canvas.height]);
-  const fit = Math.max(0.02, (width / doc.canvas.width) * zoom);
+  // Fit both dimensions, not only the width. The zoom multiplier is relative
+  // to this contain scale, so the complete slide is visible by default.
+  const contain=Math.min(Math.max(40,viewport.width-40)/doc.canvas.width,
+    Math.max(40,viewport.height-40)/doc.canvas.height);
+  const fit=Math.max(0.02,contain*zoom);
+  const displayWidth=doc.canvas.width*fit;
+  const displayHeight=doc.canvas.height*fit;
   const [previewDoc,setPreviewDoc]=useState(doc);
   useEffect(()=>{
     // Code typing changes only freeform markup; defer iframe rebuilding while
@@ -70,7 +79,6 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     return()=>window.clearTimeout(timer);
   },[doc]);
   const srcDoc=useMemo(()=>renderSlideHtml(previewDoc),[previewDoc]);
-  const canvasHeight = doc.canvas.height * fit;
 
   function updateIframePreview(boxes: Record<string,Box>) {
     const frameDoc=frameRef.current?.contentDocument;
@@ -160,8 +168,11 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   const editBox=chosen && (live[chosen.id]??worldBox(chosen,doc));
 
   return (
-    <div className="visual-viewport" ref={wrapperRef} style={{height:Math.max(210, Math.min(640,canvasHeight + 2))}}
+    <div className={"visual-viewport"+(zoom>1?" is-zoomed":"")} ref={wrapperRef}
       aria-label="Surface d'édition graphique">
+      <div className="visual-stage" style={{minWidth:Math.max(viewport.width,displayWidth+40),
+        minHeight:Math.max(viewport.height,displayHeight+40)}}>
+      <div className="visual-scale-bounds" style={{width:displayWidth,height:displayHeight}}>
       <div className="visual-artboard" data-testid="visual-artboard" style={{
         width:doc.canvas.width,height:doc.canvas.height,
         transform:"scale("+fit+")",transformOrigin:"top left",
@@ -236,6 +247,8 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
             onKeyDown={e=>{e.stopPropagation();if(e.key==="Escape"){setEditId(null);}if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commitInlineEdit();}}}
           />}
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );
