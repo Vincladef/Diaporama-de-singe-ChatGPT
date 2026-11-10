@@ -47,6 +47,42 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    browser=await chromium.launch({headless:true,timeout:20_000});
    const page=await browser.newPage({viewport:{width:1920,height:1080}});
    await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"domcontentloaded"});
+   const animationChecks=await page.evaluate(async(docs)=>{
+     const {SlideAnimationPlayer}=await import("/src/animation/runtime.ts");
+     const {renderSlideHtml}=await import("/src/engine/render.ts");
+     const results=[];
+     for(const doc of docs){
+       const frame=document.createElement("iframe");
+       frame.setAttribute("sandbox","allow-same-origin");
+       frame.style.cssText="position:absolute;top:-2000px;left:0;width:1920px;height:1080px";
+       frame.srcdoc=renderSlideHtml(doc as any);
+       document.body.appendChild(frame);
+       await new Promise<void>((resolve,reject)=>{
+         frame.addEventListener("load",()=>resolve(),{once:true});
+         setTimeout(()=>reject(new Error("animation_iframe_load_timeout")),8000);
+       });
+       const nested=frame.contentDocument;
+       if(!nested)throw new Error("sandbox_document_unavailable");
+       const player=new SlideAnimationPlayer(nested,doc as any);
+       const missing=player.missingTargets();
+       const clicks=player.plan.clicks.length;
+       await player.seek(0,{animate:false});
+       const selector=doc.animations[0]?.targetSelector;
+       const first=selector?nested.querySelector(selector) as HTMLElement|null:null;
+       const initialVisibility=first?.style.visibility??"";
+       await player.seek(1,{animate:false});
+       const firstVisibility=first?.style.visibility??"";
+       results.push({missing,clicks,initialVisibility,firstVisibility});
+       player.dispose();frame.remove();
+     }
+     return results;
+   },slides.map(s=>s.document));
+   for(const [index,c] of animationChecks.entries()){
+     assert.deepEqual(c.missing,[],"every SVG/HTML reveal cue points to a real element on slide "+index);
+     assert.ok(c.clicks>=1,"click progression has one or more steps");
+     assert.equal(c.initialVisibility,"hidden","initial reveal is not already visible");
+     assert.equal(c.firstVisibility,"visible","first click reveals its target");
+   }
    await mkdir("artifacts/integration",{recursive:true});
    for(const mode of ["editable","faithful"] as const){
      const result=await page.evaluate(async({inputDeck,exportMode})=>{
