@@ -60,6 +60,7 @@ export function VariantDock({token,slideId,currentDocument,dirty,refreshKey,onPr
       if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.repeat)return;
       const key=event.key.toUpperCase();
       if(!["A","B","C"].includes(key))return;
+      if(window.document.querySelector(".presenter-overlay"))return;
       const el=window.document.activeElement;
       if(el instanceof HTMLElement && (el.closest("input,textarea,select,[contenteditable='true'],[role='dialog']")||el.isContentEditable))return;
       if(key==="A"){event.preventDefault();select(null);return;}
