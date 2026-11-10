@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { ReferenceGallery } from "./ReferenceGallery";
 import { readCreationInstructions, writeCreationInstructions, uploadCreationReference,
   deleteCreationReference, downloadCreationReference, type CreationReference } from "../lib/api";
 
@@ -108,7 +109,8 @@ export function CreationInstructionsStudio({
                 <span>{references.length} / 8</span>
               </div>
               {references.length>0&&<div className="creation-reference-list">
-                {references.map(reference=><div key={reference.id} className="creation-reference-item">
+                {references.map(reference=><div key={reference.id} className="creation-reference-entry">
+                  <div className="creation-reference-item">
                   <span className="creation-reference-icon" aria-hidden="true">▤</span>
                   <button type="button" className="creation-reference-name" title="Télécharger l’exemple"
                     onClick={()=>void downloadReference(reference)}>{reference.filename}
@@ -117,6 +119,8 @@ export function CreationInstructionsStudio({
                   <button type="button" className="creation-reference-remove" title={"Retirer "+reference.filename}
                     aria-label={"Retirer "+reference.filename} disabled={removing===reference.id||uploading}
                     onClick={()=>void removeReference(reference.id)}>×</button>
+                  </div>
+                  <ReferenceGallery token={token} reference={reference}/>
                 </div>)}
               </div>}
               <label className={"creation-reference-upload"+(uploading||references.length>=8?" is-disabled":"")}>

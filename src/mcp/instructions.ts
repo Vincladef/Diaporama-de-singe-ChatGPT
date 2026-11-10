@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { database } from "./security.ts";
 import { listCreationReferences } from "./creationReferences.ts";
+import { searchVisualReferencePages } from "./referencePages.ts";
 
 const uuid = z.uuid();
 export const creationInstructionsSchema = z.string();
@@ -16,12 +17,13 @@ export function combineCreationInstructions(global: string, presentation: string
 export async function getCreationInstructions(presentationId?: string) {
   if (presentationId) uuid.parse(presentationId);
   const db = database();
-  const [globalRows, presentationRows, references] = await Promise.all([
+  const [globalRows, presentationRows, references, visual] = await Promise.all([
     db.query("SELECT instructions,updated_at FROM public.slide_creation_instructions WHERE id=1",[]),
     presentationId
       ? db.query("SELECT settings->>'creationInstructions' AS instructions FROM public.presentations WHERE id=$1::uuid",[presentationId])
       : Promise.resolve([]),
     listCreationReferences(),
+    searchVisualReferencePages({limit:20}).catch(()=>({pages:[]})),
   ]);
   if (presentationId && !presentationRows[0]) throw new Error("presentation_not_found");
   const global = String(globalRows[0]?.instructions ?? "");
@@ -29,9 +31,15 @@ export async function getCreationInstructions(presentationId?: string) {
   const effective=combineCreationInstructions(global,presentation)+
     (references.length?"\n\nRÉFÉRENCES DE DIAPORAMAS JOINTES : "+
       "utiliser les analyses ci-dessous ; pour les images, inspect_creation_reference permet de voir le visuel.\n"+
-      references.map(ref=>"- "+ref.filename+" ["+ref.id+"] : "+ref.analysis.slice(0,1600)).join("\n"):"");
+      references.map(ref=>"- "+ref.filename+" ["+ref.id+"] : "+ref.analysis.slice(0,1600)).join("\n"):"")+
+    (visual.pages.length?"\n\nPAGES VISUELLES SÉLECTIONNÉES : "+ 
+      "inspecter les images correspondantes avec inspect_reference_page AVANT de concevoir une composition ; "+
+      "ne pas copier leur contenu textuel.\n"+
+      visual.pages.map(page=>"- Référence "+page.referenceId+" page "+page.slideNumber+" ["+page.visualKind+
+        "] : "+(page.layout?.composition??"composition à examiner")).join("\n"):"");
   return {
     global, presentation, references,
+    visualPages:visual.pages,
     effective,
     precedence: "Les instructions propres à la présentation priment en cas de contradiction.",
     presentationId: presentationId ?? null,

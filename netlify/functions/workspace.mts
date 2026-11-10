@@ -6,6 +6,8 @@ import { createDeck, addSlides, createVariants, listVariants, saveAssets, listAs
 import { recordSlideHistory, listSlideHistory } from "../../src/mcp/history";
 import { getCreationInstructions, saveCreationInstructions, creationInstructionsSchema } from "../../src/mcp/instructions";
 import { addCreationReference, removeCreationReference, getCreationReferenceFile, MAX_REFERENCE_SIZE } from "../../src/mcp/creationReferences";
+import {listVisualReferencePages,generateVisualReferencePages,readVisualReferenceImage,
+  updateVisualReferenceSelection,updateVisualReferenceKind,kindSchema} from "../../src/mcp/referencePages";
 
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const idSchema = z.uuid();
@@ -42,6 +44,19 @@ export default async function workspace(request: Request): Promise<Response> {
         const id=query.searchParams.get("id")||undefined;
         if(id)idSchema.parse(id);
         return result(await getCreationInstructions(id));
+      }
+      if(operation==="referencePages"){
+        const id=idSchema.parse(query.searchParams.get("id"));
+        return result(await listVisualReferencePages(id));
+      }
+      if(operation==="referencePageImage"){
+        const id=idSchema.parse(query.searchParams.get("id"));
+        const page=z.coerce.number().int().min(1).max(100).parse(query.searchParams.get("page"));
+        const image=await readVisualReferenceImage(id,page);
+        return new Response(Buffer.from(image.base64,"base64"),{status:200,headers:{
+          ...headers,"Content-Type":"image/png","Content-Disposition":"inline",
+          "X-Frame-Options":"DENY",
+        }});
       }
       if(operation==="creationReferenceFile"){
         const id=idSchema.parse(query.searchParams.get("id"));
@@ -113,6 +128,23 @@ export default async function workspace(request: Request): Promise<Response> {
     } catch { return result({ ok: false, error: "invalid_json" }, 400); }
 
     switch (data.action) {
+      case "renderReferencePages":{
+        const id=idSchema.parse(data.id);
+        const start=z.number().int().min(1).max(100).parse(data.start);
+        const count=z.number().int().min(1).max(3).parse(data.count??3);
+        return result({ok:true,...await generateVisualReferencePages(id,start,count)});
+      }
+      case "updateReferenceSelection":{
+        const id=idSchema.parse(data.id);
+        const pages=z.array(z.number().int().min(1).max(100)).max(100).parse(data.pages);
+        return result({ok:true,...await updateVisualReferenceSelection(id,pages)});
+      }
+      case "updateReferenceKind":{
+        const id=idSchema.parse(data.id);
+        const page=z.number().int().min(1).max(100).parse(data.page);
+        const kind=kindSchema.parse(data.kind);
+        return result({ok:true,...await updateVisualReferenceKind(id,page,kind)});
+      }
       case "removeCreationReference":{
         const id=idSchema.parse(data.id);
         return result({ok:true,removed:await removeCreationReference(id)});
