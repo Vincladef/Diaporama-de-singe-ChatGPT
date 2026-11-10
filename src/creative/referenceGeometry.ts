@@ -28,8 +28,8 @@ export type PowerPointGeometry = {
   limitations: string[];
 };
 
-const MAX_SLIDES = 8;
-const MAX_ITEMS_PER_SLIDE = 20;
+const MAX_SLIDES = 100;
+const MAX_ITEMS_PER_SLIDE = 60;
 const MAX_XML_BYTES = 2_000_000;
 const DEFAULT_CX = 12_192_000;
 const DEFAULT_CY = 6_858_000;
