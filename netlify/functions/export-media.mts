@@ -28,7 +28,7 @@ async function retrieveImage(initial:URL):Promise<Response> {
   for(let hop=0;hop<5;hop++) {
     const response=await fetch(current, {
       redirect:"manual", signal:AbortSignal.timeout(18000),
-      headers:{"Accept":"image/avif,image/webp,image/jpeg,image/png,image/gif,*/*;q=0.6"},
+      headers:{"Accept":"image/jpeg,image/png,image/webp,image/gif,*/*;q=0.4"},
     });
     if([301,302,303,307,308].includes(response.status)){
       const location=response.headers.get("location");
