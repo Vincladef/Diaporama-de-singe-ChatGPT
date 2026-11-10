@@ -7,7 +7,7 @@ import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
-import { VariantSwitcher, VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
+import { VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
 import { SpeakerNotesPane } from "./editor/SpeakerNotesPane";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
@@ -849,9 +849,6 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                  <VariantSwitcher items={variants.items} original={variants.original} loading={variants.loading}
-                    selectedId={previewVariant?.id??draft.variantSelection?.activeId??null} disabled={variantSwitching}
-                    onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>
                   <div className="canvas-stage-shell">
                     <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
                       onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
