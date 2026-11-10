@@ -6,6 +6,7 @@ import { PresenterStudio } from "./presenter/PresenterStudio";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
+import { DiagramStudio } from "./editor/DiagramStudio";
 import { VariantsStudio } from "./editor/VariantsStudio";
 import { VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
 import { SpeakerNotesPane } from "./editor/SpeakerNotesPane";
@@ -45,6 +46,7 @@ export default function App() {
   const [tab, setTab] = useState<InspectorTab>("design");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
+  const [diagramStudioOpen,setDiagramStudioOpen]=useState(false);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
   const [previewVariant,setPreviewVariant]=useState<VariantChoice|null>(null);
   const [variantRefreshKey,setVariantRefreshKey]=useState(0);
@@ -281,6 +283,20 @@ export default function App() {
       await refreshList();
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
+  }
+  async function createDiagramSlide(document:SlideDocument,sourceNotes:string){
+    if(!current||!await flushPending())return;
+    const presentationId=current.presentation.id;
+    setBusy(true);setError("");
+    try{
+      const created=await command<{slide:{id:string}}>(token,{action:"addSlide",presentationId});
+      if(!created.slide?.id)throw Error("La nouvelle diapositive n'a pas été créée.");
+      await command(token,{action:"saveSlide",id:created.slide.id,revision:1,document,
+        notes:sourceNotes.slice(0,30000)});
+      await loadDeck(presentationId,created.slide.id);
+      await refreshList();setDiagramStudioOpen(false);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
   }
   function editDocument(next:SlideDocument,key="change"){
     const previous=draftRef.current;
@@ -823,6 +839,7 @@ export default function App() {
                       <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"☰ Diapos":"☰ Pages"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
                       <button onClick={()=>setImageStudioOpen(true)} title="Rechercher des photographies">+ Image</button>
+                       <button onClick={()=>setDiagramStudioOpen(true)} title="Générer un schéma avec des nœuds modifiables">+ Schéma</button>
                       <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
                     </div>
                     <div className="visual-toolbar-group">
@@ -904,6 +921,8 @@ export default function App() {
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
           onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
+        {diagramStudioOpen&&current&&<DiagramStudio onClose={()=>setDiagramStudioOpen(false)}
+          onCreate={createDiagramSlide}/>}
         {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
           selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
           onPick={chooseImage}/>}
