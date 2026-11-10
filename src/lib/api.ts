@@ -97,6 +97,53 @@ export interface CreationInstructions {
 export interface CreationReference {
   id:string;filename:string;mimeType:string;sizeBytes:number;analysis:string;createdAt:string;
 }
+export type VisualKind = "photographique"|"documentaire"|"graphique"|"schématique"|"comparatif"|"typographique"|"mixte";
+export interface ReferencePageInfo {
+  referenceId:string;slideNumber:number;visualKind:VisualKind;
+  selected:boolean;layout:{
+    title?:string;composition?:string;imageCount?:number;textCount?:number;
+    imageCoverage?:number;geometrySignature?:number[];
+  };
+  renderWarning:string;width:number;height:number;
+}
+export interface ReferencePageCollection {
+  referenceId:string;filename:string;mimeType:string;totalSlides:number;
+  renderedCount:number;renderEngine:string|null;pages:ReferencePageInfo[];
+}
+export async function readReferencePages(token:string,id:string):Promise<ReferencePageCollection>{
+  return call<ReferencePageCollection>(token,{op:"referencePages",id});
+}
+export async function renderReferencePages(token:string,id:string,start:number,count=3):Promise<{
+  totalSlides:number;rendered:{slideNumber:number}[];renderEngine:string
+}>{
+  const response=await fetch(endpoint,{
+    method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+    body:JSON.stringify({action:"renderReferencePages",id,start,count}),
+    cache:"no-store",signal:AbortSignal.timeout(55000),
+  });
+  const data=await response.json() as {error?:string;totalSlides?:number;rendered?:{slideNumber:number}[];renderEngine?:string};
+  if(!response.ok||!data.rendered)throw Error(data.error??"Le rendu PowerPoint a échoué.");
+  return {totalSlides:data.totalSlides??0,rendered:data.rendered,renderEngine:data.renderEngine??"unknown"};
+}
+export async function saveReferenceSelection(token:string,id:string,pages:number[]):Promise<number[]>{
+  const response=await call<{selected:number[]}>(token,{action:{action:"updateReferenceSelection",id,pages}});
+  return response.selected;
+}
+export async function saveReferenceKind(token:string,id:string,page:number,kind:VisualKind):Promise<void>{
+  await call(token,{action:{action:"updateReferenceKind",id,page,kind}});
+}
+export async function loadReferencePageImage(token:string,id:string,page:number):Promise<Blob>{
+  const url=new URL(endpoint,window.location.origin);
+  url.searchParams.set("op","referencePageImage");
+  url.searchParams.set("id",id);
+  url.searchParams.set("page",String(page));
+  const response=await fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(30000)});
+  if(!response.ok)throw Error("Aperçu indisponible : "+response.status);
+  const image=await response.blob();
+  if(image.type!=="image/png")throw Error("Format d’aperçu inattendu.");
+  return image;
+}
+
 export async function readCreationInstructions(token:string,presentationId?:string):Promise<CreationInstructions>{
   return call<CreationInstructions>(token,{op:"creationInstructions",id:presentationId});
 }
