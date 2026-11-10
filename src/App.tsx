@@ -390,10 +390,6 @@ export default function App() {
       return false;
     }finally{switchingRef.current=false;setVariantSwitching(false);}
   }
-  function applyVariant(document:SlideDocument,variantNotes:string){
-    setPreviewVariant(null);
-    editDocument(document,"variant");notesRef.current=variantNotes;setNotes(variantNotes);setSelectedIds([]);
-  }
   function updateObject(id: string, patch: Partial<SlideElement>) {
     if (!draft) return;
     editDocument({ ...draft, elements: draft.elements.map(item => item.id === id ? { ...item, ...patch } : item) });
@@ -915,7 +911,7 @@ export default function App() {
           slideId={slideId} revision={active.revision} dirty={dirty} onClose={()=>setHistoryStudioOpen(false)}
           onRestored={async()=>{await loadDeck(current.presentation.id,slideId);await refreshList();}}/>}
         {variantsStudioOpen&&token&&slideId&&draft&&<VariantsStudio key={slideId} token={token}
-          slideId={slideId} document={draft} notes={notes} dirty={dirty} onApply={applyVariant}
+          slideId={slideId} document={draft} notes={notes} dirty={dirty} onSelectStored={selectVariant}
           onClose={()=>{setVariantsStudioOpen(false);setVariantRefreshKey(x=>x+1);}}/>}
         {presenting&&current&&current.slides.length>0&&<PresenterStudio
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
