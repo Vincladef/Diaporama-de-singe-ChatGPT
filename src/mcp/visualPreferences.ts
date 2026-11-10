@@ -1,6 +1,6 @@
 import {z} from "zod";
 import {database} from "./security.ts";
-import {getSlide,getVariant,listVariants} from "./store.ts";
+
 import {designProfile,inferPurpose} from "../preferences/profile.ts";
 import {rankVisualPreferences,summarizeVisualPreferenceGuide,
  type PreferenceKind,type PreferenceScope,type PreferenceView} from "../preferences/ranking.ts";
@@ -67,6 +67,7 @@ export async function listRelevantVisualPreferences(
  };
 }
 export async function saveVariantPreference(input:SavePreferenceInput){
+ const {getSlide,getVariant,listVariants}=await import("./store.ts");
  const slideId=z.uuid().parse(input.slideId);
  const variantId=z.uuid().parse(input.variantId);
  const kind=kindSchema.parse(input.kind),scope=scopeSchema.parse(input.scope);
