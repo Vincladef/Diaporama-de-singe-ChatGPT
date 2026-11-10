@@ -96,7 +96,7 @@ export async function verifyDeckWorkflow(presentationId:string){
      independentCompositions:signatures.size,photos,images,animations,
      visualCaptures,actualPixelReviewCompleted:visualCaptures.every(v=>v.capturedImages>0),
      notesPreserved:recent.every(v=>!!v.notes?.trim()),
-     export:exportReport.slides.map(x=>({mode:x.mode,issues:x.issues})),
+     export:exportReport.slides.map(x=>({mode:x.mode,issues:x.warnings})),
      preferences:feedback.filter(p=>p.slide_id===s.id).map(p=>({kind:p.kind,count:Number(p.count)})),
      readyForVisualReview:issues.length===0,issues,
    };
