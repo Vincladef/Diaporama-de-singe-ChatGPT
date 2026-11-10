@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {validateVisualCorrection} from "../mcp/visualReview.ts";
+import {validateVisualCorrection} from "./correction.ts";
 
 test("allows a targeted CSS layout correction without touching intellectual content",()=>{
   assert.doesNotThrow(()=>validateVisualCorrection({
