@@ -94,8 +94,8 @@ export function prepareIndependentVariants(
     }
     signatures.push(signature);
     if(source.document.animations.length&&!doc?.animations.length)
-      findings.push({severity:"warning",code:"animations_need_review",
-        variantIndices:[index],message:"La source comporte des animations ; vérifier leur adaptation à la nouvelle composition."});
+      findings.push({severity:"error",code:"animations_not_preserved",
+        variantIndices:[index],message:"La source possède des animations : adapter au moins une séquence à la nouvelle composition, ou conserver les éléments et les cibles correspondantes."});
     if(doc&&doc.canvas.width*source.document.canvas.height!==doc.canvas.height*source.document.canvas.width)
       findings.push({severity:"error",code:"aspect_ratio_changed",
         variantIndices:[index],message:"Une proposition ne conserve pas le ratio de la diapositive."});
