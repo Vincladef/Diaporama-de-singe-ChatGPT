@@ -2,6 +2,7 @@ import { useEffect,useState } from "react";
 import type { ImageCandidate, ImageSearchResult, ImageSource } from "../images/search";
 import type { SlideElement } from "../domain/slide";
 import { directImageUrl } from "../images/direct";
+import type {PhotoInspection} from "../images/inspection";
 
 type Props={
   token:string;
@@ -28,6 +29,10 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
   const [error,setError]=useState("");
   const [manual,setManual]=useState("");
   const [chosen,setChosen]=useState<ImageCandidate|null>(null);
+  const [inspection,setInspection]=useState<PhotoInspection|null>(null);
+  const [inspectBusy,setInspectBusy]=useState(false);
+  const [inspectError,setInspectError]=useState("");
+  const [cropMode,setCropMode]=useState<"center"|"attention"|"entropy">("center");
 
   useEffect(()=>{
     let active=true;
@@ -43,6 +48,28 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
       }).catch(()=>{});
     return()=>{active=false;};
   },[token]);
+  useEffect(()=>{
+    if(!chosen){setInspection(null);setInspectError("");return;}
+    const controller=new AbortController();
+    setInspection(null);setInspectError("");setInspectBusy(true);setCropMode("center");
+    const w=Math.max(200,Math.min(2560,Number.parseInt(String(selectedImage?.styles.width??"1200"))||1200));
+    const h=Math.max(150,Math.min(1600,Number.parseInt(String(selectedImage?.styles.height??"675"))||675));
+    void fetch("/.netlify/functions/image-inspect",{
+      method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
+      body:JSON.stringify({url:chosen.imageUrl,target:{width:w,height:h}}),
+      signal:controller.signal,cache:"no-store",
+    }).then(async response=>{
+      const result=await response.json();
+      if(!response.ok)throw Error(result.error??"Photo inaccessible");
+      setInspection(result.inspection as PhotoInspection);
+    }).catch(e=>{
+      if(!controller.signal.aborted)setInspectError(
+        String(e instanceof Error?e.message:e)==="unsupported_image_host"
+          ?"Ce fournisseur ne permet pas encore une inspection serveur ; vérifie manuellement sa résolution et ses droits."
+          :"Impossible de vérifier ce fichier. L'image pourrait être absente ou protégée.");
+    }).finally(()=>{if(!controller.signal.aborted)setInspectBusy(false);});
+    return()=>controller.abort();
+  },[chosen?.imageUrl,token,selectedImage?.styles.width,selectedImage?.styles.height]);
   useEffect(()=>{
     const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
     window.addEventListener("keydown",close);
