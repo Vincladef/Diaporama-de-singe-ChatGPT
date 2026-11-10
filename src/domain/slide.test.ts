@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SlideDocumentSchema, createEmptySlideDocument } from "./slide.ts";
+import {editSlide} from "../mcp/documents.ts";
 
 test("un document vierge est valide et au format 16:9", () => {
   const doc = createEmptySlideDocument();
@@ -32,4 +33,16 @@ test("editable layer metadata persists without changing the slide format",()=>{
  assert.equal(value.elements[0]?.name,"Grand titre");
  assert.equal(value.elements[0]?.locked,true);
  assert.equal(value.elements[0]?.groupName,"Chronologie");
+});
+
+test("le choix de composition A/B/C survit aux retouches manuelles",()=>{
+  const doc=createEmptySlideDocument();
+  doc.variantSelection={
+    originalId:"00000000-0000-4000-8000-000000000001",
+    activeId:"00000000-0000-4000-8000-000000000002",
+  };
+  const changed=editSlide(doc,"Notes existantes",[{op:"set_html",html:"<h1>Version B</h1>"}]);
+  assert.deepEqual(changed.document.variantSelection,doc.variantSelection);
+  assert.equal(changed.notes,"Notes existantes");
+  assert.equal(SlideDocumentSchema.parse(changed.document).variantSelection?.activeId,doc.variantSelection.activeId);
 });
