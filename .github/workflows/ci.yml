@@ -18,3 +18,15 @@ jobs:
       - run: npm run check
       - run: npm run test
       - run: npm run build
+      - name: Install Chromium for real screenshot verification
+        run: npx playwright install --with-deps chromium
+      - name: Validate two real slide screenshots
+        run: npm run test:visual
+      - name: Upload captured slide evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-slide-captures
+          path: artifacts/
+          retention-days: 3
+          if-no-files-found: warn
