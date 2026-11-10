@@ -572,7 +572,7 @@ function createServer(request: Request): McpServer {
      target:z.object({width:z.number().int().min(200).max(2560).default(1200),
        height:z.number().int().min(150).max(1600).default(675)}).strict().default({width:1200,height:675})},
     false,async a=>{
-      const inspected=await Promise.all(a.candidates.map(async candidate=>{
+      const inspected=await Promise.all((a.candidates as Array<{url:string;title:string;credit:string;license:string;sourcePage?:string}>).map(async candidate=>{
         try{
           const data=await inspectPhotoUrl({url:candidate.url,target:a.target});
           return {candidate,ok:true,inspection:data};
