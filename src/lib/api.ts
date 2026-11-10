@@ -224,6 +224,13 @@ export async function readSlideHistory(token:string,slideId:string,limit=20):
   return data as {ok:true;slideId:string;items:HistoryCheckpoint[];count:number};
 }
 
+export async function readVariantPreferences(token:string,slideId:string){
+  const data=await call<{preferences:import("../preferences/ranking").PreferenceView[]}>(token,{
+    op:"variantPreferences",id:slideId
+  });
+  return data.preferences??[];
+}
+
 export async function command<T>(token: string, action: Record<string, unknown>): Promise<T> {
   return call<T>(token, { action });
 }
