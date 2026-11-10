@@ -25,6 +25,9 @@ jobs:
       - name: Validate two real slide screenshots
         timeout-minutes: 3
         run: npm run test:visual
+      - name: Verify nine real scientific variant compositions and photo loading
+        timeout-minutes: 5
+        run: npm run test:integration
       - name: Upload captured slide evidence
         uses: actions/upload-artifact@v4
         if: always()
