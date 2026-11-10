@@ -77,6 +77,15 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
         clear();return false;
       }
       const node=element as HTMLElement;
+      const rect=node.getBoundingClientRect();
+      // A full-slide HTML wrapper is usually the background, not a useful
+      // object selection. A blank click there must dismiss the current box.
+      const canvas=slideRef.current.canvas;
+      const tag=node.tagName.toLowerCase();
+      if(["div","section","article","main","figure"].includes(tag) &&
+        rect.width>=canvas.width*.92 && rect.height>=canvas.height*.92){
+        clear();return false;
+      }
       const id=node.dataset.singeId||"visual-"+crypto.randomUUID();
       node.dataset.singeId=id;
       activeElement.current=node;
