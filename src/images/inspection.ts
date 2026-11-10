@@ -69,14 +69,14 @@ export async function retrievePhoto(url:string):Promise<Buffer>{
 }
 const round=(x:number)=>Math.max(0,Math.min(100,Math.round(x)));
 function focalFromCrop(
- strategy:"center"|"attention"|"entropy",info:sharp.OutputInfo,
+ strategy:"center"|"attention"|"entropy",info:{cropOffsetLeft?:number;cropOffsetTop?:number;attentionX?:number;attentionY?:number},
  original:{width:number;height:number},target:CropTarget
 ):{x:number;y:number}{
   if(strategy==="center")return {x:50,y:50};
   const tw=target.width,th=target.height,ratio=tw/th,origRatio=original.width/original.height;
   const cropW=origRatio>ratio?original.height*ratio:original.width;
   const cropH=origRatio<ratio?original.width/ratio:original.height;
-  const details=info as sharp.OutputInfo&{attentionX?:number;attentionY?:number;cropOffsetLeft?:number;cropOffsetTop?:number};
+  const details=info;
   // Cropping offset has the same geometry as CSS object-position after cover fit.
   const x=original.width-cropW>1?100*(details.cropOffsetLeft??(original.width-cropW)/2)/(original.width-cropW):50;
   const y=original.height-cropH>1?100*(details.cropOffsetTop??(original.height-cropH)/2)/(original.height-cropH):50;
