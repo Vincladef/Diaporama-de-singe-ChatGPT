@@ -24,7 +24,8 @@ function htmlLayout(html:string):string{
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
     .replace(/>([^<]*)</g,"><")
     .replace(/\s+(?:id|class|src|alt|title|data-[\w-]+)\s*=\s*(?:"[^"]*"|'[^']*')/gi,"")
-    .replace(/\s*style\s*=\s*(?:"[^"]*"|'[^']*')/gi,"")
+    .replace(/\s*style\s*=\s*(?:"([^"]*)"|'([^']*)')/gi,(_,doubleValue:string,singleValue:string)=>
+      ' style="'+cssLayout(doubleValue??singleValue??'')+'"')
     .replace(/\s+/g,"")
     .toLowerCase();
 }
