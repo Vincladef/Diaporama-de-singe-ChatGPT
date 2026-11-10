@@ -143,7 +143,30 @@ export function ImageStudio({token,onClose,onPick,selectedImage,searchTerm}:Prop
             <div><strong>{chosen.title}</strong><p>{chosen.attribution||chosen.provider} ; {chosen.license}</p>
               <a href={chosen.pageUrl} target="_blank" rel="noopener noreferrer">Voir la source et les droits ↗</a>
             </div>
-            <button className="primary" onClick={()=>onPick(chosen)}>{selectedImage?"Remplacer l'image":"Insérer cette image"}</button>
+            <button className="primary" onClick={()=>onPick({...chosen,...(inspection?{
+              focalX:inspection.crops.find(c=>c.id===cropMode)?.focalX??50,
+              focalY:inspection.crops.find(c=>c.id===cropMode)?.focalY??50
+            }:{})})}>{selectedImage?"Remplacer l'image":"Insérer cette image"}</button>
+          </div>}
+          {chosen&&<div className="image-crop-panel">
+            <div className="image-crop-heading">
+              <strong>Vérification et cadrages</strong>
+              {inspectBusy&&<span>Analyse de l'image…</span>}
+              {inspection&&<span>{inspection.width} × {inspection.height} px ·
+                {inspection.resolution==="adequate"?" résolution adaptée":inspection.resolution==="limited"?" définition limitée":" résolution insuffisante"}</span>}
+            </div>
+            {inspection?.warning&&<p role="status" className="image-crop-warning">{inspection.warning}</p>}
+            {inspectError&&<p className="image-crop-warning">{inspectError}</p>}
+            {inspection&&<div className="image-crop-grid">
+              {inspection.crops.map(crop=><button type="button" key={crop.id}
+                aria-pressed={cropMode===crop.id}
+                className={"image-crop-choice"+(cropMode===crop.id?" selected":"")}
+                onClick={()=>setCropMode(crop.id)}>
+                <img alt={crop.label+" · prévisualisation"} src={"data:"+crop.mimeType+";base64,"+crop.previewBase64}/>
+                <span>{crop.label} · point focal {crop.focalX}% / {crop.focalY}%</span>
+              </button>)}
+            </div>}
+            <small>Prévisualisations Sharp réelles. Le cadrage retenu reste modifiable ; source et licence conservées.</small>
           </div>}
           <div className="studio-pagination">
             <button disabled={!result||page===1||loading} onClick={()=>void search(page-1)}>← Précédentes</button>
