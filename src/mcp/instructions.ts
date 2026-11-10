@@ -2,6 +2,7 @@ import { z } from "zod";
 import { database } from "./security.ts";
 import { listCreationReferences } from "./creationReferences.ts";
 import { searchVisualReferencePages } from "./referencePages.ts";
+import {listRelevantVisualPreferences} from "./visualPreferences.ts";
 
 const uuid = z.uuid();
 export const creationInstructionsSchema = z.string();
@@ -17,13 +18,14 @@ export function combineCreationInstructions(global: string, presentation: string
 export async function getCreationInstructions(presentationId?: string) {
   if (presentationId) uuid.parse(presentationId);
   const db = database();
-  const [globalRows, presentationRows, references, visual] = await Promise.all([
+  const [globalRows, presentationRows, references, visual, preferences] = await Promise.all([
     db.query("SELECT instructions,updated_at FROM public.slide_creation_instructions WHERE id=1",[]),
     presentationId
       ? db.query("SELECT settings->>'creationInstructions' AS instructions FROM public.presentations WHERE id=$1::uuid",[presentationId])
       : Promise.resolve([]),
     listCreationReferences(),
     searchVisualReferencePages({limit:20}).catch(()=>({pages:[]})),
+    listRelevantVisualPreferences(presentationId),
   ]);
   if (presentationId && !presentationRows[0]) throw new Error("presentation_not_found");
   const global = String(globalRows[0]?.instructions ?? "");
@@ -36,10 +38,12 @@ export async function getCreationInstructions(presentationId?: string) {
       "inspecter les images correspondantes avec inspect_reference_page AVANT de concevoir une composition ; "+
       "ne pas copier leur contenu textuel.\n"+
       visual.pages.map(page=>"- Référence "+page.referenceId+" page "+page.slideNumber+" ["+page.visualKind+
-        "] : "+(page.layout?.composition??"composition à examiner")).join("\n"):"");
+        "] : "+(page.layout?.composition??"composition à examiner")).join("\n"):"")+
+    (preferences.summary?"\n\n"+preferences.summary:"");
   return {
     global, presentation, references,
     visualPages:visual.pages,
+    visualPreferences:{count:preferences.preferenceCount,summary:preferences.summary},
     effective,
     precedence: "Les instructions propres à la présentation priment en cas de contradiction.",
     presentationId: presentationId ?? null,
