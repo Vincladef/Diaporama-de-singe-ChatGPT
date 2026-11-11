@@ -23,7 +23,11 @@ const alternatives=source.map(s=>clarkWellsDemonstration
   })));
 async function mockPrivateWorkspace(page:Page){
  await page.addInitScript(()=>{
-   sessionStorage.setItem("diaporama-chatgpt-owner-token","ci-mobile-test-token");
+   // Playwright injects into nested sandboxed slide-preview iframes too.
+   // Only the top-level app owns a session; sandboxed frames must not touch storage.
+   if(window.top===window){
+     sessionStorage.setItem("diaporama-chatgpt-owner-token","ci-mobile-test-token");
+   }
  });
  await page.route("**/.netlify/functions/workspace**",async route=>{
    const req=route.request();
