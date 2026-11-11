@@ -169,6 +169,15 @@ export default async function workspace(request: Request): Promise<Response> {
         const id=idSchema.parse(data.id);
         return result({ok:true,removed:await removeCreationReference(id)});
       }
+      case "deletePromptLibraryItem":{
+        const id=idSchema.parse(data.id);
+        const version=z.number().int().min(1).parse(data.version);
+        const rows=await db.query(
+          "DELETE FROM public.prompt_library_items WHERE id=$1::uuid AND version=$2 RETURNING id",
+          [id,version]);
+        if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+        return result({ok:true});
+      }
       case "savePromptLibraryItem":{
         const item=promptItemSchema.parse(data.item);
         if(item.id){

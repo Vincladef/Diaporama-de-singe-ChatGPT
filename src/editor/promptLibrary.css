@@ -64,3 +64,70 @@
 .prompt-item-editor{max-width:840px}
 .prompt-editor-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 @media(max-width:840px){.prompt-page-body{grid-template-columns:1fr}.prompt-sidebar{border-right:0;border-bottom:1px solid #e1e8e0;padding:12px;display:flex;gap:4px;overflow-x:auto}.prompt-sidebar h2,.prompt-sidebar hr{display:none}.prompt-nav{width:auto;flex:0 0 auto;white-space:nowrap}.prompt-nav-count{display:none}.prompt-content{padding:22px 16px}}
+
+/* Simpler creation instructions page: familiar app header, readable reference cards. */
+.prompt-page{background:#f8faf8}
+.prompt-page-header{padding:13px clamp(16px,2.6vw,34px);min-height:66px;display:grid;grid-template-columns:1fr auto 1fr}
+.prompt-brand-button{border:0;background:transparent;padding:0;cursor:pointer;color:#243e2e;text-align:left}
+.prompt-brand-button:hover strong{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.prompt-brand-mark{width:31px;height:31px;border-radius:7px;font-size:18px}
+.prompt-brand strong{font-size:17px;font-weight:750;white-space:nowrap;letter-spacing:-.025em}
+.prompt-header-location{font-size:13px;font-weight:600;color:#768579}
+.prompt-close{justify-self:end;border:0;background:transparent;cursor:pointer;color:#63766b;font-size:17px;padding:9px 12px;border-radius:8px}
+.prompt-close:hover{background:#eef2ee}
+.prompt-page-body{min-height:calc(100vh - 66px);grid-template-columns:minmax(210px,242px) minmax(0,1fr)}
+.prompt-sidebar{background:#fafcf9}
+.prompt-content-head{margin-bottom:24px}
+.prompt-content-head h1{font-size:clamp(24px,2.4vw,32px)}
+.prompt-panel{border-color:#e4e9e3;border-radius:12px}
+.prompt-panel h2{font-size:17px}
+.prompt-editor-large{min-height:310px}
+.prompt-card-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));align-items:stretch;gap:16px}
+.prompt-item-card{border-color:#dfe6de;border-radius:12px;box-shadow:none}
+.prompt-item-card:hover{border-color:#adbfaf}
+.prompt-item-text{padding:22px 20px 13px}
+.prompt-card-eyebrow{font-size:10px;letter-spacing:.11em;font-weight:700;text-transform:uppercase;color:#89988b;margin-bottom:10px}
+.prompt-item-text h3{font-size:18px;line-height:1.25;letter-spacing:-.03em;margin-bottom:13px;color:#263c2f}
+.prompt-item-text p{font-size:13px;line-height:1.65;color:#66796a}
+.prompt-item-text .prompt-card-prompt{font-size:12px;line-height:1.65;color:#758478;margin:14px 0 0;padding-top:13px;border-top:1px solid #edf0ed}
+.prompt-item-foot{padding:6px 20px 18px}
+.prompt-item-foot .prompt-outline{font-size:12px;font-weight:650;padding:8px 10px;background:transparent;border:0;color:#285f40;cursor:pointer}
+.prompt-item-foot .prompt-outline:hover{text-decoration:underline}
+.prompt-real-preview{display:block;width:100%;height:175px;object-fit:cover;border-bottom:1px solid #e9eeea}
+.prompt-subhead{display:flex;align-items:flex-start;gap:15px;justify-content:space-between;flex-wrap:wrap}
+.prompt-method-panel{margin-top:18px}
+.prompt-method-entry{border:1px solid #e4eae3;border-radius:10px;padding:17px;margin-top:17px;background:#fcfdfc}
+.prompt-method-head{display:flex;justify-content:space-between;align-items:start;gap:15px}
+.prompt-method-head h3{font-size:15px;margin:0 0 6px}
+.prompt-method-head p{margin:0 0 12px;font-size:12px}
+.prompt-method-entry textarea{width:100%;min-height:136px;resize:vertical;border:1px solid #d6e0d6;border-radius:8px;padding:13px;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace!important;color:#334839;background:white}
+.prompt-method-entry .prompt-editor-actions{margin-top:10px}
+.prompt-text-action{border:0;background:transparent;padding:7px 4px;color:#467354;font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.prompt-editor-justify{justify-content:space-between}
+.prompt-text-action.prompt-danger{color:#a04f49}
+.prompt-empty p{font-size:13px;margin:8px 0 16px}
+.prompt-page .creation-reference-list{margin-top:18px}
+.prompt-page .creation-reference-entry{overflow:hidden}
+.prompt-reference-image{width:100%;height:220px;object-fit:contain;background:#f2f4f1;border:1px solid #e7eae6;border-radius:7px;margin-bottom:12px}
+.prompt-image-pending{height:160px;display:flex;justify-content:center;align-items:center;background:#f4f6f3;border-radius:7px;color:#809084;font-size:12px;margin-bottom:12px}
+.prompt-page .creation-reference-upload{margin-top:18px;position:relative;overflow:hidden}
+.prompt-page .creation-reference-upload:focus-within{outline:2px solid #628a6c}
+.prompt-form-field textarea#prompt-description{font-family:inherit!important;min-height:105px}
+.prompt-form-field textarea#prompt-body{min-height:210px}
+@media(max-width:840px){
+ .prompt-page-header{grid-template-columns:1fr auto;padding:10px 14px}
+ .prompt-header-location{display:none}
+ .prompt-brand strong{font-size:16px}
+ .prompt-sidebar{background:#fff}
+ .prompt-page-body{min-height:calc(100vh - 60px)}
+ .prompt-content{padding:24px 15px}
+ .prompt-card-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+}
+@media(max-width:430px){
+ .prompt-brand strong{font-size:14px}
+ .prompt-brand-mark{width:27px;height:27px}
+ .prompt-content-head h1{font-size:25px}
+ .prompt-method-entry{padding:12px}
+ .prompt-item-text{padding:18px 16px 10px}
+ .prompt-editor-justify{gap:10px}
+}

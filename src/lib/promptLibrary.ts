@@ -28,3 +28,7 @@ export async function savePromptItem(token:string,item:PromptItemDraft):Promise<
  const result=await request<{item:PromptLibraryItem}>(token,{action:"savePromptLibraryItem",item});
  return result.item;
 }
+
+export async function deletePromptItem(token:string,id:string,version:number):Promise<void>{
+ await request(token,{action:"deletePromptLibraryItem",id,version});
+}
