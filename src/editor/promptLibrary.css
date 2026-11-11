@@ -1,0 +1,66 @@
+.prompt-page{min-height:100vh;background:#f5f7f4;color:#25382d;font-family:inherit;display:flex;flex-direction:column}
+.prompt-page *{box-sizing:border-box}
+.prompt-page-header{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#fff;border-bottom:1px solid #dee5dd;padding:18px clamp(18px,3vw,48px)}
+.prompt-brand{display:flex;align-items:center;gap:13px;min-width:0}
+.prompt-brand-mark{width:40px;height:40px;background:#28523a;color:white;display:grid;place-items:center;border-radius:11px;font-size:22px}
+.prompt-brand strong{font-size:19px;display:block;letter-spacing:-.025em}
+.prompt-brand small{display:block;color:#748478;margin-top:2px}
+.prompt-page-header .prompt-back{border:1px solid #d6e0d6;background:white;padding:10px 15px;border-radius:8px;color:#34523d;cursor:pointer}
+.prompt-page-body{display:grid;grid-template-columns:minmax(218px,250px) minmax(0,1fr);min-height:calc(100vh - 77px);max-width:1700px;width:100%;margin:0 auto}
+.prompt-sidebar{padding:30px 16px;border-right:1px solid #e1e8e0;background:#fcfdfb}
+.prompt-sidebar h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#8b9b8c;padding:0 12px}
+.prompt-nav{display:flex;align-items:center;gap:10px;border:0;width:100%;text-align:left;padding:13px 12px;color:#435b49;background:transparent;border-radius:9px;cursor:pointer;font-size:13px;margin:3px 0}
+.prompt-nav:hover{background:#edf3ed}
+.prompt-nav.active{background:#e2eee3;color:#234b34;font-weight:700}
+.prompt-nav-count{margin-left:auto;background:#fff;border-radius:20px;min-width:22px;padding:3px 5px;text-align:center;font-size:11px;color:#63816a}
+.prompt-nav-icon{font-size:18px;width:23px;text-align:center}
+.prompt-sidebar hr{border:0;border-top:1px solid #e1e8e0;margin:20px 10px}
+.prompt-content{min-width:0;padding:clamp(20px,3vw,48px);max-width:1210px;width:100%;margin:0 auto}
+.prompt-content-head{display:flex;align-items:start;justify-content:space-between;gap:15px;margin-bottom:26px;flex-wrap:wrap}
+.prompt-content-head h1{font-size:clamp(24px,2.5vw,35px);letter-spacing:-.045em;margin:0 0 8px}
+.prompt-content-head p{font-size:14px;line-height:1.6;margin:0;max-width:720px;color:#728075}
+.prompt-primary{padding:11px 17px;border-radius:9px;background:#2d6948;color:white;border:1px solid #2d6948;cursor:pointer;font-weight:600}
+.prompt-primary:disabled{opacity:.5;cursor:not-allowed}
+.prompt-outline{padding:10px 14px;border-radius:9px;background:#fff;color:#386047;border:1px solid #cbd9ce;cursor:pointer}
+.prompt-outline:disabled{opacity:.5;cursor:not-allowed}
+.prompt-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.prompt-panel{background:#fff;border:1px solid #e0e7df;border-radius:14px;padding:22px;margin-bottom:20px}
+.prompt-panel h2{font-size:17px;margin:0 0 6px}
+.prompt-panel p{font-size:13px;color:#78867a;line-height:1.55;margin:0 0 16px}
+.prompt-panel textarea,.prompt-panel input,.prompt-panel select{font:inherit;outline-color:#5f9670}
+.prompt-editor-large{width:100%;min-height:360px;resize:vertical;border:1px solid #d1ddd2;border-radius:9px;padding:17px;background:#fefefe;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace!important;color:#314338}
+.prompt-form-field{display:flex;flex-direction:column;gap:7px;margin:0 0 16px}
+.prompt-form-field label{font-size:12px;color:#455d4d;font-weight:700}
+.prompt-form-field input,.prompt-form-field textarea,.prompt-form-field select{width:100%;border:1px solid #d3ded4;border-radius:8px;padding:11px;font-size:14px;background:#fff;color:#22382c}
+.prompt-form-field textarea{min-height:170px;line-height:1.65;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.prompt-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.prompt-item-card{background:white;border:1px solid #dfe6de;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.prompt-item-preview{height:148px;background:#e8ece7;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.prompt-item-preview img{height:100%;width:100%;object-fit:cover}
+.prompt-illustrative{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prompt-illustrative.swatch-0{background:#efe5d3;color:#3e453a}
+.prompt-illustrative.swatch-1{background:#243a39;color:#f4e9d1}
+.prompt-illustrative.swatch-2{background:#e6e7e1;color:#253144}
+.prompt-illustrative.swatch-3{background:#aa755d;color:#fff5e7}
+.prompt-illustrative .shape{height:90px;width:55%;border:2px solid currentColor;transform:rotate(-12deg);opacity:.3}
+.prompt-illustrative .hero{position:absolute;font-weight:800;letter-spacing:-.06em;font-size:28px;left:18px;bottom:20px;line-height:1}
+.prompt-item-text{padding:17px;flex:1}
+.prompt-item-text h3{font-size:15px;margin:0 0 7px}
+.prompt-item-text p{font-size:12px;line-height:1.55;color:#738174;margin:0}
+.prompt-item-foot{padding:11px 17px 15px;display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.prompt-status{font-size:10px;padding:5px 8px;border-radius:99px;background:#eef1ed;color:#6b7b70;font-weight:650}
+.prompt-status.active{background:#e3f2e6;color:#2b7344}
+.prompt-status.rejected{background:#f8ebea;color:#a54c40}
+.prompt-empty{padding:55px 28px;text-align:center;border:1px dashed #bdcfc0;border-radius:13px;background:#fbfcfa;color:#718277;line-height:1.6}
+.prompt-empty strong{display:block;font-size:16px;color:#496453;margin-bottom:6px}
+.prompt-message{padding:11px 14px;border-radius:9px;margin:15px 0;font-size:13px}
+.prompt-message.error{background:#fff0ee;color:#a13d30}
+.prompt-message.success{background:#e9f5eb;color:#287546}
+.prompt-page .creation-reference-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.prompt-page .creation-reference-entry{background:white;border:1px solid #e0e6df;border-radius:12px;padding:14px;min-width:0}
+.prompt-page .creation-reference-upload{display:inline-flex;cursor:pointer;padding:11px 15px;border:1px dashed #9fbaa5;border-radius:8px;color:#2f6846;margin-top:18px}
+.prompt-page .creation-reference-upload input{position:absolute;opacity:0;width:1px;height:1px}
+.prompt-note{font-size:12px;color:#819083}
+.prompt-item-editor{max-width:840px}
+.prompt-editor-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+@media(max-width:840px){.prompt-page-body{grid-template-columns:1fr}.prompt-sidebar{border-right:0;border-bottom:1px solid #e1e8e0;padding:12px;display:flex;gap:4px;overflow-x:auto}.prompt-sidebar h2,.prompt-sidebar hr{display:none}.prompt-nav{width:auto;flex:0 0 auto;white-space:nowrap}.prompt-nav-count{display:none}.prompt-content{padding:22px 16px}}

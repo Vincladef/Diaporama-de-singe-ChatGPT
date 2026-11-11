@@ -56,7 +56,13 @@ export default function App() {
   const [presenting,setPresenting]=useState(false);
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
-  const [creationSettingsOpen,setCreationSettingsOpen]=useState(false);
+  const [creationSettingsOpen,setCreationSettingsOpen]=useState(
+    ()=>new URLSearchParams(window.location.search).get("view")==="prompts");
+  useEffect(()=>{
+    const onHistory=()=>setCreationSettingsOpen(new URLSearchParams(window.location.search).get("view")==="prompts");
+    window.addEventListener("popstate",onHistory);
+    return()=>window.removeEventListener("popstate",onHistory);
+  },[]);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
   const [showSlideRail,setShowSlideRail]=useState(()=>!window.matchMedia("(max-width:760px)").matches);
   const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
@@ -709,6 +715,19 @@ export default function App() {
     return()=>window.removeEventListener("keydown",handler);
   },[selectedIds,dirty,current?.presentation.id,notes,busy,externalChanges]);
 
+  async function openPromptPage(){
+    if(!await flushPending())return;
+    const url=new URL(window.location.href);
+    url.searchParams.set("view","prompts");
+    window.history.pushState({},"",url.pathname+url.search+url.hash);
+    setCreationSettingsOpen(true);
+  }
+  function closePromptPage(){
+    const url=new URL(window.location.href);
+    url.searchParams.delete("view");
+    window.history.pushState({},"",url.pathname+url.search+url.hash);
+    setCreationSettingsOpen(false);
+  }
   if (!token) return (
     <main className="login-screen">
       <form className="login-card" onSubmit={login}>
@@ -724,6 +743,9 @@ export default function App() {
     </main>
   );
 
+  if(creationSettingsOpen)return <CreationInstructionsStudio token={token}
+    presentationId={current?.presentation.id} presentationTitle={current?.presentation.title}
+    onClose={closePromptPage}/>;
   return (
     <div className={"app app-slides-style "+(current?"is-editing":"is-library")}>
       <main className="workspace">
@@ -774,13 +796,13 @@ export default function App() {
                   <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
                   <button onClick={()=>{setImportOpen(true);}}>Importer</button>
                   <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
-                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");setCreationSettingsOpen(true);}}>⚙ Paramètres</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void openPromptPage();}}>Bibliothèque de prompts</button>
                   <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void logout();}}>Quitter</button>
                 </div>
               </details>
             </>}
             <button className="subtle-btn creation-settings-open" title="Instructions de création des diapositives"
-              onClick={()=>setCreationSettingsOpen(true)}>⚙ Paramètres</button>
+              onClick={()=>void openPromptPage()}>Bibliothèque de prompts</button>
             <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
           </div>
         </header>
@@ -942,9 +964,6 @@ export default function App() {
           </div>
         )}
 
-        {creationSettingsOpen&&token&&<CreationInstructionsStudio token={token}
-          presentationId={current?.presentation.id} presentationTitle={current?.presentation.title}
-          onClose={()=>setCreationSettingsOpen(false)}/>}
         {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
           onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}

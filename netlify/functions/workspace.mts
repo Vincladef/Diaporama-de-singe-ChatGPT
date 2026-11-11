@@ -16,6 +16,16 @@ const titleSchema = z.string().trim().min(1).max(180);
 const folderNameSchema=z.string().trim().min(1).max(120);
 const folderIdSchema=z.union([z.uuid(),z.null()]);
 const notesSchema = z.string().max(30000);
+const promptItemSchema=z.object({
+  id:z.uuid().optional(),version:z.number().int().min(1).optional(),
+  category:z.enum(["socle","styles","compositions","skills","references"]),
+  title:z.string().trim().min(1).max(120),
+  description:z.string().max(800),prompt:z.string().max(12000),
+  previewUrl:z.string().max(1500),
+  status:z.enum(["draft","active","rejected","disabled"])
+});
+const promptColumns='id::text AS id,category,title,description,prompt,preview_url AS "previewUrl",'+
+  'status,version,created_at AS "createdAt",updated_at AS "updatedAt"';
 function result(payload: unknown, status = 200): Response {
   return Response.json(payload, { status, headers });
 }
@@ -44,6 +54,11 @@ export default async function workspace(request: Request): Promise<Response> {
       if(operation==="variantPreferences"){
         const slideId=idSchema.parse(query.searchParams.get("id"));
         return result({ok:true,...await listSlidePreferences(slideId)});
+      }
+      if(operation==="promptLibrary"){
+        const items=await db.query("SELECT "+promptColumns+
+          " FROM public.prompt_library_items ORDER BY updated_at DESC LIMIT 300",[]);
+        return result({ok:true,items});
       }
       if(operation==="creationInstructions"){
         const id=query.searchParams.get("id")||undefined;
@@ -153,6 +168,23 @@ export default async function workspace(request: Request): Promise<Response> {
       case "removeCreationReference":{
         const id=idSchema.parse(data.id);
         return result({ok:true,removed:await removeCreationReference(id)});
+      }
+      case "savePromptLibraryItem":{
+        const item=promptItemSchema.parse(data.item);
+        if(item.id){
+          const rows=await db.query(
+            "UPDATE public.prompt_library_items SET category=$2,title=$3,description=$4,prompt=$5,"+
+            "preview_url=$6,status=$7,version=version+1,updated_at=now() WHERE id=$1::uuid AND version=$8::int "+
+            "RETURNING "+promptColumns,
+            [item.id,item.category,item.title,item.description,item.prompt,item.previewUrl,item.status,item.version??0]);
+          if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
+          return result({ok:true,item:rows[0]});
+        }
+        const rows=await db.query(
+          "INSERT INTO public.prompt_library_items(category,title,description,prompt,preview_url,status) "+
+          "VALUES($1,$2,$3,$4,$5,$6) RETURNING "+promptColumns,
+          [item.category,item.title,item.description,item.prompt,item.previewUrl,item.status]);
+        return result({ok:true,item:rows[0]},201);
       }
       case "saveCreationInstructions":{
         const scope=z.enum(["global","presentation"]).parse(data.scope);
