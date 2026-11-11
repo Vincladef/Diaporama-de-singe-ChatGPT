@@ -1226,3 +1226,257 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 .variant-feedback-error,.variant-feedback-notice{padding:3px 7px;font-size:10px;line-height:1.4}
 .variant-feedback-error{color:#a04744}
 .variant-feedback-notice{color:#4d7460}
+
+
+/* Mobile-first interaction layer for Diaporama de singe (ChatGPT edition).
+   Desktop layout, editor contents, and 1920x1080 slide coordinates stay unchanged. */
+.mobile-editor-navigation,.mobile-sheet-close,.mobile-sheet-scrim{display:none}
+
+@media (max-width:760px){
+  html,body,#root{width:100%;min-width:0;max-width:100%;overflow-x:clip}
+  .app-slides-style{min-width:0;width:100%;max-width:100%}
+  .app-slides-style.is-editing{height:100dvh;min-height:0;overflow:hidden}
+  .app-slides-style.is-editing .workspace{
+    height:100%;max-height:100%;min-width:0;min-height:0;overflow:hidden
+  }
+
+  /* Two readable rows instead of forcing the title and six actions into 360px. */
+  .app-slides-style.is-editing .slides-header{
+    display:grid;grid-template-columns:40px minmax(0,1fr);
+    grid-template-rows:minmax(36px,auto) minmax(43px,auto);
+    height:auto;min-height:92px;max-height:none;flex:none;
+    gap:4px 9px;padding:7px 10px 5px;
+    align-content:center;align-items:center;
+  }
+  .app-slides-style.is-editing .app-brand{
+    grid-column:1;grid-row:1;min-width:0;min-height:36px;
+    width:40px;height:40px;padding:0;justify-content:center;
+  }
+  .app-slides-style.is-editing .app-brand .identity-mark{width:34px;height:34px}
+  .app-slides-style.is-editing .app-brand span:last-child{display:none}
+  .app-slides-style.is-editing .slides-header-current{
+    grid-column:2;grid-row:1;order:initial;min-width:0;min-height:0;
+    max-width:100%;width:100%;flex:initial;display:flex;
+    align-items:center;gap:6px;overflow:hidden;
+  }
+  .app-slides-style.is-editing .slides-header-current .presentation-title{
+    flex:1 1 0;min-width:0;max-width:100%;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis;font-size:12px;
+  }
+  .app-slides-style.is-editing .slides-header-current small{
+    flex:0 0 auto;white-space:nowrap;font-size:9px;
+  }
+  .app-slides-style.is-editing .slides-header-actions{
+    grid-row:2;grid-column:1/-1;order:initial;
+    display:flex;align-items:center;justify-content:flex-start;
+    min-width:0;width:100%;gap:7px;flex-wrap:nowrap;
+  }
+  .app-slides-style.is-editing .slides-header-actions .present-action{
+    flex:1 1 0;min-width:0;min-height:40px;font-size:12px;
+  }
+  .app-slides-style.is-editing .slides-export-menu{flex:1 1 0;min-width:0}
+  .app-slides-style.is-editing .slides-export-menu summary{
+    width:100%;min-height:40px;padding:8px 10px;
+  }
+  .app-slides-style.is-editing .slides-extra-actions{flex:0 0 42px;min-width:42px}
+  .app-slides-style.is-editing .slides-extra-actions>summary{
+    min-height:40px;min-width:42px;display:grid;place-items:center;
+  }
+  .app-slides-style.is-editing .creation-settings-open,
+  .app-slides-style.is-editing .slides-logout{display:none}
+  .app-slides-style.is-editing .slides-export-options{right:0;top:44px;max-width:calc(100vw - 20px)}
+  .app-slides-style.is-editing .slides-extra-actions>div{
+    right:0;left:auto;max-width:calc(100vw - 20px);z-index:50;
+  }
+  .app-slides-style.is-editing .editing-area{flex:1 1 0;min-height:0;overflow:hidden}
+  .app-slides-style.is-editing .editor-layout{
+    position:relative;isolation:isolate;flex:1 1 0;
+    display:flex;flex-direction:column;min-width:0;min-height:0;max-height:100%;
+    overflow:hidden;
+  }
+  .app-slides-style.is-editing .editor-main{
+    flex:1 1 0;min-width:0;min-height:0;max-height:100%;
+    overflow:hidden;padding:6px 7px 4px;
+  }
+  .app-slides-style.is-editing .visual-toolbar{
+    width:100%;min-width:0;min-height:44px;max-height:49px;
+    flex:0 0 auto;display:flex;gap:8px;
+    align-items:center;justify-content:flex-start;
+    overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    padding:3px 5px;margin-bottom:5px;
+  }
+  .app-slides-style.is-editing .visual-toolbar::-webkit-scrollbar{display:none}
+  .app-slides-style.is-editing .visual-toolbar .visual-toolbar-group,
+  .app-slides-style.is-editing .visual-toolbar .visual-toolbar-group:nth-child(2){
+    display:flex;flex:0 0 auto;align-items:center;gap:2px
+  }
+  .app-slides-style.is-editing .visual-toolbar button,
+  .app-slides-style.is-editing .visual-toolbar .editor-more>summary{
+    min-height:38px;padding:7px 10px;font-size:12px;
+  }
+  .app-slides-style.is-editing .editor-more-menu{
+    position:fixed;top:111px;right:8px;left:auto;
+    max-width:calc(100vw - 16px);z-index:100;
+  }
+  .app-slides-style.is-editing .canvas-stage-shell{flex:1 1 0;min-height:0;min-width:0}
+  .app-slides-style.is-editing .visual-stage{padding:7px}
+  .app-slides-style.is-editing .canvas-statusbar{
+    flex:0 0 auto;min-height:32px;gap:6px;font-size:10px
+  }
+  .app-slides-style.is-editing .canvas-statusbar>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app-slides-style.is-editing .canvas-zoom-controls{flex:0 0 auto}
+  .app-slides-style.is-editing .canvas-zoom-controls button{min-height:32px;min-width:32px}
+  .app-slides-style.is-editing .canvas-zoom-controls span{min-width:36px}
+  .app-slides-style.is-editing .speaker-notes-pane{max-height:55%}
+  .app-slides-style.is-editing .speaker-notes-handle{min-height:18px;height:18px}
+  .app-slides-style.is-editing .speaker-notes-heading{min-height:19px}
+
+  /* The thumbnail rail is optional; default phone view preserves the canvas. */
+  .app-slides-style.is-editing .slide-rail{
+    flex:0 0 123px;width:100%;min-width:0;min-height:0;
+    height:123px;max-height:123px;padding:5px 8px 4px;overflow:hidden;
+    border-bottom:1px solid #d7e1d9;
+  }
+  .app-slides-style.is-editing .rail-heading{padding:0 3px;margin:0 0 4px;min-height:29px}
+  .app-slides-style.is-editing .rail-heading button{min-width:32px;min-height:32px}
+  .app-slides-style.is-editing .slide-list{
+    flex:1 1 0;min-height:0;min-width:0;width:100%;max-width:100%;
+    display:flex;flex-direction:row;gap:7px;
+    overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;padding:0 2px 5px;
+  }
+  .app-slides-style.is-editing .slide-list .slide-tile{flex:0 0 99px;width:99px;margin:0}
+  .app-slides-style.is-editing .rail-tools{display:none}
+
+  /* Modal side sheet for alternatives and tools, with a real close control. */
+  .app-slides-style.is-editing .mobile-sheet-scrim{
+    display:block;position:absolute;inset:0;z-index:11;
+    width:100%;height:100%;border:0;background:#0c241649;cursor:pointer;
+  }
+  .app-slides-style.is-editing .editor-sidebar{
+    position:absolute;left:0;right:0;top:auto;bottom:0;
+    z-index:12;min-width:0;width:100%;
+    height:min(72dvh,610px);max-height:calc(100% - 20px);
+    min-height:0;overflow:hidden;border-left:0;border-top:2px solid #8fbfa0;
+    border-radius:14px 14px 0 0;background:#f1f3f4;
+    box-shadow:0 -10px 35px #0e241f33;
+  }
+  .app-slides-style.is-editing .editor-sidebar-tabs{
+    min-height:52px;padding:6px 10px;gap:8px;align-items:center;
+  }
+  .app-slides-style.is-editing .editor-sidebar-tabs button{min-height:40px}
+  .app-slides-style.is-editing .mobile-sheet-close{
+    display:block;flex:0 0 40px;min-width:40px;min-height:40px;
+    background:#fff;border:1px solid #d2dfd4;border-radius:9px;
+    color:#3d5b44;font-size:17px;
+  }
+  .app-slides-style.is-editing .variant-gallery{flex:1 1 0;min-height:0;overflow:hidden}
+  .app-slides-style.is-editing .variant-gallery-list{
+    flex:1 1 0;min-height:0;padding:8px 12px 20px;overflow-y:auto;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  .app-slides-style.is-editing .variant-gallery-card{
+    width:100%;grid-template-columns:minmax(0,43%) minmax(0,1fr);gap:10px;
+    min-height:75px;padding:8px;
+  }
+  .app-slides-style.is-editing .variant-gallery-actions{padding:8px 12px}
+  .app-slides-style.is-editing .variant-feedback-buttons button{min-height:36px}
+
+  /* Bottom navigation is always reachable, including on devices with a home bar. */
+  .mobile-editor-navigation{
+    flex:0 0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    width:100%;min-width:0;min-height:59px;position:relative;z-index:30;
+    padding:4px 7px calc(4px + env(safe-area-inset-bottom,0px));
+    background:#fff;border-top:1px solid #dbe5dc;
+    box-shadow:0 -3px 15px #12261e14;
+  }
+  .mobile-editor-navigation button{
+    min-width:0;min-height:47px;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:2px;border:1px solid transparent;
+    background:transparent;border-radius:8px;color:#6b806f;
+    font-size:16px;font-weight:750;
+  }
+  .mobile-editor-navigation button small{font-size:10px;font-weight:700;white-space:nowrap}
+  .mobile-editor-navigation button[aria-pressed="true"]{
+    background:#e8f2ea;border-color:#c0d9c6;color:#286447;
+  }
+
+  /* Phone-sized dialogs keep their header, body and exit control visible. */
+  .studio-backdrop{
+    align-items:stretch;justify-content:stretch;
+    padding:0;background:#f6f8f6;backdrop-filter:none;
+  }
+  .studio-dialog,.creation-settings-dialog{
+    width:100%;max-width:100%;height:100%;max-height:100dvh;
+    min-height:0;border:0;border-radius:0;box-shadow:none;
+  }
+  .studio-header{flex:0 0 auto;min-height:56px;padding:12px 14px}
+  .studio-content,.creation-settings-content{flex:1 1 0;min-height:0;overflow-y:auto}
+  .studio-variant-grid{grid-template-columns:minmax(0,1fr);padding:10px}
+  .studio-footer,.creation-settings-footer{flex:0 0 auto;padding:11px 14px}
+  .creation-settings-content{padding:14px}
+  .creation-settings-section textarea{max-width:100%;font-size:16px}
+  .image-gallery{columns:2 120px}
+  .image-details{flex-wrap:wrap}
+  .diagram-form{grid-template-columns:minmax(0,1fr);padding:14px}
+  .diagram-form label,.diagram-form label:nth-child(n+3){grid-column:1}
+  .diagram-preview{min-width:0;max-width:100%;overflow:hidden}
+  .library-home{padding:20px 12px 40px}
+  .library-welcome{gap:13px;margin-bottom:16px}
+  .library-welcome h1{font-size:clamp(27px,7.5vw,35px)}
+  .library-primary-actions{width:100%;gap:8px}
+  .library-primary-actions .library-create-primary{flex:1 1 180px}
+  .library-controls{gap:9px;margin:15px 0}
+  .library-search{width:100%;max-width:none;flex:1 1 100%;min-width:0}
+  .library-deck-grid,.library-folder-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}
+  .library-folder-card,.library-deck-card{min-width:0}
+  .library-navigation{-webkit-overflow-scrolling:touch}
+  .library-menu{max-width:calc(100vw - 25px)}
+  .login-screen{min-height:100dvh;padding:16px}
+  .login-card{padding:24px;width:100%;max-width:420px}
+}
+
+@media(max-width:480px){
+  .app-slides-style.is-library .slides-header{padding:9px 12px;gap:7px}
+  .app-slides-style.is-library .slides-header-current{min-width:0}
+  .app-slides-style.is-library .slides-header-actions{gap:6px}
+  .app-slides-style.is-library .slides-header-actions button{font-size:11px;min-height:40px}
+  .library-home{padding:17px 11px 35px}
+  .library-deck-grid,.library-folder-grid{grid-template-columns:minmax(0,1fr)}
+  .library-controls>label:not(.library-search){flex:1 1 120px}
+  .library-layout-switch{margin-left:auto}
+  .library-deck-grid.is-list .library-deck-open{min-width:0}
+  .library-deck-grid.is-list .library-cover{width:100%;max-width:120px}
+  .library-deck-grid.is-list .library-deck-meta{width:auto}
+  .library-new-folder input{min-width:0;width:100%}
+  .app-slides-style.is-editing .slides-header-current small{font-size:9px}
+  .app-slides-style.is-editing .editor-main{padding:5px}
+  .app-slides-style.is-editing .canvas-zoom-controls button{min-width:30px}
+  .app-slides-style.is-editing .variant-gallery-card{grid-template-columns:minmax(0,41%) minmax(0,1fr)}
+  .app-slides-style.is-editing .variant-gallery-label b{font-size:11px}
+}
+@media(max-width:380px){
+  .app-slides-style.is-editing .slides-header{grid-template-columns:36px minmax(0,1fr);padding:5px 7px}
+  .app-slides-style.is-editing .slides-header-current .presentation-title{font-size:11px}
+  .app-slides-style.is-editing .slides-header-current small{max-width:95px;overflow:hidden;text-overflow:ellipsis}
+  .app-slides-style.is-editing .slides-header-actions{gap:5px}
+  .app-slides-style.is-editing .slides-header-actions .present-action,
+  .app-slides-style.is-editing .slides-export-menu summary{font-size:11px;padding:7px}
+  .app-slides-style.is-editing .canvas-zoom-controls button[aria-label="Augmenter le zoom"]{display:none}
+  .mobile-editor-navigation button small{font-size:9px}
+}
+@media(max-width:760px) and (orientation:landscape) and (max-height:520px){
+  .app-slides-style.is-editing .slides-header{min-height:47px;grid-template-columns:36px minmax(0,1fr) auto;grid-template-rows:1fr;padding:3px 7px}
+  .app-slides-style.is-editing .app-brand{grid-column:1;grid-row:1}
+  .app-slides-style.is-editing .slides-header-current{grid-column:2;grid-row:1}
+  .app-slides-style.is-editing .slides-header-actions{grid-column:3;grid-row:1;width:auto;max-width:220px}
+  .app-slides-style.is-editing .slides-header-actions .present-action{display:none}
+  .app-slides-style.is-editing .slide-rail{height:82px;flex-basis:82px;max-height:82px}
+  .app-slides-style.is-editing .rail-heading{display:none}
+  .app-slides-style.is-editing .visual-toolbar{min-height:38px;max-height:40px}
+  .mobile-editor-navigation{min-height:44px;padding:2px 5px calc(2px + env(safe-area-inset-bottom,0px))}
+  .mobile-editor-navigation button{min-height:40px;gap:0}
+  .mobile-editor-navigation button small{font-size:9px}
+  .app-slides-style.is-editing .editor-sidebar{height:min(84dvh,480px)}
+}

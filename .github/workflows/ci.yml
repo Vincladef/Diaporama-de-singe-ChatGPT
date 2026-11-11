@@ -26,6 +26,9 @@ jobs:
       - name: Require visible browser app at startup
         timeout-minutes: 2
         run: npm run test:browser-entry
+      - name: Check smartphone, mobile landscape and tablet interaction layouts
+        timeout-minutes: 5
+        run: npm run test:mobile
       - name: Validate two real slide screenshots
         timeout-minutes: 3
         run: npm run test:visual
