@@ -18,10 +18,14 @@ jobs:
       - run: npm run check
       - run: npm run test
       - run: npm run build
+      - run: npm run check:browser-bundle
       - name: Verify editable PowerPoint export with real PPTX ZIP
         run: npm run test:export
       - name: Install Chromium for real screenshot verification
         run: npx playwright install --with-deps chromium
+      - name: Require visible browser app at startup
+        timeout-minutes: 2
+        run: npm run test:browser-entry
       - name: Validate two real slide screenshots
         timeout-minutes: 3
         run: npm run test:visual
