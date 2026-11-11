@@ -58,7 +58,7 @@ export default function App() {
   const [improveOpen,setImproveOpen]=useState(false);
   const [creationSettingsOpen,setCreationSettingsOpen]=useState(false);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
-  const [showSlideRail,setShowSlideRail]=useState(true);
+  const [showSlideRail,setShowSlideRail]=useState(()=>!window.matchMedia("(max-width:760px)").matches);
   const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
   const [rightPane,setRightPane]=useState<"variants"|"tools">("variants");
   const [zoom, setZoom] = useState(1);
@@ -774,6 +774,8 @@ export default function App() {
                   <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
                   <button onClick={()=>{setImportOpen(true);}}>Importer</button>
                   <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");setCreationSettingsOpen(true);}}>⚙ Paramètres</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void logout();}}>Quitter</button>
                 </div>
               </details>
             </>}
@@ -895,10 +897,14 @@ export default function App() {
                     onChange={value=>{versionRef.current++;notesRef.current=value;setNotes(value);dirtyRef.current=true;setDirty(true);}}/>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
               </section>
-              {draft&&showInspector&&<section className="editor-sidebar">
+              {draft&&showInspector&&<button type="button" className="mobile-sheet-scrim"
+                aria-label="Fermer le panneau latéral" onClick={()=>setShowInspector(false)}/>}
+              {draft&&showInspector&&<section className="editor-sidebar" aria-label={rightPane==="variants"?"Variantes":"Outils de la diapositive"}>
                 <div className="editor-sidebar-tabs" role="group" aria-label="Panneau latéral">
                   <button aria-pressed={rightPane==="variants"||Boolean(previewVariant)} onClick={()=>setRightPane("variants")}>◆ Variantes</button>
                   <button aria-pressed={rightPane==="tools"&&!previewVariant} onClick={()=>{if(!variantSwitching){setRightPane("tools");setPreviewVariant(null);}}}>Outils</button>
+                  <button type="button" className="mobile-sheet-close" aria-label="Fermer les variantes ou les outils"
+                    onClick={()=>setShowInspector(false)}>✕</button>
                 </div>
                 {rightPane==="variants"||previewVariant?
                   <VariantGallery token={token} slideId={slideId??""} items={variants.items} original={variants.original} loading={variants.loading} error={variants.error}
@@ -911,6 +917,28 @@ export default function App() {
                     onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
               </section>}
             </div>
+            <nav className="mobile-editor-navigation" aria-label="Navigation de l'éditeur sur téléphone">
+              <button type="button" aria-pressed={showSlideRail&&!showInspector}
+                onClick={()=>{setShowInspector(false);setShowSlideRail(v=>!v);}}
+                title="Afficher ou masquer la liste des diapositives">
+                <span aria-hidden="true">▤</span><small>Diapos</small>
+              </button>
+              <button type="button" aria-pressed={!showSlideRail&&!showInspector}
+                onClick={()=>{setShowSlideRail(false);setShowInspector(false);}}
+                title="Revenir à la diapositive">
+                <span aria-hidden="true">▣</span><small>Diapo active</small>
+              </button>
+              <button type="button" aria-pressed={showInspector&&rightPane==="variants"}
+                onClick={()=>{setShowSlideRail(false);setShowInspector(v=>!(v&&rightPane==="variants"));setRightPane("variants");}}
+                title="Choisir parmi les variantes">
+                <span aria-hidden="true">◇</span><small>Variantes</small>
+              </button>
+              <button type="button" aria-pressed={showInspector&&rightPane==="tools"}
+                onClick={()=>{setShowSlideRail(false);setShowInspector(v=>!(v&&rightPane==="tools"));setRightPane("tools");setPreviewVariant(null);}}
+                title="Afficher les outils de création">
+                <span aria-hidden="true">⚙</span><small>Outils</small>
+              </button>
+            </nav>
           </div>
         )}
 
