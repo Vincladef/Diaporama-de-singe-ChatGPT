@@ -236,24 +236,55 @@ export async function activateVariant(slideId: string, variantId: string, expect
   uuid.parse(slideId);uuid.parse(variantId);
   const db=database();
   const rows=await db.query(
-    "SELECT s.presentation_id::text AS presentation_id,s.revision,s.document,s.notes,v.document AS variant_document,v.notes AS variant_notes FROM public.slides s JOIN public.slide_variants v ON v.slide_id=s.id WHERE s.id=$1::uuid AND v.id=$2::uuid",
+    "SELECT s.presentation_id::text AS presentation_id,s.revision,s.document,s.notes,"+
+    "v.document AS variant_document,v.notes AS variant_notes FROM public.slides s "+
+    "JOIN public.slide_variants v ON v.slide_id=s.id "+
+    "WHERE s.id=$1::uuid AND v.id=$2::uuid",
     [slideId,variantId]);
   const row=rows[0];
-  if(!row)throw new Error("variant_not_found");
-  if(expectedRevision!==undefined && row.revision!==expectedRevision)throw new Error("revision_conflict");
-  const doc=SlideDocumentSchema.parse(row.variant_document);
-  const updated=await db.query("UPDATE public.slides SET document=$2::jsonb,notes=$3,revision=revision+1,updated_at=now() WHERE id=$1::uuid AND revision=$4 RETURNING revision",
-    [slideId,JSON.stringify(doc),row.variant_notes,row.revision]);
-  if(!updated[0])throw new Error("revision_conflict");
-  // Archive the former slide, so the selection is reversible.
-  let checkpointSaved=true;
-  try{
-    await db.query("INSERT INTO public.slide_variants(slide_id,name,document,notes) VALUES($1::uuid,$2,$3::jsonb,$4)",
-      [slideId,"Historique r"+row.revision+" · restauration",JSON.stringify(row.document),row.notes]);
-  }catch(error){
-    console.error("Restore backup unavailable:",error instanceof Error?error.message:String(error));
-    checkpointSaved=false;
+  if(!row)throw Error("variant_not_found");
+  if(expectedRevision!==undefined&&row.revision!==expectedRevision)throw Error("revision_conflict");
+  const previous=SlideDocumentSchema.parse(row.document);
+  const existingOriginal=previous.variantSelection?.originalId;
+  const originalName="A · Original (automatique)";
+  const originalRows=existingOriginal?[]:await db.query(
+    "SELECT id::text AS id FROM public.slide_variants "+
+    "WHERE slide_id=$1::uuid AND name=$2 ORDER BY created_at ASC LIMIT 1",
+    [slideId,originalName]);
+  let originalId=existingOriginal??originalRows[0]?.id as string|undefined;
+  const previousDocument=structuredClone(previous);
+  delete previousDocument.variantSelection;
+  if(!originalId){
+    const backup=await db.query(
+      "INSERT INTO public.slide_variants(slide_id,name,document,notes) "+
+      "VALUES($1::uuid,$2,$3::jsonb,$4) RETURNING id::text AS id",
+      [slideId,originalName,JSON.stringify(previousDocument),String(row.notes??"")]);
+    originalId=String(backup[0]?.id??"");
   }
+  if(!originalId)throw Error("original_variant_backup_failed");
+  const activeId=previous.variantSelection?.activeId??originalId;
+  if(activeId===variantId)return {
+    slideId,revision:row.revision,unchanged:true,previousVersionSaved:true,
+    preferenceRecorded:true,
+  };
+  const selected=SlideDocumentSchema.parse({
+    ...SlideDocumentSchema.parse(row.variant_document),
+    variantSelection:{originalId,activeId:variantId},
+  });
+  const result=await db.query(
+    "WITH switched AS(UPDATE public.slides SET document=$3::jsonb,notes=$4,"+
+    "revision=revision+1,updated_at=now() WHERE id=$1::uuid AND revision=$2 "+
+    "RETURNING id,presentation_id,revision),"+
+    "archived AS(UPDATE public.slide_variants SET document=$6::jsonb,notes=$7 "+
+    "WHERE id=$5::uuid AND slide_id=$1::uuid AND EXISTS(SELECT 1 FROM switched) "+
+    "RETURNING id),"+
+    "touched AS(UPDATE public.presentations SET updated_at=now() "+
+    "WHERE id IN(SELECT presentation_id FROM switched) RETURNING id) "+
+    "SELECT revision,(SELECT COUNT(*)::int FROM archived) AS previous_saved FROM switched",
+    [slideId,row.revision,JSON.stringify(selected),String(row.variant_notes??""),
+      activeId,JSON.stringify(previousDocument),String(row.notes??"")]);
+  if(!result[0])throw Error("revision_conflict");
+  const checkpointSaved=Number(result[0].previous_saved)>0;
   let preferenceRecorded=true;
   try{
     const {recordVariantSelection}=await import("./visualPreferences.ts");
@@ -262,7 +293,7 @@ export async function activateVariant(slideId: string, variantId: string, expect
     console.error("Selection memory unavailable:",error instanceof Error?error.message:String(error));
     preferenceRecorded=false;
   }
-  return {slideId,revision:updated[0].revision,previousVersionSaved:checkpointSaved,
-    preferenceRecorded,
-    ...(!checkpointSaved?{warning:"La version a été restaurée mais son état précédent n'a pas pu être archivé."}:{})};
+  return {slideId,revision:result[0].revision,previousVersionSaved:checkpointSaved,
+    preferenceRecorded,selectedVariantId:variantId,
+    ...(!checkpointSaved?{warning:"L'état précédent n'a pas été archivé comme variante modifiable."}:{})};
 }
