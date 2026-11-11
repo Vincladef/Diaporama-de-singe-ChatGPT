@@ -102,6 +102,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     if(clicked.linkFrom&&clicked.linkTo){onSelect([clicked.id]);return;}
     e.preventDefault();
     e.stopPropagation();
+    wrapperRef.current?.focus({preventScroll:true});
     freeRef.current?.clear();
     const selected=selectionRef.current;
     const group=clicked.groupId && mode==="move"
@@ -170,11 +171,13 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   return (
     <div className={"visual-viewport"+(zoom>1?" is-zoomed":"")} ref={wrapperRef}
       aria-label="Surface d'édition graphique"
+      tabIndex={-1}
       onPointerDown={e=>{
         if(readOnly||editingHtml)return;
         // The gray pasteboard is part of the editing surface: clicking it must
         // clear both native-object and freeform-HTML selections.
         if((e.target as HTMLElement).closest(".visual-artboard"))return;
+        wrapperRef.current?.focus({preventScroll:true});
         onSelect([]);setEditId(null);freeRef.current?.clear();
       }}>
       <div className="visual-stage" style={{minWidth:Math.max(viewport.width,displayWidth+40),
@@ -196,6 +199,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
         <div className="visual-hit-layer" style={{pointerEvents:editingHtml?"none":"auto"}}
           onPointerDown={e=>{
             if(readOnly)return;
+            wrapperRef.current?.focus({preventScroll:true});
             onSelect([]);setEditId(null);
             const rect=e.currentTarget.getBoundingClientRect();
             freeRef.current?.selectAt((e.clientX-rect.left)/fit,(e.clientY-rect.top)/fit);
