@@ -16,15 +16,19 @@ const titleSchema = z.string().trim().min(1).max(180);
 const folderNameSchema=z.string().trim().min(1).max(120);
 const folderIdSchema=z.union([z.uuid(),z.null()]);
 const notesSchema = z.string().max(30000);
+const promptExampleUrlSchema=z.string().trim().min(1).max(1500).refine(value=>
+  /^https?:\/\/[^\s]+$/i.test(value)||/^\/prompt-examples\/[a-z0-9._\-/]+\.svg$/i.test(value),
+  "invalid_image_url");
 const promptItemSchema=z.object({
   id:z.uuid().optional(),version:z.number().int().min(1).optional(),
   category:z.enum(["socle","styles","compositions","skills","references"]),
   title:z.string().trim().min(1).max(120),
   description:z.string().max(800),prompt:z.string().max(12000),
-  previewUrl:z.string().max(1500),
+  previewUrl:z.string().max(1500),exampleImages:z.array(promptExampleUrlSchema).max(12).default([]),
   status:z.enum(["draft","active","rejected","disabled"])
 });
 const promptColumns='id::text AS id,category,title,description,prompt,preview_url AS "previewUrl",'+
+  'example_images AS "exampleImages",'+
   'status,version,created_at AS "createdAt",updated_at AS "updatedAt"';
 function result(payload: unknown, status = 200): Response {
   return Response.json(payload, { status, headers });
@@ -183,16 +187,16 @@ export default async function workspace(request: Request): Promise<Response> {
         if(item.id){
           const rows=await db.query(
             "UPDATE public.prompt_library_items SET category=$2,title=$3,description=$4,prompt=$5,"+
-            "preview_url=$6,status=$7,version=version+1,updated_at=now() WHERE id=$1::uuid AND version=$8::int "+
+            "preview_url=$6,example_images=$7::jsonb,status=$8,version=version+1,updated_at=now() WHERE id=$1::uuid AND version=$9::int "+
             "RETURNING "+promptColumns,
-            [item.id,item.category,item.title,item.description,item.prompt,item.previewUrl,item.status,item.version??0]);
+            [item.id,item.category,item.title,item.description,item.prompt,item.previewUrl,JSON.stringify(item.exampleImages),item.status,item.version??0]);
           if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
           return result({ok:true,item:rows[0]});
         }
         const rows=await db.query(
-          "INSERT INTO public.prompt_library_items(category,title,description,prompt,preview_url,status) "+
-          "VALUES($1,$2,$3,$4,$5,$6) RETURNING "+promptColumns,
-          [item.category,item.title,item.description,item.prompt,item.previewUrl,item.status]);
+          "INSERT INTO public.prompt_library_items(category,title,description,prompt,preview_url,example_images,status) "+
+          "VALUES($1,$2,$3,$4,$5,$6::jsonb,$7) RETURNING "+promptColumns,
+          [item.category,item.title,item.description,item.prompt,item.previewUrl,JSON.stringify(item.exampleImages),item.status]);
         return result({ok:true,item:rows[0]},201);
       }
       case "saveCreationInstructions":{

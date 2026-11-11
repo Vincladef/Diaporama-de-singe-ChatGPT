@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img"><rect x="0" y="0" width="960" height="540" fill="#f5f5f1" rx="0"/><text x="55" y="61" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#333c3b" >COMPARER DEUX APPROCHES</text>
+<rect x="54" y="98" width="506" height="378" fill="#dce5e1" rx="12"/><rect x="579" y="98" width="329" height="378" fill="#e8dcd0" rx="12"/>
+<text x="81" y="146" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#426659" >CAS A</text>
+<text x="600" y="146" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#926954" >CAS B</text>
+<circle cx="298" cy="280" r="114" fill="#769d8f" stroke="none" stroke-width="1"/><circle cx="298" cy="280" r="69" fill="#dce5e1" stroke="none" stroke-width="1"/>
+<circle cx="742" cy="281" r="92" fill="#c58c6e" stroke="none" stroke-width="1"/><rect x="685" y="236" width="112" height="85" fill="#e6be9c" rx="5"/>
+<text x="83" y="438" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="500" fill="#4a695e" >Une grande zone d'analyse</text>
+<text x="600" y="438" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="500" fill="#805d4d" >Un contrepoint</text>
+<line x1="567" y1="98" x2="567" y2="476" stroke="#fff" stroke-width="4"/>
+<text x="55" y="515" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#7a8980" >COMPOSITION / ASYMÉTRIE</text></svg>

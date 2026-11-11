@@ -1,10 +1,10 @@
 export type PromptCategory="socle"|"styles"|"compositions"|"skills"|"references";
 export type PromptStatus="draft"|"active"|"rejected"|"disabled";
 export interface PromptLibraryItem{
- id:string;category:PromptCategory;title:string;description:string;prompt:string;previewUrl:string;
+ id:string;category:PromptCategory;title:string;description:string;prompt:string;previewUrl:string;exampleImages:string[];
  status:PromptStatus;version:number;createdAt:string;updatedAt:string;
 }
-export type PromptItemDraft=Pick<PromptLibraryItem,"category"|"title"|"description"|"prompt"|"previewUrl"|"status">&
+export type PromptItemDraft=Pick<PromptLibraryItem,"category"|"title"|"description"|"prompt"|"previewUrl"|"exampleImages"|"status">&
  Partial<Pick<PromptLibraryItem,"id"|"version">>;
 const endpoint="/.netlify/functions/workspace";
 async function request<T>(token:string,action?:Record<string,unknown>):Promise<T>{

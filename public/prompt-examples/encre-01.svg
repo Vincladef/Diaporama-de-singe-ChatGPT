@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img"><rect x="0" y="0" width="960" height="540" fill="#f5f1e6" rx="0"/><text x="47" y="65" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#455750" >OBSERVATION   /   PLANCHE BOTANIQUE</text>
+<line x1="49" y1="86" x2="910" y2="86" stroke="#b5b6aa" stroke-width="1"/>
+<path d="M 480 477 Q 455 350 482 215 Q 487 145 485 114" stroke="#344f4b" stroke-width="4" fill="none"/>
+<path d="M 480 175 Q 399 72 300 147 Q 381 185 480 175" fill="#afc1a7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="175" x2="332.4" y2="155" stroke="#748c73" stroke-width="1"/><path d="M 480 214 Q 561 111 660 186 Q 579 224 480 214" fill="#d4d9c7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="214" x2="627.6" y2="194" stroke="#748c73" stroke-width="1"/><path d="M 480 253 Q 399 150 300 225 Q 381 263 480 253" fill="#d4d9c7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="253" x2="332.4" y2="233" stroke="#748c73" stroke-width="1"/><path d="M 480 292 Q 561 189 660 264 Q 579 302 480 292" fill="#afc1a7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="292" x2="627.6" y2="272" stroke="#748c73" stroke-width="1"/><path d="M 480 331 Q 399 228 300 303 Q 381 341 480 331" fill="#d4d9c7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="331" x2="332.4" y2="311" stroke="#748c73" stroke-width="1"/><path d="M 480 370 Q 561 267 660 342 Q 579 380 480 370" fill="#d4d9c7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="370" x2="627.6" y2="350" stroke="#748c73" stroke-width="1"/><path d="M 480 409 Q 399 306 300 381 Q 381 419 480 409" fill="#afc1a7" stroke="#4f6859" stroke-width="2"/><line x1="480" y1="409" x2="332.4" y2="389" stroke="#748c73" stroke-width="1"/>
+<circle cx="605" cy="200" r="65" fill="#d7a98a" stroke="none" stroke-width="1"/>
+<text x="55" y="177" font-family="Georgia,serif" font-size="36" font-weight="600" fill="#485b4e" >TISSUS</text>
+<text x="55" y="218" font-family="Georgia,serif" font-size="32" font-weight="500" fill="#485b4e" >ET FORMES</text>
+<line x1="70" y1="250" x2="272" y2="250" stroke="#7c9282" stroke-width="1"/>
+<text x="70" y="287" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="500" fill="#6a796c" >Structure détaillée</text>
+<line x1="267" y1="283" x2="368" y2="313" stroke="#6a796c" stroke-width="1"/>
+<text x="716" y="409" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="500" fill="#4b6356" >Figure 1</text>
+<line x1="695" y1="405" x2="603" y2="376" stroke="#4b6356" stroke-width="1"/>
+<text x="50" y="510" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#758574" >ENCRE &amp; APLATS LÉGERS</text></svg>

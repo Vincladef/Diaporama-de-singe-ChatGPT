@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img"><rect x="0" y="0" width="960" height="540" fill="#f0d8b7" rx="0"/><defs><clipPath id="a"><rect x="0" y="0" width="960" height="540"/></clipPath></defs>
+<circle cx="738" cy="270" r="235" fill="#ce613e" stroke="none" stroke-width="1"/><circle cx="738" cy="270" r="169" fill="#e5a35c" stroke="none" stroke-width="1"/><circle cx="738" cy="270" r="100" fill="#f0d8b7" stroke="none" stroke-width="1"/>
+<path d="M 480 405 Q 680 360 980 415" fill="none" stroke="#9d5940" stroke-width="2" opacity=".45"/><path d="M 480 424 Q 680 372 980 431" fill="none" stroke="#9d5940" stroke-width="2" opacity=".45"/><path d="M 480 443 Q 680 384 980 447" fill="none" stroke="#9d5940" stroke-width="2" opacity=".45"/><path d="M 480 462 Q 680 396 980 463" fill="none" stroke="#9d5940" stroke-width="2" opacity=".45"/><path d="M 480 481 Q 680 408 980 479" fill="none" stroke="#9d5940" stroke-width="2" opacity=".45"/>
+<text x="55" y="92" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#70432c" >REVUE DES FORMES</text>
+<text x="55" y="238" font-family="Georgia, serif" font-size="79" font-weight="700" fill="#523b30" >UN AUTRE</text>
+<text x="55" y="319" font-family="Georgia, serif" font-size="103" font-weight="700" fill="#523b30" >REGARD</text>
+<text x="57" y="454" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="600" fill="#80553c" >MÉMOIRE     •     HISTOIRES     •     CULTURE</text>
+<line x1="55" y1="480" x2="897" y2="480" stroke="#80553c" stroke-width="2"/></svg>

@@ -31,13 +31,15 @@ export async function getCreationInstructions(presentationId?: string) {
   const global = String(globalRows[0]?.instructions ?? "");
   const presentation = String(presentationRows[0]?.instructions ?? "");
   const approvedItems=await db.query(
-    "SELECT category,title,description,prompt FROM public.prompt_library_items "+
+    "SELECT category,title,description,prompt,example_images FROM public.prompt_library_items "+
     "WHERE status='active' ORDER BY updated_at DESC LIMIT 12",[]).catch(()=>[]);
   const librarySection=approvedItems.length?
     "\n\nRESSOURCES VALIDÉES DE LA BIBLIOTHÈQUE DE PROMPTS : "+
     "suggestions facultatives, à choisir selon le propos ; ne pas toutes les appliquer à la fois.\n"+
     approvedItems.map(row=>"## "+row.title+" ("+row.category+")\n"+
-      String(row.description??"")+"\n"+String(row.prompt??"").slice(0,1400)).join("\n"):"";
+      String(row.description??"")+"\n"+String(row.prompt??"").slice(0,1400)+
+      (Array.isArray(row.example_images)&&row.example_images.length?
+        "\nExemples visuels consultables : "+row.example_images.slice(0,3).join(", "):"")).join("\n"):"";
   const effective=combineCreationInstructions(global,presentation)+
     (references.length?"\n\nRÉFÉRENCES DE DIAPORAMAS JOINTES : "+
       "utiliser les analyses ci-dessous ; pour les images, inspect_creation_reference permet de voir le visuel.\n"+

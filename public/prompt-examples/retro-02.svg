@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img"><rect x="0" y="0" width="960" height="540" fill="#485849" rx="0"/><rect x="46" y="43" width="869" height="452" fill="#e9cf9f" rx="8"/>
+<circle cx="760" cy="235" r="162" fill="#d88555" stroke="none" stroke-width="1"/><circle cx="737" cy="214" r="111" fill="#e7b778" stroke="none" stroke-width="1"/><circle cx="715" cy="183" r="65" fill="#485849" stroke="none" stroke-width="1"/>
+<path d="M 465 490 Q 530 337 700 425 T 970 395 L 970 540 L 465 540 Z" fill="#8a9a71"/>
+<text x="78" y="128" font-family="Georgia,serif" font-size="84" font-weight="700" fill="#3f473b" >CARNET</text>
+<text x="78" y="213" font-family="Georgia,serif" font-size="97" font-weight="700" fill="#3f473b" >VISUEL</text>
+<line x1="81" y1="259" x2="475" y2="259" stroke="#a55c48" stroke-width="4"/>
+<text x="81" y="304" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#83664e" >N° 07   •   ÉTÉ 1974</text>
+<text x="81" y="425" font-family="Georgia,serif" font-size="29" font-weight="400" fill="#544636" >Formes et récits</text></svg>

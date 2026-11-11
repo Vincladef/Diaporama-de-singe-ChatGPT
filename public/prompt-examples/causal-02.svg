@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img"><rect x="0" y="0" width="960" height="540" fill="#f1f4f7" rx="0"/><text x="48" y="64" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#304154" >PROCESSUS ET RÉTROACTION</text>
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0 0 L7 3 L0 6Z" fill="#54748b"/></marker></defs>
+<rect x="65" y="135" width="225" height="100" fill="#dce8f1" rx="11"/><rect x="369" y="135" width="225" height="100" fill="#d3e3dd" rx="11"/><rect x="672" y="135" width="225" height="100" fill="#eee0d2" rx="11"/>
+<text x="93" y="193" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#2f5062" >Perception</text><text x="404" y="193" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#3b6755" >Évaluation</text><text x="716" y="193" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#7a5a42" >Réponse</text>
+<path d="M290 185 L365 185 M594 185 L668 185" stroke="#54748b" stroke-width="5" marker-end="url(#a)"/>
+<text x="398" y="338" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="600" fill="#5c6b77" >Rétroaction</text>
+<path d="M 784 235 V386 Q 784 425 741 425 H217 Q 177 425 177 385 V239" fill="none" stroke="#839eaa" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#a)"/>
+<text x="60" y="506" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#80909b" >COMPOSITION / CHAÎNE ET RETOUR</text></svg>

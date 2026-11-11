@@ -4,6 +4,7 @@ import {readCreationInstructions,writeCreationInstructions,uploadCreationReferen
  deleteCreationReference,downloadCreationReference,type CreationReference} from "../lib/api";
 import {listPromptItems,savePromptItem,deletePromptItem,type PromptCategory,
  type PromptLibraryItem,type PromptItemDraft} from "../lib/promptLibrary";
+import {ExampleImage,PromptExampleGallery} from "./PromptExampleGallery";
 import "./promptLibrary.css";
 
 const sections:{id:PromptCategory;name:string;icon:string;description:string}[]=[
@@ -53,6 +54,7 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
  const [savedLocal,setSavedLocal]=useState("");
  const [items,setItems]=useState<PromptLibraryItem[]>([]);
  const [editing,setEditing]=useState<PromptItemDraft|null>(null);
+ const [viewer,setViewer]=useState<{title:string;urls:string[];index:number}|null>(null);
  const [methodDrafts,setMethodDrafts]=useState<Record<string,string>>({});
  const [references,setReferences]=useState<CreationReference[]>([]);
  const [loading,setLoading]=useState(true);
@@ -75,6 +77,16 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[token,presentationId]);
+ useEffect(()=>{
+  if(!viewer)return;
+  const handler=(event:KeyboardEvent)=>{
+   if(event.key==="Escape")setViewer(null);
+   if(event.key==="ArrowRight")setViewer(prev=>prev?{...prev,index:(prev.index+1)%prev.urls.length}:prev);
+   if(event.key==="ArrowLeft")setViewer(prev=>prev?{...prev,index:(prev.index+prev.urls.length-1)%prev.urls.length}:prev);
+  };
+  window.addEventListener("keydown",handler);
+  return()=>window.removeEventListener("keydown",handler);
+ },[viewer]);
  const dirty=global!==savedGlobal||(!!presentationId&&local!==savedLocal);
  const methods=items.filter(i=>i.category==="skills");
  function leave(){
@@ -93,7 +105,7 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   finally{setSaving(false)}
  }
  function addItem(category:PromptCategory){
-  setEditing({category,title:"",description:"",prompt:"",previewUrl:"",status:"active"});
+  setEditing({category,title:"",description:"",prompt:"",previewUrl:"",exampleImages:[],status:"active"});
   setMessage("");setError("");
  }
  function openItem(item:PromptLibraryItem){
@@ -102,7 +114,8 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
  async function persist(item:PromptItemDraft){
   setSaving(true);setError("");setMessage("");
   try{
-   const saved=await savePromptItem(token,{...item,status:"active"});
+   const images=(item.exampleImages??[]).map(url=>url.trim()).filter(Boolean);
+   const saved=await savePromptItem(token,{...item,exampleImages:images,previewUrl:images[0]??"",status:"active"});
    setItems(list=>[saved,...list.filter(i=>i.id!==saved.id)]);
    setEditing(null);setMessage(labelByCategory[saved.category]+" enregistré(e).");
   }catch(e){setError(e instanceof Error?e.message:String(e))}
@@ -176,17 +189,17 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   </div>}
  </section>;
  function renderCard(item:PromptLibraryItem){
-  const excerpt=item.prompt.replace(/^#+\s*/gm,"").replace(/\s+/g," ").trim();
+  const images=item.exampleImages?.length?item.exampleImages:(item.previewUrl?[item.previewUrl]:[]);
   return <article className="prompt-item-card" key={item.id}>
-   {item.previewUrl&&<img className="prompt-real-preview" src={item.previewUrl} alt={"Exemple visuel : "+item.title} loading="lazy"/>}
+   <PromptExampleGallery title={item.title} urls={images}
+    onOpen={(urls,index)=>setViewer({title:item.title,urls,index})}/>
    <div className="prompt-item-text">
     <div className="prompt-card-eyebrow">{labelByCategory[item.category]}</div>
     <h3>{item.title}</h3>
     <p>{item.description}</p>
-    {excerpt&&<p className="prompt-card-prompt">{excerpt.slice(0,420)}{excerpt.length>420?"…":""}</p>}
    </div>
    <div className="prompt-item-foot">
-    <button className="prompt-outline" onClick={()=>openItem(item)}>Voir / modifier la fiche</button>
+    <button className="prompt-outline" onClick={()=>openItem(item)}>Voir et modifier</button>
    </div>
   </article>;
  }
@@ -228,9 +241,37 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
         <textarea id="prompt-body" maxLength={12000} rows={10} value={editing.prompt}
          onChange={e=>setEditing({...editing,prompt:e.target.value})} spellCheck={false}/></div>
        {(editing.category==="styles"||editing.category==="compositions"||editing.category==="references")&&
-        <div className="prompt-form-field"><label htmlFor="prompt-image">Image d'exemple (URL facultative)</label>
-         <input id="prompt-image" type="url" maxLength={1500} placeholder="https://..."
-          value={editing.previewUrl} onChange={e=>setEditing({...editing,previewUrl:e.target.value})}/></div>}
+        <div className="prompt-form-field prompt-image-fields">
+         <label>Galerie d’exemples visuels</label>
+         <p>Colle plusieurs URL d’images, dans l’ordre souhaité. La première servira d’illustration principale. Tu peux aussi utiliser les exemples SVG de l’application.</p>
+         {(editing.exampleImages??[]).map((url,i)=><div className="prompt-image-url-row" key={i}>
+          <label htmlFor={"prompt-example-"+i}>Image {i+1}</label>
+          <input id={"prompt-example-"+i} type="text" maxLength={1500}
+           placeholder="https://exemple.fr/image.jpg"
+           value={url}
+           onChange={e=>{
+            const next=[...(editing.exampleImages??[])];next[i]=e.target.value;
+            setEditing({...editing,exampleImages:next});
+           }}/>
+          <button className="prompt-outline" title={"Retirer l'image "+(i+1)}
+           aria-label={"Retirer l’image "+(i+1)}
+           onClick={()=>{
+            const next=(editing.exampleImages??[]).filter((_,index)=>index!==i);
+            setEditing({...editing,exampleImages:next});
+           }}>✕</button>
+         </div>)}
+         <button className="prompt-outline prompt-add-image"
+          disabled={(editing.exampleImages??[]).length>=12}
+          onClick={()=>setEditing({...editing,exampleImages:[...(editing.exampleImages??[]),""]})}>
+          + Ajouter une URL d’image</button>
+         <small>Jusqu’à 12 images par fiche ; URL HTTPS ou image SVG de la bibliothèque.</small>
+         {(editing.exampleImages??[]).some(url=>url.trim())&&
+          <div className="prompt-editor-image-gallery">
+           <PromptExampleGallery title={editing.title||"Nouvelle fiche"}
+            urls={(editing.exampleImages??[]).filter(url=>url.trim())}
+            onOpen={(urls,index)=>setViewer({title:editing.title||"Aperçu",urls,index})}/>
+          </div>}
+        </div>}
        <div className="prompt-editor-actions prompt-editor-justify">
         {editing.id&&<button className="prompt-text-action prompt-danger" disabled={saving}
          onClick={()=>void removeItem(editing)}>Supprimer la fiche</button>}
@@ -303,5 +344,25 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
     {message&&<p role="status" className="prompt-message success">{message}</p>}
    </main>
   </div>
+  {viewer&&<div className="prompt-lightbox" role="dialog" aria-modal="true"
+   aria-label={"Galerie agrandie : "+viewer.title} onClick={()=>setViewer(null)}>
+   <div className="prompt-lightbox-panel" onClick={e=>e.stopPropagation()}>
+    <div className="prompt-lightbox-head">
+     <strong>{viewer.title}</strong>
+     <button className="prompt-lightbox-close" aria-label="Fermer l’image" onClick={()=>setViewer(null)}>✕</button>
+    </div>
+    <div className="prompt-lightbox-visual">
+     {viewer.urls.length>1&&<button className="prompt-lightbox-arrow" aria-label="Image précédente"
+      onClick={()=>setViewer(v=>v?{...v,index:(v.index+v.urls.length-1)%v.urls.length}:v)}>‹</button>}
+     <ExampleImage src={viewer.urls[viewer.index]!} alt={"Aperçu agrandi : "+viewer.title}/>
+     {viewer.urls.length>1&&<button className="prompt-lightbox-arrow" aria-label="Image suivante"
+      onClick={()=>setViewer(v=>v?{...v,index:(v.index+1)%v.urls.length}:v)}>›</button>}
+    </div>
+    <div className="prompt-lightbox-foot">
+     <span>Exemple {viewer.index+1} sur {viewer.urls.length}</span>
+     <a href={viewer.urls[viewer.index]} target="_blank" rel="noopener noreferrer">Ouvrir l’image d’origine</a>
+    </div>
+   </div>
+  </div>}
  </div>;
 }

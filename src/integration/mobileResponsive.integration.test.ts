@@ -45,6 +45,18 @@ async function mockPrivateWorkspace(page:Page){
       case "cover":return json({document:slides[0]!.document});
       case "variantPreferences":return json({ok:true,preferences:[]});
       case "creationInstructions":return json({ok:true,global:"",presentation:"",effective:"",references:[]});
+      case "promptLibrary":return json({ok:true,items:[
+       {id:"11111111-1111-4111-8111-111111111111",category:"styles",title:"Éditorial suisse",
+        description:"Grilles typographiques lisibles et contrastes précis.",prompt:"Règles graphiques",
+        previewUrl:"/prompt-examples/suisse-01.svg",
+        exampleImages:["/prompt-examples/suisse-01.svg","/prompt-examples/suisse-02.svg"],
+        status:"active",version:1,createdAt:now,updatedAt:now},
+       {id:"22222222-2222-4222-8222-222222222222",category:"styles",title:"Rétro éditorial",
+        description:"Palette chaude, surfaces et caractères expressifs.",prompt:"Magazine",
+        previewUrl:"/prompt-examples/retro-01.svg",
+        exampleImages:["/prompt-examples/retro-01.svg","/prompt-examples/retro-02.svg"],
+        status:"active",version:1,createdAt:now,updatedAt:now}
+      ]});
       default:return json({ok:true,items:[],variants:[]});
      }
    }
@@ -137,7 +149,11 @@ test("real built React app is usable on phones: library, editor, tabs, tools, va
      await page.getByRole("button",{name:"Quitter"}).waitFor({timeout:5000});
      await page.getByRole("button",{name:"Bibliothèque de prompts"}).click();
      await page.getByRole("heading",{name:"Socle général"}).waitFor({timeout:5000});
-     await page.getByRole("button",{name:/Styles graphiques/}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:/Styles graphiques/}).click();
+     await page.getByRole("button",{name:/Voir l.exemple 2 de Éditorial suisse/}).click();
+     await page.getByRole("button",{name:/Agrandir l.exemple 2 de Éditorial suisse/}).click();
+     await page.getByRole("dialog",{name:/Galerie agrandie/}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:"Fermer l’image"}).click();
      const promptFit=await fitCheck(page,"prompt-library-"+size.name);
      assert.ok(promptFit.maxScrollWidth<=size.width+2,
        "prompt library horizontal overflow at "+size.width+": "+JSON.stringify(promptFit));
@@ -171,5 +187,40 @@ test("on small phones the non-authenticated login stays fully visible",
  }finally{
    await browser.close();
    await new Promise<void>((resolve,reject)=>server.httpServer.close(e=>e?reject(e):resolve()));
+ }
+});
+
+test("prompt gallery uses exactly two columns on desktop and loads its SVG examples",
+ {timeout:45000},async()=>{
+ const server=await preview({preview:{port:5194,host:"127.0.0.1",strictPort:true},logLevel:"error"});
+ const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage({viewport:{width:1540,height:900}});
+  await mockPrivateWorkspace(page);
+  await page.goto("http://127.0.0.1:5194/",{waitUntil:"domcontentloaded"});
+  await page.getByRole("button",{name:"Bibliothèque de prompts"}).click();
+  await page.getByRole("button",{name:/Styles graphiques/}).click();
+  const grid=page.locator(".prompt-card-grid");
+  await grid.waitFor();
+  const columns=await grid.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(" ").length);
+  assert.equal(columns,2,"style cards should use two spacious columns on desktop");
+  const image=page.locator(".prompt-gallery-cover img").first();
+  await image.waitFor();
+  await assert.doesNotReject(async()=>{
+   await image.evaluate(async (node:HTMLImageElement)=>{
+    if(node.complete)return;
+    await new Promise<void>((resolve,reject)=>{
+     node.addEventListener("load",()=>resolve(),{once:true});
+     node.addEventListener("error",()=>reject(new Error("example image missing")),{once:true});
+    });
+   });
+  });
+  assert.ok(await image.evaluate((node:HTMLImageElement)=>node.naturalWidth>0),
+    "original SVG sample should load");
+  await page.screenshot({path:"artifacts/mobile/prompt-library-desktop.png"});
+  await page.close();
+ }finally{
+  await browser.close();
+  await new Promise<void>((resolve,reject)=>server.httpServer.close(e=>e?reject(e):resolve()));
  }
 });
