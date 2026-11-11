@@ -1,0 +1,45 @@
+name: Manual deploy to Netlify without build credits
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-direct-netlify.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-netlify-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Netlify deployment credential
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::error::Missing NETLIFY_AUTH_TOKEN repository secret. A personal Netlify access token is required for direct deployment."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package.json
+      - name: Install dependencies and build outside Netlify
+        run: |
+          npm install
+          npm run build
+      - name: Deploy site and functions directly
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: 62280335-f588-4932-bdc4-b7fb7fac797a
+          CI: 'true'
+        run: |
+          npx --yes netlify-cli@latest deploy --prod --dir=dist --functions=netlify/functions --site="$NETLIFY_SITE_ID" --message="Manual GitHub Actions deploy: $GITHUB_SHA"
