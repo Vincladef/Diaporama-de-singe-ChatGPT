@@ -99,6 +99,33 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     // An existing HTML selection may need to be resolved after iframe regeneration.
     if(slide.mode==="structured")clear();
   },[slide.mode]);
+  useEffect(()=>{
+    // HTML/CSS objects are selected independently from native slide elements.
+    // Their Delete/Backspace shortcut must therefore operate on the iframe DOM.
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.key!=="Backspace"&&event.key!=="Delete")return;
+      if(event.defaultPrevented||event.ctrlKey||event.metaKey||event.altKey||editingRef.current)return;
+      const target=event.target instanceof HTMLElement?event.target:null;
+      if(target?.isContentEditable||target?.closest("input, textarea, select, .slide-list"))return;
+      const element=activeElement.current;
+      const content=frameRef.current?.contentDocument;
+      if(!selectedRef.current||!element||!content?.contains(element))return;
+      const freeform=slideRef.current.freeform;
+      if(!freeform)return;
+      const nextHtml=serializeFreeform(content);
+      if(nextHtml===null)return;
+      element.remove();
+      const html=serializeFreeform(content);
+      if(html===null)return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clear();
+      onChange({...slideRef.current,freeform:{html,css:freeform.css}},"dom-html");
+    };
+    window.addEventListener("keydown",onKeyDown,true);
+    return()=>window.removeEventListener("keydown",onKeyDown,true);
+  },[frameRef,onChange]);
+
 
   function commit() {
     const content=frameRef.current?.contentDocument;
