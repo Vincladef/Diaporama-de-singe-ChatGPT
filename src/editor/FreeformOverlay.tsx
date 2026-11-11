@@ -112,11 +112,16 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
       if(!selectedRef.current||!element||!content?.contains(element))return;
       const freeform=slideRef.current.freeform;
       if(!freeform)return;
-      const nextHtml=serializeFreeform(content);
-      if(nextHtml===null)return;
+      const previousHtml=serializeFreeform(content);
+      if(previousHtml===null)return;
+      const parent=element.parentNode;
+      const sibling=element.nextSibling;
       element.remove();
       const html=serializeFreeform(content);
-      if(html===null)return;
+      if(html===null||html===previousHtml){
+        parent?.insertBefore(element,sibling);
+        return;
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
       clear();
