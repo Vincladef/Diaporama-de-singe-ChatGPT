@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {spawn} from "node:child_process";
+import {createServer} from "vite";
 import {mkdir,writeFile} from "node:fs/promises";
 import {chromium} from "playwright-core";
 import JSZip from "jszip";
@@ -38,11 +38,13 @@ async function waitForPort(port:number,ms=15_000){
 
 test("real Chromium browser exports actual editable and faithful PPTX from real demo",{timeout:180_000},async()=>{
  const port=5183;
- const server=spawn("npm",["run","dev","--","--host","127.0.0.1","--port",String(port)],{
-   stdio:["ignore","pipe","pipe"],env:{...process.env,CI:"1"},
+ const server=await createServer({
+   server:{host:"127.0.0.1",port,strictPort:true},
+   logLevel:"error",
  });
  let browser:Awaited<ReturnType<typeof chromium.launch>>|null=null;
  try{
+   await server.listen();
    await waitForPort(port);
    browser=await chromium.launch({headless:true,timeout:20_000});
    const page=await browser.newPage({viewport:{width:1920,height:1080}});
@@ -126,6 +128,6 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    }
  }finally{
    await browser?.close().catch(()=>{});
-   server.kill("SIGTERM");
+   await server.close();
  }
 });
