@@ -1,4 +1,5 @@
 import type { SlideDocument,SlideElement } from "../domain/slide.ts";
+import {inspectMarkupMedia} from "./markupMedia.ts";
 
 export type Finding={
   severity:"error"|"warning"|"info";
@@ -32,6 +33,12 @@ export function auditSlide(doc:SlideDocument,index:number):Finding[]{
     findings.push({severity,code,message,slideIndex:index, ...(elementId?{elementId}:{})});
   };
   const html=doc.freeform?.html??"",css=doc.freeform?.css??"";
+  const freeformMedia=inspectMarkupMedia(doc);
+  if(freeformMedia.invalidUrls.length)
+    push("error","freeform_image_url","Une image HTML/CSS contient une URL de format non autorisé.");
+  if(freeformMedia.imageCount)
+    push("info","freeform_image_requires_capture",
+      freeformMedia.imageCount+" image(s) dans le HTML/CSS : vérifier leur chargement réel avec Chromium ; l'audit statique ne le prouve pas.");
   if(doc.elements.length===0&&!html.trim())push("warning","empty_slide","Cette diapositive ne contient aucun élément visible.");
   const ids=new Set<string>();
   for(const e of doc.elements){

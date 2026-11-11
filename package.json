@@ -12,7 +12,9 @@
     "test:visual": "node --experimental-strip-types --test src/visual/capture.integration.test.ts",
     "test:export": "node --experimental-strip-types --test src/export/nativeDiagram.integration.test.ts",
     "check:browser-bundle": "node scripts/assertBrowserBundle.mjs",
-    "test:browser-entry": "node --experimental-strip-types --test src/integration/browserEntry.integration.test.ts"
+    "test:browser-entry": "node --experimental-strip-types --test src/integration/browserEntry.integration.test.ts",
+    "test:integration": "node --experimental-strip-types --test src/integration/fullPipeline.integration.test.ts",
+    "test:integration:export": "node --experimental-strip-types --test src/integration/exportBrowser.integration.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
