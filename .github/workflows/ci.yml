@@ -26,6 +26,9 @@ jobs:
       - name: Require visible browser app at startup
         timeout-minutes: 2
         run: npm run test:browser-entry
+      - name: Check smartphone, mobile landscape and tablet interaction layouts
+        timeout-minutes: 5
+        run: npm run test:mobile
       - name: Validate two real slide screenshots
         timeout-minutes: 3
         run: npm run test:visual
@@ -35,9 +38,6 @@ jobs:
       - name: Verify faithful and editable browser PowerPoint exports
         timeout-minutes: 4
         run: npm run test:integration:export
-      - name: Check smartphone, mobile landscape and tablet interaction layouts
-        timeout-minutes: 5
-        run: npm run test:mobile
       - name: Upload captured slide evidence
         uses: actions/upload-artifact@v4
         if: always()
