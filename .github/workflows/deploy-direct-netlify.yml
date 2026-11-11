@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Check Netlify deployment credential
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN || secrets.NETLIFY_TOKEN || secrets.NETLIFY_API_TOKEN || secrets.NETLIFY_ACCESS_TOKEN }}
         run: |
           if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
             echo "::error::Missing NETLIFY_AUTH_TOKEN repository secret. A personal Netlify access token is required for direct deployment."
@@ -38,7 +38,7 @@ jobs:
           npm run build
       - name: Deploy site and functions directly
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN || secrets.NETLIFY_TOKEN || secrets.NETLIFY_API_TOKEN || secrets.NETLIFY_ACCESS_TOKEN }}
           NETLIFY_SITE_ID: 62280335-f588-4932-bdc4-b7fb7fac797a
           CI: 'true'
         run: |
