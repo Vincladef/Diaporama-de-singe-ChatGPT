@@ -141,7 +141,7 @@ test("real built React app is usable on phones: library, editor, tabs, tools, va
      const promptFit=await fitCheck(page,"prompt-library-"+size.name);
      assert.ok(promptFit.maxScrollWidth<=size.width+2,
        "prompt library horizontal overflow at "+size.width+": "+JSON.stringify(promptFit));
-     await page.getByRole("button",{name:/Retour à la présentation/}).click();
+     await page.getByRole("button",{name:"Fermer les instructions"}).click();
    }else{
      assert.equal(await nav.isVisible(),false,"desktop/tablet should hide mobile nav");
    }
