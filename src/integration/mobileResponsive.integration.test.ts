@@ -133,9 +133,15 @@ test("real built React app is usable on phones: library, editor, tabs, tools, va
      const end=await fitCheck(page,"closed-"+size.name);
      assert.ok(end.maxScrollWidth<=size.width+2,"no overflow after interactions");
      await page.locator(".slides-extra-actions summary").click();
-     await page.getByRole("button",{name:"⚙ Paramètres"}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:"Bibliothèque de prompts"}).waitFor({timeout:5000});
      await page.getByRole("button",{name:"Quitter"}).waitFor({timeout:5000});
-     await page.locator(".slides-extra-actions summary").click();
+     await page.getByRole("button",{name:"Bibliothèque de prompts"}).click();
+     await page.getByRole("heading",{name:"Socle général"}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:/Styles graphiques/}).waitFor({timeout:5000});
+     const promptFit=await fitCheck(page,"prompt-library-"+size.name);
+     assert.ok(promptFit.maxScrollWidth<=size.width+2,
+       "prompt library horizontal overflow at "+size.width+": "+JSON.stringify(promptFit));
+     await page.getByRole("button",{name:/Retour à la présentation/}).click();
    }else{
      assert.equal(await nav.isVisible(),false,"desktop/tablet should hide mobile nav");
    }
