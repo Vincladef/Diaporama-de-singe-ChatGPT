@@ -45,6 +45,11 @@ async function mockPrivateWorkspace(page:Page){
       case "cover":return json({document:slides[0]!.document});
       case "variantPreferences":return json({ok:true,preferences:[]});
       case "creationInstructions":return json({ok:true,global:"",presentation:"",effective:"",references:[]});
+      case "promptFeedbackJournal":return json({ok:true,items:[
+       {id:"variant:00000000-0000-4000-8000-000000000111",category:"composition",kind:"choice",
+        content:"Variante choisie : B",source:"variant",createdAt:now,
+        presentationTitle:presentation.title,variantName:"B"}
+      ]});
       case "promptLibrary":return json({ok:true,items:[
        {id:"11111111-1111-4111-8111-111111111111",category:"styles",title:"Éditorial suisse",
         description:"Grilles typographiques lisibles et contrastes précis.",prompt:"Règles graphiques",
@@ -60,12 +65,19 @@ async function mockPrivateWorkspace(page:Page){
       default:return json({ok:true,items:[],variants:[]});
      }
    }
-   const data=JSON.parse(req.postData()||"{}") as {action?:string;slideId?:string};
+   const data=JSON.parse(req.postData()||"{}") as {action?:string;slideId?:string;
+      feedback?:{category:string;kind:string;content:string}};
    if(data.action==="listVariants"){
      const index=slides.findIndex(s=>s.id===data.slideId);
      return json({ok:true,variants:alternatives[index]??[]});
    }
    if(data.action==="switchVariant")return json({ok:true,slide:slides[0]});
+   if(data.action==="savePromptFeedback")return json({ok:true,item:{
+      id:"note:00000000-0000-4000-8000-000000000222",
+      category:data.feedback?.category,kind:data.feedback?.kind,
+      content:data.feedback?.content,source:"note",createdAt:now,
+      presentationTitle:null,variantName:null
+   }});
    return json({ok:true});
  });
  await page.route("**/.netlify/functions/health",route=>route.fulfill({
@@ -157,6 +169,17 @@ test("real built React app is usable on phones: library, editor, tabs, tools, va
      const promptFit=await fitCheck(page,"prompt-library-"+size.name);
      assert.ok(promptFit.maxScrollWidth<=size.width+2,
        "prompt library horizontal overflow at "+size.width+": "+JSON.stringify(promptFit));
+     await page.getByRole("button",{name:"Supprimer le style Éditorial suisse"}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:"Journal des feedbacks"}).click();
+     await page.getByRole("heading",{name:"Journal des feedbacks"}).waitFor({timeout:5000});
+     await page.getByText("Variante choisie : B").waitFor({timeout:5000});
+     await page.getByRole("button",{name:"+ Ajouter un feedback"}).click();
+     await page.locator("#new-feedback-text").fill("Je préfère une mise en page plus sobre.");
+     await page.getByRole("button",{name:"Enregistrer le feedback"}).click();
+     await page.getByText("Feedback ajouté au journal.").waitFor({timeout:5000});
+     const journalFit=await fitCheck(page,"feedback-journal-"+size.name);
+     assert.ok(journalFit.maxScrollWidth<=size.width+2,"feedback journal overflow at "+
+       size.width+": "+JSON.stringify(journalFit));
      await page.getByRole("button",{name:"Fermer les instructions"}).click();
    }else{
      assert.equal(await nav.isVisible(),false,"desktop/tablet should hide mobile nav");

@@ -4,6 +4,8 @@ import {readCreationInstructions,writeCreationInstructions,uploadCreationReferen
  deleteCreationReference,downloadCreationReference,type CreationReference} from "../lib/api";
 import {listPromptItems,savePromptItem,deletePromptItem,type PromptCategory,
  type PromptLibraryItem,type PromptItemDraft} from "../lib/promptLibrary";
+import {listPromptFeedback,savePromptFeedback,type FeedbackEntry,type FeedbackCategory,
+ type FeedbackKind,type FeedbackDraft} from "../lib/promptFeedback";
 import {ExampleImage,PromptExampleGallery} from "./PromptExampleGallery";
 import "./promptLibrary.css";
 
@@ -14,7 +16,31 @@ const sections:{id:PromptCategory;name:string;icon:string;description:string}[]=
  {id:"skills",name:"Skills et méthodes",icon:"⚙",description:"Les procédures que suit l'agent pour travailler ; distinctes de la mise en page."},
  {id:"references",name:"Références et évaluations",icon:"▧",description:"Images, captures d'écran et présentations utilisées comme exemples de forme."}
 ];
-type Section=PromptCategory;
+type Section=PromptCategory|"journal";
+const feedbackTypes:{value:FeedbackCategory;label:string}[]=[
+ {value:"style",label:"Styles graphiques"},
+ {value:"composition",label:"Compositions"},
+ {value:"typography",label:"Typographie"},
+ {value:"images",label:"Images et références"},
+ {value:"diagram",label:"Schémas et graphiques"},
+ {value:"content",label:"Contenu et rédaction"},
+ {value:"animation",label:"Animations"},
+ {value:"ergonomics",label:"Ergonomie et lisibilité"},
+ {value:"technical",label:"Technique et export"},
+ {value:"other",label:"Autre"}
+];
+const feedbackKinds:{value:FeedbackKind;label:string}[]=[
+ {value:"positive",label:"Point positif"},
+ {value:"issue",label:"À améliorer"},
+ {value:"idea",label:"Idée"},
+ {value:"observation",label:"Observation"},
+ {value:"choice",label:"Choix de variante"}
+];
+const typeLabel=(value:FeedbackCategory)=>feedbackTypes.find(c=>c.value===value)?.label??"Autre";
+const kindLabel=(value:FeedbackKind)=>feedbackKinds.find(c=>c.value===value)?.label??"Observation";
+function TrashIcon(){return <svg width="15" height="15" viewBox="0 0 24 24"
+  fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round"
+  strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7"/></svg>}
 const labelByCategory:Record<PromptCategory,string>={
  socle:"Instruction",styles:"Style",compositions:"Composition",skills:"Méthode",references:"Référence"
 };
@@ -57,6 +83,16 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
  const [viewer,setViewer]=useState<{title:string;urls:string[];index:number}|null>(null);
  const [methodDrafts,setMethodDrafts]=useState<Record<string,string>>({});
  const [references,setReferences]=useState<CreationReference[]>([]);
+ const [feedback,setFeedback]=useState<FeedbackEntry[]>([]);
+ const [feedbackLoading,setFeedbackLoading]=useState(false);
+ const [feedbackError,setFeedbackError]=useState("");
+ const [feedbackFormOpen,setFeedbackFormOpen]=useState(false);
+ const [feedbackDraft,setFeedbackDraft]=useState<FeedbackDraft>({
+   category:"composition",kind:"observation",content:""
+ });
+ const [feedbackTypeFilter,setFeedbackTypeFilter]=useState<FeedbackCategory|"all">("all");
+ const [feedbackKindFilter,setFeedbackKindFilter]=useState<FeedbackKind|"all">("all");
+ const [feedbackOrder,setFeedbackOrder]=useState<"newest"|"oldest">("newest");
  const [loading,setLoading]=useState(true);
  const [saving,setSaving]=useState(false);
  const [uploading,setUploading]=useState(false);
@@ -87,6 +123,14 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   window.addEventListener("keydown",handler);
   return()=>window.removeEventListener("keydown",handler);
  },[viewer]);
+ useEffect(()=>{
+  if(view!=="journal")return;
+  let active=true;setFeedbackLoading(true);setFeedbackError("");
+  void listPromptFeedback(token).then(entries=>{if(active)setFeedback(entries)})
+   .catch(e=>{if(active)setFeedbackError(e instanceof Error?e.message:String(e))})
+   .finally(()=>{if(active)setFeedbackLoading(false)});
+  return()=>{active=false};
+ },[view,token]);
  const dirty=global!==savedGlobal||(!!presentationId&&local!==savedLocal);
  const methods=items.filter(i=>i.category==="skills");
  function leave(){
@@ -133,13 +177,25 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   finally{setSaving(false)}
  }
  async function removeItem(item:PromptItemDraft){
-  if(!item.id||!item.version||!window.confirm("Supprimer définitivement cette fiche ?"))return;
+  if(!item.id||!item.version||!window.confirm("Supprimer définitivement « "+item.title+" » de la bibliothèque ?"))return;
   setSaving(true);setError("");
   try{
    await deletePromptItem(token,item.id,item.version);
    setItems(list=>list.filter(i=>i.id!==item.id));setEditing(null);
+   setMethodDrafts(d=>{const next={...d};delete next[item.id!];return next;});
    setMessage("Fiche supprimée.");
   }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setSaving(false)}
+ }
+ async function submitFeedback(){
+  if(saving||!feedbackDraft.content.trim())return;
+  setSaving(true);setFeedbackError("");setMessage("");
+  try{
+   const item=await savePromptFeedback(token,{...feedbackDraft,content:feedbackDraft.content.trim()});
+   setFeedback(items=>[item,...items]);
+   setFeedbackDraft({category:"composition",kind:"observation",content:""});
+   setFeedbackFormOpen(false);setMessage("Feedback ajouté au journal.");
+  }catch(e){setFeedbackError(e instanceof Error?e.message:String(e))}
   finally{setSaving(false)}
  }
  async function uploadFiles(event:ChangeEvent<HTMLInputElement>){
@@ -164,7 +220,21 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   catch(e){setError(e instanceof Error?e.message:String(e))}
   finally{setRemoving(null)}
  }
- const info=sections.find(s=>s.id===view)!;
+ const info=sections.find(s=>s.id===view);
+ const filteredFeedback=feedback.filter(entry=>
+  (feedbackTypeFilter==="all"||entry.category===feedbackTypeFilter)&&
+  (feedbackKindFilter==="all"||entry.kind===feedbackKindFilter))
+  .sort((a,b)=>(feedbackOrder==="newest"?-1:1)*
+    (new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()));
+ const feedbackGroups:{day:string;items:FeedbackEntry[]}[]=[];
+ for(const entry of filteredFeedback){
+  const day=new Date(entry.createdAt).toLocaleDateString("fr-FR",{
+   weekday:"long",day:"numeric",month:"long",year:"numeric"
+  });
+  const previous=feedbackGroups[feedbackGroups.length-1];
+  if(previous?.day===day)previous.items.push(entry);
+  else feedbackGroups.push({day,items:[entry]});
+ }
  const selected=items.filter(i=>i.category===view);
  const renderMethods=()=> <section className="prompt-panel prompt-method-panel" aria-label="Skills et méthodes">
   <div className="prompt-subhead">
@@ -175,7 +245,13 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
   </div>
   {methods.length?methods.map(item=><div key={item.id} className="prompt-method-entry">
    <div className="prompt-method-head"><div><h3>{item.title}</h3>
-    <p>{item.description}</p></div><button className="prompt-text-action" onClick={()=>openItem(item)}>Détails</button></div>
+    <p>{item.description}</p></div>
+    <div className="prompt-method-controls">
+     <button className="prompt-text-action" onClick={()=>openItem(item)}>Détails</button>
+     <button type="button" className="prompt-trash" disabled={saving}
+      title={"Supprimer : "+item.title} aria-label={"Supprimer la méthode "+item.title}
+      onClick={()=>void removeItem(item)}><TrashIcon/></button>
+    </div></div>
    <textarea aria-label={"Instructions de la méthode "+item.title} value={methodDrafts[item.id]??item.prompt}
     onChange={e=>setMethodDrafts(d=>({...d,[item.id]:e.target.value}))}
     spellCheck={false} rows={6}/>
@@ -191,6 +267,10 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
  function renderCard(item:PromptLibraryItem){
   const images=item.exampleImages?.length?item.exampleImages:(item.previewUrl?[item.previewUrl]:[]);
   return <article className="prompt-item-card" key={item.id}>
+   <button type="button" className="prompt-trash prompt-card-trash" disabled={saving}
+    title={"Supprimer : "+item.title}
+    aria-label={"Supprimer "+(item.category==="styles"?"le style ":"la composition ")+item.title}
+    onClick={()=>void removeItem(item)}><TrashIcon/></button>
    <PromptExampleGallery title={item.title} urls={images}
     onOpen={(urls,index)=>setViewer({title:item.title,urls,index})}/>
    <div className="prompt-item-text">
@@ -219,6 +299,12 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
       setEditing(null);setView(s.id);setMessage("");}}>
      <span className="prompt-nav-icon">{s.icon}</span>{s.name}
     </button>)}
+    <hr/>
+    <button className={"prompt-nav "+(view==="journal"?"active":"")}
+     onClick={()=>{if(editing&&!window.confirm("Abandonner la fiche en cours ?"))return;
+      setEditing(null);setView("journal");setMessage("");}}>
+     <span className="prompt-nav-icon">◷</span>Journal des feedbacks
+    </button>
    </aside>
    <main className="prompt-content">
     {loading?<div className="prompt-panel">Chargement des instructions…</div>:editing?
@@ -284,7 +370,8 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
       </div>
      </div>:<>
       <div className="prompt-content-head">
-       <div><h1>{view==="socle"?"Instructions générales":info.name}</h1><p>{info.description}</p></div>
+       <div><h1>{view==="socle"?"Instructions générales":view==="journal"?"Journal des feedbacks":info?.name}</h1>
+        <p>{view==="journal"?"Retours organisés par thème, puis classés par date. Les choix de variantes déjà enregistrés figurent aussi dans cet historique.":info?.description}</p></div>
        {(view==="styles"||view==="compositions")&&
         <button className="prompt-primary" onClick={()=>addItem(view)}>+ Ajouter {view==="styles"?"un style":"une composition"}</button>}
       </div>
@@ -317,6 +404,93 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
          <p>Ajoute toi-même une description et les instructions correspondantes.</p>
          <button className="prompt-primary" onClick={()=>addItem(view)}>+ Ajouter {view==="styles"?"un style":"une composition"}</button>
         </div>)}
+      {view==="journal"&&<section className="prompt-feedback-section">
+       <div className="prompt-feedback-toolbar">
+        <div className="prompt-feedback-filter">
+         <label htmlFor="feedback-type-filter">Typologie</label>
+         <select id="feedback-type-filter" value={feedbackTypeFilter}
+          onChange={e=>setFeedbackTypeFilter(e.target.value as FeedbackCategory|"all")}>
+          <option value="all">Tous les thèmes</option>
+          {feedbackTypes.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
+         </select>
+        </div>
+        <div className="prompt-feedback-filter">
+         <label htmlFor="feedback-kind-filter">Nature</label>
+         <select id="feedback-kind-filter" value={feedbackKindFilter}
+          onChange={e=>setFeedbackKindFilter(e.target.value as FeedbackKind|"all")}>
+          <option value="all">Tous les retours</option>
+          {feedbackKinds.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
+         </select>
+        </div>
+        <div className="prompt-feedback-filter">
+         <label htmlFor="feedback-sort">Date</label>
+         <select id="feedback-sort" value={feedbackOrder}
+          onChange={e=>setFeedbackOrder(e.target.value as "newest"|"oldest")}>
+          <option value="newest">Plus récents d’abord</option>
+          <option value="oldest">Plus anciens d’abord</option>
+         </select>
+        </div>
+        <button className="prompt-primary prompt-feedback-add"
+         onClick={()=>setFeedbackFormOpen(open=>!open)}>
+         {feedbackFormOpen?"Fermer":"+ Ajouter un feedback"}
+        </button>
+       </div>
+       {feedbackFormOpen&&<form className="prompt-panel prompt-feedback-composer"
+        onSubmit={e=>{e.preventDefault();void submitFeedback();}}>
+        <h2>Ajouter un retour</h2>
+        <div className="prompt-feedback-composer-fields">
+         <div className="prompt-form-field"><label htmlFor="new-feedback-type">Thème</label>
+          <select id="new-feedback-type" value={feedbackDraft.category}
+           onChange={e=>setFeedbackDraft(d=>({...d,category:e.target.value as FeedbackCategory}))}>
+           {feedbackTypes.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
+          </select></div>
+         <div className="prompt-form-field"><label htmlFor="new-feedback-kind">Nature</label>
+          <select id="new-feedback-kind" value={feedbackDraft.kind}
+           onChange={e=>setFeedbackDraft(d=>({...d,kind:e.target.value as FeedbackDraft["kind"]}))}>
+           {feedbackKinds.filter(x=>x.value!=="choice").map(type=>
+            <option key={type.value} value={type.value}>{type.label}</option>)}
+          </select></div>
+        </div>
+        <div className="prompt-form-field">
+         <label htmlFor="new-feedback-text">Feedback</label>
+         <textarea id="new-feedback-text" rows={4} maxLength={2400}
+          placeholder="Décris ce qui fonctionne, ce qui devrait changer ou une idée à retenir."
+          value={feedbackDraft.content}
+          onChange={e=>setFeedbackDraft(d=>({...d,content:e.target.value}))}/>
+        </div>
+        <div className="prompt-editor-actions"><button type="submit" className="prompt-primary"
+         disabled={saving||!feedbackDraft.content.trim()}>
+         {saving?"Enregistrement…":"Enregistrer le feedback"}</button></div>
+       </form>}
+       {feedbackError&&<div className="prompt-message error" role="alert">{feedbackError}</div>}
+       {feedbackLoading?<p className="prompt-feedback-empty">Chargement du journal…</p>:
+        <div className="prompt-feedback-timeline">
+         <p className="prompt-feedback-count">{filteredFeedback.length} retour(s) affiché(s)</p>
+         {feedbackGroups.length===0?<div className="prompt-empty">
+          <strong>Aucun retour pour ces critères</strong>
+          <p>Ajoute un feedback pour commencer à documenter tes préférences.</p>
+         </div>:feedbackGroups.map(group=><section key={group.day} className="prompt-feedback-day">
+          <h2>{group.day}</h2>
+          {group.items.map(entry=><article key={entry.id} className="prompt-feedback-entry">
+           <div className="prompt-feedback-entry-header">
+            <span className="prompt-feedback-category">{typeLabel(entry.category)}</span>
+            <span className={"prompt-feedback-kind feedback-"+entry.kind}>{kindLabel(entry.kind)}</span>
+            <time dateTime={entry.createdAt}>
+             {new Date(entry.createdAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+            </time>
+           </div>
+           <p>{entry.content}</p>
+           {entry.source==="variant"&&<small className="prompt-feedback-source">
+            Variante enregistrée{entry.presentationTitle?" · "+entry.presentationTitle:""}
+           </small>}
+           {entry.source==="note"&&<small className="prompt-feedback-source">Feedback ajouté au journal</small>}
+          </article>)}
+         </section>)}
+        </div>}
+       <p className="prompt-note">
+        Les préférences issues de clics sur les variantes sont des choix enregistrés, pas des critiques explicites. Les commentaires des conversations ChatGPT ne sont pas importés automatiquement.
+       </p>
+      </section>}
       {view==="references"&&<section className="prompt-panel">
        <h2>Exemples visuels</h2>
        <p>Ajoute des captures d'écran, des images PNG/JPG/WebP, des PDF ou des PowerPoint. Les images sont présentées directement en miniature ; elles peuvent être plus simples à interpréter que des fichiers de présentation.</p>

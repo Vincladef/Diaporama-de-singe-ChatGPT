@@ -240,3 +240,51 @@
  .prompt-lightbox-arrow{width:30px;flex-basis:30px;height:43px;font-size:28px}
  .prompt-lightbox-visual>img,.prompt-lightbox-visual>.prompt-image-unavailable{max-width:calc(100% - 65px)}
 }
+
+/* Journal de feedbacks : compact, chronologique et filtrable. */
+.prompt-trash{width:32px;height:32px;flex:0 0 32px;border:1px solid transparent;
+ background:transparent;color:#829188;border-radius:8px;display:inline-flex;
+ align-items:center;justify-content:center;cursor:pointer;transition:background .16s,color .16s}
+.prompt-trash:hover,.prompt-trash:focus-visible{background:#fff0ef;border-color:#f1d9d4;color:#a44540}
+.prompt-trash:disabled{opacity:.45;cursor:default}
+.prompt-item-card{position:relative}
+.prompt-card-trash{position:absolute;top:11px;right:11px;z-index:5;background:#fffefde6;
+ border-color:#e5e9e2;box-shadow:0 1px 4px #1b2e1912}
+.prompt-method-controls{display:flex;align-items:center;gap:10px}
+.prompt-feedback-toolbar{display:flex;align-items:end;gap:11px;flex-wrap:wrap;margin:4px 0 22px}
+.prompt-feedback-filter{display:flex;flex-direction:column;gap:6px;min-width:146px;flex:1 1 146px}
+.prompt-feedback-filter label{font-size:11px;font-weight:700;color:#67796b}
+.prompt-feedback-filter select,.prompt-feedback-composer select{
+ border:1px solid #d7e2d6;border-radius:8px;min-height:41px;padding:9px 10px;
+ color:#354939;background:white;font:inherit;font-size:12px;max-width:100%}
+.prompt-feedback-add{margin-left:auto;min-height:41px}
+.prompt-feedback-composer{max-width:860px}
+.prompt-feedback-composer-fields{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.prompt-feedback-composer-fields .prompt-form-field{margin-bottom:14px}
+.prompt-feedback-count{font-size:12px;color:#78887a;margin:8px 0 19px}
+.prompt-feedback-day{margin:0 0 25px;max-width:960px}
+.prompt-feedback-day h2{font-size:14px;text-transform:capitalize;color:#526e59;
+ font-weight:700;letter-spacing:0;margin:0 0 11px}
+.prompt-feedback-entry{border:1px solid #e1e8e0;border-radius:10px;padding:17px 19px;
+ margin:0 0 9px;background:white}
+.prompt-feedback-entry-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.prompt-feedback-category,.prompt-feedback-kind{font-size:11px;line-height:1.2;border-radius:5px;
+ padding:5px 8px;background:#edf2ed;color:#587262;font-weight:600}
+.prompt-feedback-kind{background:#f2f3f0;color:#697b6b}
+.prompt-feedback-kind.feedback-positive{background:#e3f1e6;color:#347347}
+.prompt-feedback-kind.feedback-issue{background:#f8ebe8;color:#945143}
+.prompt-feedback-kind.feedback-idea{background:#e8eef8;color:#4d6f9b}
+.prompt-feedback-kind.feedback-choice{background:#eae9f2;color:#68628d}
+.prompt-feedback-entry-header time{margin-left:auto;font-size:11px;color:#829187}
+.prompt-feedback-entry>p{font-size:13.5px;line-height:1.65;color:#324d3a;margin:0 0 8px;
+ white-space:pre-wrap;overflow-wrap:anywhere}
+.prompt-feedback-source{font-size:11px;line-height:1.5;color:#88978a}
+.prompt-feedback-empty{font-size:13px;color:#829187;padding:18px 0}
+@media(max-width:680px){
+ .prompt-feedback-toolbar{gap:9px}
+ .prompt-feedback-filter{flex:1 1 44%;min-width:0}
+ .prompt-feedback-add{margin-left:0;width:100%}
+ .prompt-feedback-composer-fields{grid-template-columns:1fr;gap:0}
+ .prompt-feedback-entry{padding:13px 12px}
+ .prompt-feedback-entry-header time{margin-left:0}
+}

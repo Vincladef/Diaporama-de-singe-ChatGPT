@@ -30,6 +30,15 @@ const promptItemSchema=z.object({
 const promptColumns='id::text AS id,category,title,description,prompt,preview_url AS "previewUrl",'+
   'example_images AS "exampleImages",'+
   'status,version,created_at AS "createdAt",updated_at AS "updatedAt"';
+const feedbackCategory=z.enum(["style","composition","typography","images","diagram","content",
+  "animation","ergonomics","technical","other"]);
+const feedbackKind=z.enum(["positive","issue","idea","observation"]);
+const feedbackSchema=z.object({
+  category:feedbackCategory,kind:feedbackKind,
+  content:z.string().trim().min(1).max(2400)
+}).strict();
+const feedbackColumns='id::text AS id,category,kind,content,'+
+  "'note' AS source,created_at AS \"createdAt\",NULL::text AS \"presentationTitle\",NULL::text AS \"variantName\"";
 function result(payload: unknown, status = 200): Response {
   return Response.json(payload, { status, headers });
 }
@@ -62,6 +71,31 @@ export default async function workspace(request: Request): Promise<Response> {
       if(operation==="promptLibrary"){
         const items=await db.query("SELECT "+promptColumns+
           " FROM public.prompt_library_items ORDER BY updated_at DESC LIMIT 300",[]);
+        return result({ok:true,items});
+      }
+      if(operation==="promptFeedbackJournal"){
+        const [manual,visual]=await Promise.all([
+          db.query("SELECT "+feedbackColumns+
+            " FROM public.prompt_feedback_journal ORDER BY created_at DESC LIMIT 400",[]),
+          db.query("SELECT ('variant:' || v.id::text) AS id,"+
+            "CASE v.slide_kind WHEN 'photographique' THEN 'images' WHEN 'graphique' THEN 'diagram' "+
+            "WHEN 'schématique' THEN 'diagram' WHEN 'comparatif' THEN 'composition' "+
+            "WHEN 'typographique' THEN 'typography' ELSE 'composition' END AS category,"+
+            "CASE v.kind WHEN 'selected' THEN 'choice' WHEN 'disliked' THEN 'issue' "+
+            "ELSE 'positive' END AS kind,"+
+            "COALESCE(NULLIF(v.comment,''),CASE v.kind "+
+            "WHEN 'selected' THEN 'Variante choisie : '||v.variant_name "+
+            "WHEN 'disliked' THEN 'Variante écartée : '||v.variant_name "+
+            "ELSE 'Variante enregistrée : '||v.variant_name END) AS content,"+
+            "'variant' AS source,v.updated_at AS \"createdAt\",p.title AS \"presentationTitle\", "+
+            "v.variant_name AS \"variantName\" "+
+            "FROM public.slide_visual_preferences v "+
+            "LEFT JOIN public.presentations p ON p.id=v.presentation_id "+
+            "ORDER BY v.updated_at DESC LIMIT 400",[])
+        ]);
+        const items=[...manual,...visual].sort((a,b)=>
+          new Date(String(b.createdAt)).getTime()-new Date(String(a.createdAt)).getTime()
+        ).slice(0,500);
         return result({ok:true,items});
       }
       if(operation==="creationInstructions"){
@@ -181,6 +215,14 @@ export default async function workspace(request: Request): Promise<Response> {
           [id,version]);
         if(!rows[0])return result({ok:false,error:"revision_conflict"},409);
         return result({ok:true});
+      }
+      case "savePromptFeedback":{
+        const feedback=feedbackSchema.parse(data.feedback);
+        const rows=await db.query(
+          "INSERT INTO public.prompt_feedback_journal(category,kind,content) "+
+          "VALUES($1,$2,$3) RETURNING "+feedbackColumns,
+          [feedback.category,feedback.kind,feedback.content]);
+        return result({ok:true,item:rows[0]},201);
       }
       case "savePromptLibraryItem":{
         const item=promptItemSchema.parse(data.item);
