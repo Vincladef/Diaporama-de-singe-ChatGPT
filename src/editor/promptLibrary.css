@@ -131,3 +131,20 @@
  .prompt-item-text{padding:18px 16px 10px}
  .prompt-editor-justify{gap:10px}
 }
+
+/* Guard against intrinsic min-content width from large prompts on very narrow phones. */
+.prompt-page,.prompt-page-body,.prompt-sidebar,.prompt-content,.prompt-panel,.prompt-method-entry{min-width:0}
+.prompt-page{width:100%;max-width:100%;overflow-x:clip}
+.prompt-page *{overflow-wrap:break-word}
+@media(max-width:840px){
+ .prompt-page-body{grid-template-columns:minmax(0,1fr);width:100%;max-width:100%}
+ .prompt-page-header{grid-template-columns:minmax(0,1fr) auto}
+ .prompt-sidebar{min-width:0;max-width:100%;overflow-x:auto}
+ .prompt-content{width:100%;min-width:0;max-width:100%}
+ .prompt-panel,.prompt-method-entry{min-width:0;max-width:100%}
+ .prompt-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+ .prompt-brand{min-width:0;max-width:100%}
+ .prompt-brand strong{min-width:0;overflow:hidden;text-overflow:ellipsis}
+ .prompt-method-head>div{min-width:0}
+ .prompt-editor-large,.prompt-method-entry textarea{max-width:100%;min-width:0}
+}
