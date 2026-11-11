@@ -1,4 +1,4 @@
-import ELK from "elkjs";
+import ELK from "elkjs/lib/elk.bundled.js";
 import {DiagramSchema,composeDiagram,type Diagram} from "./diagrams.ts";
 import {SlideDocumentSchema,type SlideDocument,type SlideElement} from "../domain/slide.ts";
 
