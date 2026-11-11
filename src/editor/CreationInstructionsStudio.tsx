@@ -132,7 +132,7 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
  async function uploadFiles(event:ChangeEvent<HTMLInputElement>){
   const files=Array.from(event.currentTarget.files??[]);event.currentTarget.value="";
   if(!files.length)return;
-  if(files.length+references.length>8){setError("Limite de 8 références ; supprime une ancienne pièce jointe avant d'en ajouter.");return;}
+  if(files.length+references.length>24){setError("Limite de 24 références ; supprime une ancienne pièce jointe avant d'en ajouter.");return;}
   setUploading(true);setError("");setMessage("");
   try{
    for(const file of files){
@@ -294,9 +294,9 @@ export function CreationInstructionsStudio({token,presentationId,presentationTit
        <label className="creation-reference-upload">
         {uploading?"Ajout en cours…":"+ Ajouter des images ou documents"}
         <input type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pptx,.pdf,.html,.htm,.json"
-         disabled={uploading||references.length>=8} onChange={e=>void uploadFiles(e)}/>
+         disabled={uploading||references.length>=24} onChange={e=>void uploadFiles(e)}/>
        </label>
-       <p className="prompt-note">{references.length} / 8 fichiers ; 4 Mo maximum chacun.</p>
+       <p className="prompt-note">{references.length} / 24 fichiers ; 4 Mo maximum chacun.</p>
       </section>}
      </>}
     {error&&<p role="alert" className="prompt-message error">{error}</p>}

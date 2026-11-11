@@ -165,7 +165,7 @@ export async function uploadCreationReference(token:string,file:File):Promise<Cr
   if(!response.ok||!payload.reference){
     if(payload.error==="payload_too_large")throw new Error("Le fichier dépasse 4 Mo.");
     if(payload.error==="invalid_reference_file")throw new Error("Fichier invalide ou format non accepté.");
-    if(payload.error==="maximum_references_reached")throw new Error("La limite de huit exemples est atteinte.");
+    if(payload.error==="maximum_references_reached")throw new Error("La limite de 24 références est atteinte.");
     throw new Error("L’envoi du fichier a échoué : "+(payload.error??response.status));
   }
   return payload.reference;

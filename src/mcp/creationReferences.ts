@@ -4,7 +4,7 @@ import { z } from "zod";
 import { database } from "./security.ts";
 
 export const MAX_REFERENCE_SIZE = 4_000_000;
-export const MAX_CREATION_REFERENCES = 8;
+export const MAX_CREATION_REFERENCES = 24;
 const uuid = z.uuid();
 const allowed: Record<string,string> = {
   pptx:"application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -92,7 +92,7 @@ function validateSignature(ext:string,bytes:Uint8Array):boolean{
 }
 export async function listCreationReferences():Promise<CreationReference[]>{
   const rows=await database().query("SELECT id::text,filename,mime_type AS \"mimeType\",size_bytes AS \"sizeBytes\",analysis,created_at AS \"createdAt\" "+
-    "FROM public.slide_creation_references ORDER BY created_at DESC LIMIT 12",[]);
+    "FROM public.slide_creation_references ORDER BY created_at DESC LIMIT 30",[]);
   return rows as CreationReference[];
 }
 export async function addCreationReference(filename:string,bytes:Uint8Array):Promise<CreationReference>{
