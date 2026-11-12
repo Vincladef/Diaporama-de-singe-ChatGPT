@@ -28,18 +28,21 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   const popup = useRef<Window | null>(initialPopup ?? null);
   const positionRef = useRef(position);
   const blackoutRef = useRef(blackout);
-  const busyRef = useRef(busy);
+  const busyRef = useRef(busy); // Snapshot for private-console handshakes, never a navigation lock.
+  const publicRoot = useRef<HTMLElement>(null);
   const enteredFullscreen = useRef(Boolean(document.fullscreenElement));
   const ending = useRef(false);
   positionRef.current = position;
   blackoutRef.current = blackout;
   busyRef.current = busy;
 
+  // An input must never be discarded while a reveal transition is playing.
+  // The animation player cancels the previous seek when the desired position changes.
   const next = useCallback(() => {
-    if (!busyRef.current) setPosition(old => nextPosition(documents, old));
+    setPosition(old => nextPosition(documents, old));
   }, [documents]);
   const previous = useCallback(() => {
-    if (!busyRef.current) setPosition(old => previousPosition(documents, old));
+    setPosition(old => previousPosition(documents, old));
   }, [documents]);
 
   const close = useCallback(() => {
@@ -71,7 +74,7 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
         if (message.command === "next") next();
         if (message.command === "previous") previous();
         if (message.command === "toggleBlackout") setBlackout(value => !value);
-        if (message.command === "goto" && !busyRef.current &&
+        if (message.command === "goto" &&
           typeof message.slide === "number" && Number.isInteger(message.slide) &&
           message.slide >= 0 && message.slide < documents.length) {
           setPosition(gotoSlide(documents, message.slide));
@@ -103,9 +106,9 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       if (event.target instanceof HTMLElement &&
           event.target.closest("input,textarea,select,[contenteditable=true]")) return;
-      if (["ArrowRight", "PageDown", " ", "Enter"].includes(event.key)) {
+      if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(event.key)) {
         event.preventDefault(); next();
-      } else if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) {
+      } else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(event.key)) {
         event.preventDefault(); previous();
       } else if (event.key === "Home") {
         event.preventDefault(); setPosition({ slide: 0, reveal: 0 });
@@ -160,8 +163,9 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
 
   const active = snapshot.slides[position.slide]!;
 
-  return <main className="presentation-public" role="dialog" aria-modal="true"
-      aria-label="Projection publique des diapositives">
+  return <main ref={publicRoot} tabIndex={-1} className="presentation-public"
+      role="dialog" aria-modal="true" aria-busy={busy} aria-label="Projection publique des diapositives"
+      onPointerDownCapture={() => publicRoot.current?.focus({ preventScroll: true })}>
     <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
       onBusyChange={setBusy} title={"Diapositive " + (position.slide + 1)}/>
     {blackout && <div className="presentation-blackout" role="status"

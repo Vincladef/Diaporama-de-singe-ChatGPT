@@ -1511,6 +1511,7 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
   position:fixed;inset:0;z-index:6500;width:100vw;height:100dvh;
   background:#080c09;color:#fff;display:flex;min-height:0;overflow:hidden;
 }
+.presentation-public:focus{outline:none}
 .presentation-public .projection-stage{width:100%;height:100%;flex:1;min-height:0;background:#080c09}
 .presentation-public .projection-artboard{box-shadow:none}
 .presentation-blackout{

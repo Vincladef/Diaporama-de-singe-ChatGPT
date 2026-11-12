@@ -78,6 +78,34 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     assert.equal(await page.locator(".presentation-public button, .presentation-public nav").count(), 0);
     await page.keyboard.press("ArrowRight");
     await waitForAnimatedVisibility(page, ".presentation-public", "#premise", "visible");
+    await page.locator('.presentation-public[aria-busy="false"]').waitFor();
+
+    // Regression: reverse DURING a visible click animation; this command was
+    // silently dropped by the previous busy-state guard.
+    await page.keyboard.press("ArrowRight");
+    await page.locator('.presentation-public[aria-busy="true"]').waitFor();
+    await page.keyboard.press("ArrowLeft");
+    await page.locator('.presentation-public[aria-busy="false"]').waitFor();
+    await waitForAnimatedVisibility(page, ".presentation-public", "#belief", "hidden");
+
+    // The projected slide surface is still clickable, despite having no toolbar.
+    // A mouse click should be interruptible with an immediate backward arrow.
+    await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
+    await page.locator('.presentation-public[aria-busy="true"]').waitFor();
+    await page.keyboard.press("ArrowLeft");
+    await page.locator('.presentation-public[aria-busy="false"]').waitFor();
+    await waitForAnimatedVisibility(page, ".presentation-public", "#belief", "hidden");
+
+    // Rapid sequences must not lose a click when the previous reveal is running.
+    await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
+    await page.locator('.presentation-public[aria-busy="true"]').waitFor();
+    await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
+    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 2"]').waitFor();
+    // Back from a slide starts at the preceding slide's final reveal.
+    await page.keyboard.press("ArrowLeft");
+    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 1"]').waitFor();
+    await waitForAnimatedVisibility(page, ".presentation-public", "#belief", "visible");
+
     // The browser's fullscreen exit closes the public presentation.
     await page.evaluate(async () => {
       if (document.fullscreenElement) await document.exitFullscreen();
