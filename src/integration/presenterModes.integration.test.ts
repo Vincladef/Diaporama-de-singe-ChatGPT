@@ -136,8 +136,10 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     await popup.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
     await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 2"]').waitFor({ timeout: 12000 });
     await popup.close();
+    // In an actual meeting the user focuses the projected window before pressing N.
+    await page.bringToFront();
     // N can reopen private notes without ever showing buttons to the audience.
-    const reopenedEvent = page.waitForEvent("popup");
+    const reopenedEvent = page.waitForEvent("popup", { timeout: 12000 });
     await page.keyboard.press("n");
     const reopened = await reopenedEvent;
     await reopened.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
