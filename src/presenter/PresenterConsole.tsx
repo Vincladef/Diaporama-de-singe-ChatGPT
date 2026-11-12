@@ -115,7 +115,7 @@ export function PresenterConsole() {
       <section className="presenter-console-left" aria-label="Commandes et aperçu">
         {controls}
         <label className="presenter-console-slide-label" htmlFor="presenter-slide-select">Diapositive</label>
-        <select id="presenter-slide-select" value={position.slide}
+        <select id="presenter-slide-select" value={position.slide} disabled={busy}
           onChange={event => send("goto", Number(event.target.value))}>
           {show.slides.map((slide, index) => <option value={index} key={slide.id}>
             Diapositive {index + 1} sur {show.slides.length}
