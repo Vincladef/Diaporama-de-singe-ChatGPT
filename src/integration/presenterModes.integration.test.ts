@@ -134,8 +134,7 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     // Selecting a slide remains possible without skipping a pending reveal accidentally.
     await popup.locator("#presenter-slide-select").selectOption("1");
     await popup.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
-    await waitForAnimatedVisibility(page, ".presentation-public", "#premise", "hidden");
-    await page.getByRole("dialog", { name: "Projection publique des diapositives" }).waitFor();
+    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 2"]').waitFor({ timeout: 12000 });
     await popup.close();
     // N can reopen private notes without ever showing buttons to the audience.
     const reopenedEvent = page.waitForEvent("popup");
