@@ -72,8 +72,17 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     await page.getByRole("dialog", { name: "Projection publique des diapositives" }).waitFor();
     assert.equal(await page.locator(".presenter-console-notes").count(), 0);
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
-    await page.locator(".presentation-public-toolbar").getByRole("button", { name: "Quitter" })
-      .click({ force: true });
+    // No overlay or controls appear even on mouse hover; keyboard still advances.
+    await page.locator(".presentation-public").hover();
+    assert.equal(await page.locator(".presentation-public-toolbar, .presentation-speaker-warning, .presentation-fullscreen-error").count(), 0);
+    assert.equal(await page.locator(".presentation-public button, .presentation-public nav").count(), 0);
+    await page.keyboard.press("ArrowRight");
+    await waitForAnimatedVisibility(page, ".presentation-public", "#premise", "visible");
+    // The browser's fullscreen exit closes the public presentation.
+    await page.evaluate(async () => {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
     await page.locator(".presentation-public").waitFor({ state: "detached" });
     await page.waitForFunction(() => !document.fullscreenElement);
 
@@ -98,6 +107,9 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     assert.equal(await page.locator(".presentation-public").count(), 1);
     assert.equal(await page.locator(".presenter-console-notes").count(), 0);
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
+    await page.locator(".presentation-public").hover();
+    assert.equal(await page.locator(".presentation-public button, .presentation-public nav").count(), 0);
+    assert.equal(await page.locator(".presentation-public-toolbar, .presentation-speaker-warning, .presentation-fullscreen-error").count(), 0);
 
     // The live presenter preview must mirror the *visible animation state*
     // and the second preview must show the end state of the upcoming click.
@@ -122,13 +134,17 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     // Selecting a slide remains possible without skipping a pending reveal accidentally.
     await popup.locator("#presenter-slide-select").selectOption("1");
     await popup.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
-    await page.locator(".presentation-public-toolbar").getByText("2 / 2").waitFor({ timeout: 12000 });
+    await waitForAnimatedVisibility(page, ".presentation-public", "#premise", "hidden");
+    await page.getByRole("dialog", { name: "Projection publique des diapositives" }).waitFor();
     await popup.close();
-    await page.locator(".presentation-public-toolbar")
-      .getByRole("button", { name: "Ouvrir les notes privées" })
-      .waitFor({ timeout: 4000 });
-    await page.locator(".presentation-public-toolbar").getByRole("button", { name: "Quitter" })
-      .click({ force: true });
+    // N can reopen private notes without ever showing buttons to the audience.
+    const reopenedEvent = page.waitForEvent("popup");
+    await page.keyboard.press("n");
+    const reopened = await reopenedEvent;
+    await reopened.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
+    assert.equal(await page.locator(".presentation-public button, .presentation-public nav").count(), 0);
+    await page.keyboard.press("Escape");
+    await page.locator(".presentation-public").waitFor({ state: "detached" });
     assert.deepEqual(errors, []);
     await context.close();
   } finally {
