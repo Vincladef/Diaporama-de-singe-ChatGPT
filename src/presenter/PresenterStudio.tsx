@@ -28,11 +28,13 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   const popup = useRef<Window | null>(initialPopup ?? null);
   const positionRef = useRef(position);
   const blackoutRef = useRef(blackout);
+  const busyRef = useRef(busy); // Snapshot for private-console handshakes, never a navigation lock.
   const publicRoot = useRef<HTMLElement>(null);
   const enteredFullscreen = useRef(Boolean(document.fullscreenElement));
   const ending = useRef(false);
   positionRef.current = position;
   blackoutRef.current = blackout;
+  busyRef.current = busy;
 
   // An input must never be discarded while a reveal transition is playing.
   // The animation player cancels the previous seek when the desired position changes.
