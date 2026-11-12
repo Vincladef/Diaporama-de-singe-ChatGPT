@@ -61,7 +61,7 @@ export function PresenterConsole() {
   }, [show, paused]);
 
   function send(command: "next" | "previous" | "goto" | "toggleBlackout", slide?: number) {
-    if (!show || busy) return;
+    if (!show) return;
     channel.current?.postMessage({ type: "command", sessionId, command, slide } satisfies PresenterMessage);
   }
 
@@ -115,7 +115,7 @@ export function PresenterConsole() {
       <section className="presenter-console-left" aria-label="Commandes et aperçu">
         {controls}
         <label className="presenter-console-slide-label" htmlFor="presenter-slide-select">Diapositive</label>
-        <select id="presenter-slide-select" value={position.slide} disabled={busy}
+        <select id="presenter-slide-select" value={position.slide}
           onChange={event => send("goto", Number(event.target.value))}>
           {show.slides.map((slide, index) => <option value={index} key={slide.id}>
             Diapositive {index + 1} sur {show.slides.length}
@@ -136,7 +136,7 @@ export function PresenterConsole() {
           <span>{nextIsReveal
             ? "Au prochain clic : apparition " + next.reveal + " / " + clickCount
             : upcoming ? "Diapositive suivante : " + (next.slide + 1) : "Fin du diaporama"}</span>
-          {upcoming ? <button onClick={() => send("next")} disabled={busy}
+          {upcoming ? <button onClick={() => send("next")}
               aria-label={nextIsReveal ? "Révéler la prochaine apparition" : "Aller à la diapositive suivante"}>
             <div className="presenter-console-next-image"
               style={{ aspectRatio: upcoming.document.canvas.width + "/" + upcoming.document.canvas.height }}>
@@ -146,10 +146,10 @@ export function PresenterConsole() {
           </button> : <p>Fin du diaporama</p>}
         </div>
         <nav className="presenter-console-navigation" aria-label="Naviguer dans le diaporama">
-          <button onClick={() => send("previous")} disabled={busy || (position.slide === 0 && position.reveal === 0)}>
+          <button onClick={() => send("previous")} disabled={position.slide === 0 && position.reveal === 0}>
             ← Précédent
           </button>
-          <button onClick={() => send("next")} disabled={busy}>Suivant →</button>
+          <button onClick={() => send("next")}>Suivant →</button>
         </nav>
       </section>
       <section className="presenter-console-right" aria-label="Notes du présentateur">
