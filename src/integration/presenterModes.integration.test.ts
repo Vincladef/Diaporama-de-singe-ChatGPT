@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { preview } from "vite";
-import { chromium } from "playwright-core";
+import { chromium, type Page } from "playwright-core";
 import { clarkWellsDemonstration } from "./clarkWellsDemonstration.ts";
 
 const deckId = "f193e336-3328-4679-8227-9bd5561d5c95";
@@ -16,6 +16,17 @@ const slides = samples.map((s, index) => ({
   notes: index === 0 ? "NOTE_PRIVEE_CONFIDENTIELLE_123" : "NOTE_SUIVANTE_PRIVEE_456"
 }));
 const summary = { ...presentation, slide_count: slides.length };
+
+async function waitForAnimatedVisibility(page: Page, region: string, target: string,
+  expected: "hidden" | "visible") {
+  await page.waitForFunction(({ region, target, expected }) => {
+    const iframe = document.querySelector<HTMLIFrameElement>(
+      region + ' .projection-artboard[aria-hidden="false"] iframe'
+    );
+    const element = iframe?.contentDocument?.querySelector<HTMLElement>(target);
+    return element?.style.visibility === expected;
+  }, { region, target, expected }, { timeout: 18000 });
+}
 
 test("public fullscreen has no visible notes; speaker notes stay in separate window",
  { timeout: 120_000 }, async () => {
@@ -49,7 +60,7 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
         ok: true, database: "connected", schema: "ready", service: "diaporama-de-singe-chatgpt"
       })
     }));
-    const page = await context.newPage();
+    let page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto("http://127.0.0.1:5191/", { waitUntil: "domcontentloaded" });
@@ -63,18 +74,52 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
     await page.locator(".presentation-public-toolbar").getByRole("button", { name: "Quitter" })
       .click({ force: true });
+    await page.locator(".presentation-public").waitFor({ state: "detached" });
+    await page.waitForFunction(() => !document.fullscreenElement);
+
+    // Test speaker mode in another browser tab to avoid incidental focus
+    // transitions inherited from the fullscreen-only scenario.
+    await page.close();
+    page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto("http://127.0.0.1:5191/", { waitUntil: "domcontentloaded" });
+    await page.locator(".library-deck-open").first().click();
+    await page.locator(".present-action").waitFor();
 
     // Speaker mode: the original tab remains public; popup alone shows the notes.
     await page.locator(".slides-present-options > summary").click();
     const popupEvent = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Mode Présentateur avec notes" }).click();
     const popup = await popupEvent;
+    popup.on("close", () => console.log("PRESENTER_POPUP_CLOSED"));
+    popup.on("crash", () => console.log("PRESENTER_POPUP_CRASHED"));
+    popup.on("pageerror", error => console.log("PRESENTER_POPUP_PAGEERROR", error.message));
     await popup.getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").waitFor({ timeout: 15000 });
     assert.equal(await page.locator(".presentation-public").count(), 1);
     assert.equal(await page.locator(".presenter-console-notes").count(), 0);
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
-    // These slides contain click-by-click animation cues, so use the explicit
-    // slide selector to test inter-window navigation independently of reveals.
+
+    // The live presenter preview must mirror the *visible animation state*
+    // and the second preview must show the end state of the upcoming click.
+    await popup.getByText(/Apparition 0 \/ 2/).waitFor();
+    await popup.getByText("Au prochain clic : apparition 1 / 2").waitFor();
+    await waitForAnimatedVisibility(popup, ".presenter-console-preview", "#premise", "hidden");
+    await waitForAnimatedVisibility(popup, ".presenter-console-next-image", "#premise", "visible");
+    await waitForAnimatedVisibility(popup, ".presenter-console-next-image", "#belief", "hidden");
+
+    await popup.getByRole("button", { name: "Suivant →" }).click();
+    await popup.getByText(/Apparition 1 \/ 2/).waitFor();
+    await waitForAnimatedVisibility(popup, ".presenter-console-preview", "#premise", "visible");
+    await waitForAnimatedVisibility(popup, ".presenter-console-preview", "#belief", "hidden");
+    await waitForAnimatedVisibility(popup, ".presenter-console-next-image", "#belief", "visible");
+    await waitForAnimatedVisibility(page, ".presentation-public", "#premise", "visible");
+
+    await popup.getByRole("button", { name: "Suivant →" }).click();
+    await popup.getByText(/Apparition 2 \/ 2/).waitFor();
+    await waitForAnimatedVisibility(popup, ".presenter-console-preview", "#belief", "visible");
+    await popup.getByText("Diapositive suivante : 2").waitFor();
+
+    // Selecting a slide remains possible without skipping a pending reveal accidentally.
     await popup.locator("#presenter-slide-select").selectOption("1");
     await popup.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
     await page.locator(".presentation-public-toolbar").getByText("2 / 2").waitFor({ timeout: 12000 });

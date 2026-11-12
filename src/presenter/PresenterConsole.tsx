@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SlideThumbnail } from "../editor/SlideThumbnail";
-import type { PlaybackPosition } from "../animation/timeline";
+import { ProjectionStage } from "./ProjectionStage";
+import { buildPlaybackPlan, nextPosition, type PlaybackPosition } from "../animation/timeline";
 import { isSessionId, presenterChannel, type PresenterMessage, type SessionSlide } from "./session";
 
 type Show = { title: string; slides: SessionSlide[] };
@@ -85,7 +85,11 @@ export function PresenterConsole() {
   });
 
   const active = show?.slides[position.slide];
-  const following = show?.slides[position.slide + 1];
+  const clickCount = active ? buildPlaybackPlan(active.document.animations).clicks.length : 0;
+  const next = show ? nextPosition(show.slides.map(slide => slide.document), position) : position;
+  const hasNext = next.slide !== position.slide || next.reveal !== position.reveal;
+  const upcoming = hasNext ? show?.slides[next.slide] : undefined;
+  const nextIsReveal = hasNext && next.slide === position.slide;
   const controls = <div className="presenter-console-timer">
     <strong aria-label="Durée de présentation">{formatDuration(seconds)}</strong>
     <button onClick={() => setPaused(value => !value)}>{paused ? "Reprendre" : "Pause"}</button>
@@ -111,20 +115,34 @@ export function PresenterConsole() {
       <section className="presenter-console-left" aria-label="Commandes et aperçu">
         {controls}
         <label className="presenter-console-slide-label" htmlFor="presenter-slide-select">Diapositive</label>
-        <select id="presenter-slide-select" value={position.slide}
+        <select id="presenter-slide-select" value={position.slide} disabled={busy}
           onChange={event => send("goto", Number(event.target.value))}>
           {show.slides.map((slide, index) => <option value={index} key={slide.id}>
             Diapositive {index + 1} sur {show.slides.length}
           </option>)}
         </select>
-        <div className="presenter-console-preview">
-          <SlideThumbnail document={active.document} index={position.slide + 1}/>
+        <div className="presenter-console-preview-status" aria-live="polite">
+          <strong>À l'écran</strong>
+          <span>Diapositive {position.slide + 1} · Apparition {position.reveal} / {clickCount}
+            {busy ? " · Animation en cours" : ""}</span>
+        </div>
+        <div className="presenter-console-preview"
+          style={{ aspectRatio: active.document.canvas.width + "/" + active.document.canvas.height }}>
+          <ProjectionStage slide={active} reveal={position.reveal}
+            title={"Aperçu en direct, diapositive " + (position.slide + 1)}/>
+          {blackout && <div className="presenter-console-preview-blackout">Écran public noir</div>}
         </div>
         <div className="presenter-console-next">
-          <span>Diapositive suivante</span>
-          {following ? <button onClick={() => send("goto", position.slide + 1)}
-              aria-label="Aller à la diapositive suivante">
-            <SlideThumbnail document={following.document} index={position.slide + 2}/>
+          <span>{nextIsReveal
+            ? "Au prochain clic : apparition " + next.reveal + " / " + clickCount
+            : upcoming ? "Diapositive suivante : " + (next.slide + 1) : "Fin du diaporama"}</span>
+          {upcoming ? <button onClick={() => send("next")} disabled={busy}
+              aria-label={nextIsReveal ? "Révéler la prochaine apparition" : "Aller à la diapositive suivante"}>
+            <div className="presenter-console-next-image"
+              style={{ aspectRatio: upcoming.document.canvas.width + "/" + upcoming.document.canvas.height }}>
+              <ProjectionStage slide={upcoming} reveal={next.reveal} animateTransitions={false}
+                title={nextIsReveal ? "Aperçu de la prochaine apparition" : "Aperçu de la diapositive suivante"}/>
+            </div>
           </button> : <p>Fin du diaporama</p>}
         </div>
         <nav className="presenter-console-navigation" aria-label="Naviguer dans le diaporama">
