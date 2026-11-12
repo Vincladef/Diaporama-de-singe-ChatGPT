@@ -44,9 +44,12 @@ Cliquer **▶ Présenter** depuis l'éditeur.
 
 - Affichage du diaporama au format et aux proportions de ses propres diapositives.
 - Avancer au clic, avec Espace / flèche droite. Revenir avec la flèche gauche. Home / End pour naviguer.
-- Notes privées, compte à rebours depuis l'ouverture (chronomètre) et aperçu de la diapositive suivante.
-- Plein écran pour la console ou fenêtre séparée **Ouvrir l'écran public**.
-- La fenêtre publique reçoit uniquement un instantané des diapositives et les commandes via un `BroadcastChannel` de même origine lié à une session aléatoire. Aucune clé du compte, aucune note et aucun accès direct à Neon ne sont transmis. La connexion est temporaire et s'arrête lorsque la console se ferme.
+- **▶ Présenter** ouvre directement la projection publique, uniquement les diapositives ; le plein écran est demandé dans le geste utilisateur. Si le navigateur refuse, le bouton Plein écran reste disponible.
+- La flèche ▾ du bouton Présenter permet de choisir **Mode Présentateur avec notes**. La page principale affiche uniquement les diapositives ; une nouvelle fenêtre privée présente le chronomètre, les notes redimensionnables, les miniatures et la navigation.
+- Les deux fenêtres se synchronisent par `BroadcastChannel` de même origine, avec un identifiant de session aléatoire. Les messages de notes ne sont envoyés qu'à la fenêtre privée ; la projection ne les rend jamais. La page principale ne communique aucun jeton d'authentification au présentateur.
+- Le navigateur peut bloquer l'ouverture d'une fenêtre ou refuser le passage au plein écran combiné à un pop-up. Un bouton explicite permet alors d'ouvrir les notes ou de passer en plein écran séparément.
+- En visioconférence, partager **l'onglet ou la fenêtre de projection** ; ne jamais choisir le partage de l'écran entier lorsque les notes privées sont visibles sur le même moniteur.
+- Les flèches, Espace, Home, End, G (aller à), B (écran noir), F (plein écran sur l'écran public) sont conservés. Quitter met fin à la session et ferme la console privée si le navigateur l'autorise.
 
 La projection ne fait pas appel à Neon à chaque clic. Un instantané déjà chargé continue à fonctionner tant que les médias nécessaires sont disponibles ; **le mode totalement hors ligne n'est pas garanti** pour les photos, polices et autres ressources HTML externes.
 
