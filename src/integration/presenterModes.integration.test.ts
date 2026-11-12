@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { preview } from "vite";
 import { chromium, type Page } from "playwright-core";
 import { clarkWellsDemonstration } from "./clarkWellsDemonstration.ts";
+import type { SlideDocument } from "../domain/slide.ts";
 
 const deckId = "f193e336-3328-4679-8227-9bd5561d5c95";
 const samples = [0, 1].map(index => clarkWellsDemonstration.find(item =>
@@ -10,9 +11,20 @@ const samples = [0, 1].map(index => clarkWellsDemonstration.find(item =>
 const now = "2026-11-12T12:00:00.000Z";
 const presentation = { id: deckId, title: "Projection de test",
   description: "", format: "16:9", folder_id: null, updated_at: now };
+function fixtureDocument(document: SlideDocument, index: number): SlideDocument {
+  const result = structuredClone(document);
+  if (index === 1 && result.freeform) {
+    // A deliberately slow asset must not stall the projection's HTML transition.
+    result.freeform.html +=
+      '<div id="singe-second-slide-marker" style="position:absolute;left:1px;top:1px"></div>' +
+      '<img src="https://presenter-fixtures.invalid/slow-image.png" ' +
+      'style="position:absolute;left:2px;top:2px;width:2px;height:2px">';
+  }
+  return result;
+}
 const slides = samples.map((s, index) => ({
   id: s.slide_id, presentation_id: deckId, position: index,
-  revision: 1, updated_at: now, document: s.document,
+  revision: 1, updated_at: now, document: fixtureDocument(s.document, index),
   notes: index === 0 ? "NOTE_PRIVEE_CONFIDENTIELLE_123" : "NOTE_SUIVANTE_PRIVEE_456"
 }));
 const summary = { ...presentation, slide_count: slides.length };
@@ -38,6 +50,10 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     await context.addInitScript(() => {
       if (window.top === window)
         sessionStorage.setItem("diaporama-chatgpt-owner-token", "ci-presenter-test-token");
+    });
+    await context.route("**/slow-image.png", async route => {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      await route.abort().catch(() => {});
     });
     await context.route("**/.netlify/functions/workspace**", async route => {
       const req = route.request();
@@ -99,12 +115,51 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     // Rapid sequences must not lose a click when the previous reveal is running.
     await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
     await page.locator('.presentation-public[aria-busy="true"]').waitFor();
+    const firstSwitchStarted = Date.now();
     await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
-    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 2"]').waitFor();
-    // Back from a slide starts at the preceding slide's final reveal.
+    // Check what the iframe visibly displays, not merely its updated label.
+    // The second slide contains an image that takes four seconds to resolve.
+    await page.waitForFunction(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        '.presentation-public .projection-artboard[aria-hidden="false"] iframe'
+      );
+      return !!frame?.contentDocument?.getElementById("singe-second-slide-marker");
+    }, undefined, { timeout: 1800 });
+    assert.ok(Date.now() - firstSwitchStarted < 1800,
+      "First slide switch must not wait for the slow image to finish");
+
+    // Regressions: a BACK command with focus INSIDE the iframe used to be lost.
+    await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        '.presentation-public .projection-artboard[aria-hidden="false"] iframe'
+      );
+      if (!frame?.contentDocument?.body) throw Error("Missing slide body");
+      frame.contentDocument.body.tabIndex = 0;
+      frame.contentDocument.body.focus();
+    });
+    assert.equal(await page.evaluate(() => document.activeElement?.tagName), "IFRAME");
+    const backwardStarted = Date.now();
     await page.keyboard.press("ArrowLeft");
-    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 1"]').waitFor();
     await waitForAnimatedVisibility(page, ".presentation-public", "#belief", "visible");
+    assert.ok(Date.now() - backwardStarted < 1300,
+      "Cached backward slide switch must not wait for media or fonts");
+
+    // A sequence of forward/backward switches must keep the cached iframe ready.
+    for (let index = 0; index < 3; index++) {
+      const forwardStarted = Date.now();
+      await page.keyboard.press("ArrowRight");
+      await page.waitForFunction(() => {
+        const frame = document.querySelector<HTMLIFrameElement>(
+          '.presentation-public .projection-artboard[aria-hidden="false"] iframe'
+        );
+        return !!frame?.contentDocument?.getElementById("singe-second-slide-marker");
+      }, undefined, { timeout: 2500 });
+      assert.ok(Date.now() - forwardStarted < 1300, "Cached forward switch is too slow");
+      const reverseStarted = Date.now();
+      await page.keyboard.press("ArrowLeft");
+      await waitForAnimatedVisibility(page, ".presentation-public", "#belief", "visible");
+      assert.ok(Date.now() - reverseStarted < 1300, "Cached backward switch is too slow");
+    }
 
     // The browser's fullscreen exit closes the public presentation.
     await page.evaluate(async () => {

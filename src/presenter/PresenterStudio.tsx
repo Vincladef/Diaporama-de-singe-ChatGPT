@@ -30,6 +30,7 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   const blackoutRef = useRef(blackout);
   const busyRef = useRef(busy); // Snapshot for private-console handshakes, never a navigation lock.
   const publicRoot = useRef<HTMLElement>(null);
+  const embeddedKey = useRef<(event: KeyboardEvent) => void>(() => {});
   const enteredFullscreen = useRef(Boolean(document.fullscreenElement));
   const ending = useRef(false);
   positionRef.current = position;
@@ -101,6 +102,20 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
     return () => document.removeEventListener("fullscreenchange", onFullscreen);
   }, [close]);
 
+  // Entering fullscreen can leave keyboard focus on the editor behind the
+  // overlay. Keep the projected root focused, including after window switches.
+  useEffect(() => {
+    const focusProjection = () => publicRoot.current?.focus({ preventScroll: true });
+    const frame = window.requestAnimationFrame(focusProjection);
+    window.addEventListener("focus", focusProjection);
+    document.addEventListener("fullscreenchange", focusProjection);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("focus", focusProjection);
+      document.removeEventListener("fullscreenchange", focusProjection);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -140,6 +155,7 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
         event.preventDefault(); close();
       }
     };
+    embeddedKey.current = onKey;
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [documents, next, previous, close, mode]);
@@ -167,7 +183,8 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
       role="dialog" aria-modal="true" aria-busy={busy} aria-label="Projection publique des diapositives"
       onPointerDownCapture={() => publicRoot.current?.focus({ preventScroll: true })}>
     <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
-      onBusyChange={setBusy} title={"Diapositive " + (position.slide + 1)}/>
+      onBusyChange={setBusy} onEmbeddedKeyDown={event => embeddedKey.current(event)}
+      title={"Diapositive " + (position.slide + 1)}/>
     {blackout && <div className="presentation-blackout" role="status"
       aria-label="Écran public noir" onClick={() => setBlackout(false)}/>}
   </main>;
