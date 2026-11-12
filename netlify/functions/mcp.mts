@@ -178,7 +178,7 @@ function createServer(request: Request): McpServer {
     "Read recent real user feedback from the persistent Creation Instructions journal. Consult before visual design when correcting previous mistakes; never interpret a selected style as proof the result was successful.",
     {limit:z.number().int().min(1).max(100).default(30)},false,
     async a=>({items:await database().query(
-      "SELECT id::text AS id,category,kind,content,created_at AS \\"createdAt\\" FROM public.prompt_feedback_journal ORDER BY created_at DESC LIMIT $1",
+      "SELECT id::text AS id,category,kind,content,created_at AS created_at FROM public.prompt_feedback_journal ORDER BY created_at DESC LIMIT $1",
       [a.limit])}));
 
   register("save_prompt_feedback","Inscrire un feedback dans le journal",
@@ -188,7 +188,7 @@ function createServer(request: Request): McpServer {
       content:z.string().trim().min(1).max(2400)},true,
     async a=>{
       const rows=await database().query(
-        "INSERT INTO public.prompt_feedback_journal(category,kind,content) VALUES($1,$2,$3) RETURNING id::text AS id,category,kind,content,created_at AS \\"createdAt\\"",
+        "INSERT INTO public.prompt_feedback_journal(category,kind,content) VALUES($1,$2,$3) RETURNING id::text AS id,category,kind,content,created_at AS created_at",
         [a.category,a.kind,a.content]);
       return {item:rows[0]};
     });
