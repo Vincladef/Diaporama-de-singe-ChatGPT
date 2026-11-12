@@ -162,7 +162,7 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   const active = snapshot.slides[position.slide]!;
 
   return <main ref={publicRoot} tabIndex={-1} className="presentation-public"
-      role="dialog" aria-modal="true" aria-label="Projection publique des diapositives"
+      role="dialog" aria-modal="true" aria-busy={busy} aria-label="Projection publique des diapositives"
       onPointerDownCapture={() => publicRoot.current?.focus({ preventScroll: true })}>
     <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
       onBusyChange={setBusy} title={"Diapositive " + (position.slide + 1)}/>
