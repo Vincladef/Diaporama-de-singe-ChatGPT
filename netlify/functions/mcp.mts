@@ -22,7 +22,7 @@ import { prepareIndependentVariantBrief, saveIndependentVariants } from "../../s
 import {prepareDeckWorkflow,verifyDeckWorkflow} from "../../src/mcp/creationWorkflow";
 import {VisualReferenceUsedSchema,listSlidePreferences,listRelevantVisualPreferences,saveVariantPreference} from "../../src/mcp/visualPreferences";
 import {inspectVisualRender,readVisualCapture,applyVisualCorrection} from "../../src/mcp/visualReview";
-import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE } from "../../src/mcp/security";
+import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE, database } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
 import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
@@ -70,7 +70,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.18.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.18.1",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. FOR NEW VISUAL REQUESTS, FOLLOW TWO PHASES: PHASE 1 is a CHAT-ONLY design proposal, not a write. Offer 3-5 concrete artistic directions with visual examples where available; specify intended images, source rights, diagrams and their production methods (SVG, verified data, documentary photos or AI illustration), a per-slide storyboard, text hierarchy and animations. Ask the user to select or refine. PHASE 2 begins ONLY after the user selects/approves the direction or explicitly instructs immediate execution. Then use create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. On projected slides, prohibit AI filler microheadings, repeated series labels, fictitious scientific plate IDs, decorative page counters, and inventing metadata. For an interview question deck project only the exact question and genuinely helpful visuals unless other text is requested. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. AFTER THE DESIGN GATE, for a COMPLETE presentation request, FIRST call get_creation_instructions, create the scientific source slides, then prepare_deck_workflow for consolidated slide-level briefs and follow its instructions. For each page inspect reference pixels, curate and inspect photos, independently compose THREE versions with create_independent_variants; inspect real pixels with inspect_visual_render, apply bounded corrections, and call verify_deck_workflow. Never claim a full pixel review if the verification reports absent captures. For any request for three AI variants, FIRST call prepare_independent_variants (which reads instructions, sources and reference pixels), author THREE separate complete HTML/CSS/SVG slide documents, then call create_independent_variants. BEFORE presenting a generated slide as visually checked, call inspect_visual_render to receive actual Chromium screenshot pixels as an image, examine their appearance together with reference images and DOM diagnostics, then if needed call apply_visual_correction and repeat inspect_visual_render with the same sessionId (max 3 screenshot passes and 2 corrections). Never claim aesthetic review without viewing screenshot pixels. Do not alter scientific content or citations in CSS fixes. NEVER use generate_variants, proposeGraphicVariants or compose_slides to simulate original AI variants. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For photos first curate_images then inspect_photo_candidates to see decoded pixels and three crops with source dimensions. Apply only a chosen candidate and retain credits and rights. Use ELK diagrams when relationships justify a scientific graph. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
@@ -157,8 +157,8 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.18.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.18.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.18.1",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.18.1",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
       capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library","three_independent_ai_variants","chromium_pixel_capture","bounded_multimodal_visual_revision","sharp_image_inspection","elk_auto_layout_editable_science","visual_preferences_memory","integrated_deck_pipeline","real_variant_pixel_smoke"]}));
@@ -173,6 +173,25 @@ function createServer(request: Request): McpServer {
     {scope:z.enum(["global","presentation"]),instructions:creationInstructionsSchema,
       presentationId:uuid.optional()},true,
     async a=>saveCreationInstructions(a.scope,a.instructions,a.presentationId));
+
+  register("list_prompt_feedback","Lire le journal des feedbacks",
+    "Read recent real user feedback from the persistent Creation Instructions journal. Consult before visual design when correcting previous mistakes; never interpret a selected style as proof the result was successful.",
+    {limit:z.number().int().min(1).max(100).default(30)},false,
+    async a=>({items:await database().query(
+      "SELECT id::text AS id,category,kind,content,created_at AS \\"createdAt\\" FROM public.prompt_feedback_journal ORDER BY created_at DESC LIMIT $1",
+      [a.limit])}));
+
+  register("save_prompt_feedback","Inscrire un feedback dans le journal",
+    "Save a user-given observation, issue, positive reaction or design idea to the actual persistent feedback journal. Use the original meaning, concrete examples and actionable preference; do not invent praise. Store user-directed corrections when explicitly requested.",
+    {category:z.enum(["style","composition","typography","images","diagram","content","animation","ergonomics","technical","other"]),
+      kind:z.enum(["positive","issue","idea","observation"]),
+      content:z.string().trim().min(1).max(2400)},true,
+    async a=>{
+      const rows=await database().query(
+        "INSERT INTO public.prompt_feedback_journal(category,kind,content) VALUES($1,$2,$3) RETURNING id::text AS id,category,kind,content,created_at AS \\"createdAt\\"",
+        [a.category,a.kind,a.content]);
+      return {item:rows[0]};
+    });
 
   register("inspect_creation_reference","Examiner un exemple visuel joint",
     "Read a saved design reference. For PPTX with cached previews, return up to four actual rendered slide images along with style and geometry information; unrendered PPTX return geometry only. For all slides use inspect_reference_page. PDF pages are not rendered. Reference IDs come from get_creation_instructions.",
