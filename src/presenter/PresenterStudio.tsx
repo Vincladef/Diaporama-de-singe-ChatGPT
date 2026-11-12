@@ -104,9 +104,9 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       if (event.target instanceof HTMLElement &&
           event.target.closest("input,textarea,select,[contenteditable=true]")) return;
-      if (["ArrowRight", "PageDown", " ", "Enter"].includes(event.key)) {
+      if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(event.key)) {
         event.preventDefault(); next();
-      } else if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) {
+      } else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(event.key)) {
         event.preventDefault(); previous();
       } else if (event.key === "Home") {
         event.preventDefault(); setPosition({ slide: 0, reveal: 0 });
