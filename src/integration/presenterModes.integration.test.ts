@@ -60,7 +60,7 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
         ok: true, database: "connected", schema: "ready", service: "diaporama-de-singe-chatgpt"
       })
     }));
-    const page = await context.newPage();
+    let page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto("http://127.0.0.1:5191/", { waitUntil: "domcontentloaded" });
@@ -77,9 +77,12 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     await page.locator(".presentation-public").waitFor({ state: "detached" });
     await page.waitForFunction(() => !document.fullscreenElement);
 
-    // Start the second scenario from a fresh editor session, not the browser's
-    // asynchronous post-fullscreen focus transition.
-    await page.reload({ waitUntil: "domcontentloaded" });
+    // Test speaker mode in another browser tab to avoid incidental focus
+    // transitions inherited from the fullscreen-only scenario.
+    await page.close();
+    page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto("http://127.0.0.1:5191/", { waitUntil: "domcontentloaded" });
     await page.locator(".library-deck-open").first().click();
     await page.locator(".present-action").waitFor();
 
