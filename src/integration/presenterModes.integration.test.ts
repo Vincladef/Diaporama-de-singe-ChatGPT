@@ -115,17 +115,18 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     // Rapid sequences must not lose a click when the previous reveal is running.
     await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
     await page.locator('.presentation-public[aria-busy="true"]').waitFor();
+    const firstSwitchStarted = Date.now();
     await page.locator(".presentation-public .projection-stage").click({ position: { x: 150, y: 180 } });
-    await page.locator('.presentation-public .projection-stage[aria-label="Diapositive 2"]').waitFor();
-    // Verify the actual visible iframe, not just the parent's updated label.
-    // The second slide includes an asset that takes 4 seconds to resolve.
-    const onSecond = await page.evaluate(() => {
+    // Check what the iframe visibly displays, not merely its updated label.
+    // The second slide contains an image that takes four seconds to resolve.
+    await page.waitForFunction(() => {
       const frame = document.querySelector<HTMLIFrameElement>(
         '.presentation-public .projection-artboard[aria-hidden="false"] iframe'
       );
       return !!frame?.contentDocument?.getElementById("singe-second-slide-marker");
-    });
-    assert.equal(onSecond, true, "The second slide must be visibly rendered");
+    }, undefined, { timeout: 1800 });
+    assert.ok(Date.now() - firstSwitchStarted < 1800,
+      "First slide switch must not wait for the slow image to finish");
 
     // Regressions: a BACK command with focus INSIDE the iframe used to be lost.
     await page.evaluate(() => {
