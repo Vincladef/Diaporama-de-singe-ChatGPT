@@ -1007,11 +1007,12 @@ export default function App() {
           slideId={slideId} document={draft} notes={notes} dirty={dirty} onSelectStored={selectVariant}
           onClose={()=>{setVariantsStudioOpen(false);setVariantRefreshKey(x=>x+1);}}/>}
         {presenting&&current&&current.slides.length>0&&<PresenterStudio
+          key={presenting.sessionId}
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
             {...s,document:draft,notes}:s)}}
           initialSlideId={slideId} mode={presenting.mode}
            sessionId={presenting.sessionId} initialPopup={presenting.popup}
-           onClose={()=>setPresenting(null)}/>}
+           onClose={()=>setPresenting(previous=>previous?.sessionId===presenting.sessionId?null:previous)}/>}
         <footer className="footer">Diaporama de singe · Version ChatGPT <span>Neon · Netlify</span></footer>
       </main>
     </div>
