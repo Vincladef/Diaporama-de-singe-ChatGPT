@@ -11,6 +11,8 @@ type Props = {
   onBusyChange?: (busy: boolean) => void;
   title?: string;
   onReady?: () => void;
+  /** Resolve a future click state instantly when used as a next-step preview. */
+  animateTransitions?: boolean;
 };
 
 /**
@@ -18,7 +20,8 @@ type Props = {
  * sandboxed document loads, settles its fonts/media and prepares its timeline.
  * Never expose a newly-created white iframe between slide changes.
  */
-export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title, onReady }: Props) {
+export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title, onReady,
+  animateTransitions = true }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const frames = useRef<(HTMLIFrameElement | null)[]>([null, null]);
   const players = useRef<(SlideAnimationPlayer | null)[]>([null, null]);
@@ -107,10 +110,10 @@ export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title,
     const engine = players.current[activeIndex.current];
     if (!ready || !engine || current?.id !== slide.id) return;
     if (last.current?.id === slide.id && last.current.reveal === reveal) return;
-    const animate = last.current?.id === slide.id && reveal === last.current.reveal + 1;
+    const animate = animateTransitions && last.current?.id === slide.id && reveal === last.current.reveal + 1;
     last.current = { id: slide.id, reveal };
     void engine.seek(reveal, { animate, onBusy: state => busyCallback.current?.(state) });
-  }, [slide.id, reveal, ready, visible]);
+  }, [slide.id, reveal, ready, visible, animateTransitions]);
 
   useEffect(() => () => {
     players.current.forEach(p => p?.dispose());
