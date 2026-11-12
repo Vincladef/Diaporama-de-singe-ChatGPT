@@ -16,6 +16,10 @@ Fonctions disponibles : création, renommage et suppression de présentations ; 
 
 L'interface se trouve sur https://diaporama-de-singe-chatgpt.netlify.app/.
 
+## Mode présentation sans commandes publiques
+
+La projection ne contient aucune barre de navigation, aucun bouton ni aucune bulle, y compris au survol de la souris. Les diapositives restent pilotables au clic, avec les flèches et la barre d'espace. Les notes, le chronomètre et les commandes sont réservés à la fenêtre privée du présentateur. Raccourcis : F pour le plein écran ; N pour rouvrir les notes privées en mode Présentateur ; B pour l'écran noir ; Échap pour quitter la projection. Si le navigateur empêche le plein écran, F11 reste une possibilité selon sa configuration.
+
 ## Sécurité
 
 Toutes les requêtes vers `/.netlify/functions/workspace` exigent `Authorization: Bearer <EDITOR_ACCESS_TOKEN>`.

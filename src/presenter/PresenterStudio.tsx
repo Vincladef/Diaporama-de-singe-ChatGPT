@@ -24,8 +24,6 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   const [position, setPosition] = useState<PlaybackPosition>({ slide: first, reveal: 0 });
   const [blackout, setBlackout] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [speakerOpen, setSpeakerOpen] = useState(Boolean(initialPopup && !initialPopup.closed));
-  const [fullscreenError, setFullscreenError] = useState("");
   const channel = useRef<BroadcastChannel | null>(null);
   const popup = useRef<Window | null>(initialPopup ?? null);
   const positionRef = useRef(position);
@@ -90,14 +88,6 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
   }, [sessionId, position, blackout, busy]);
 
   useEffect(() => {
-    if (mode !== "speaker") return;
-    const check = () => setSpeakerOpen(Boolean(popup.current && !popup.current.closed));
-    check();
-    const timer = window.setInterval(check, 1000);
-    return () => window.clearInterval(timer);
-  }, [mode]);
-
-  useEffect(() => {
     const onFullscreen = () => {
       if (document.fullscreenElement) enteredFullscreen.current = true;
       else if (enteredFullscreen.current) close();
@@ -129,6 +119,10 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
       } else if (event.key.toLowerCase() === "f") {
         event.preventDefault();
         void fullscreen();
+      } else if (event.key.toLowerCase() === "n" && mode === "speaker") {
+        // Reopen the private presenter console without displaying any public controls.
+        event.preventDefault();
+        openSpeaker();
       } else if (event.key.toLowerCase() === "g") {
         event.preventDefault();
         const answer = window.prompt("Aller à la diapositive (1 à " +
@@ -145,29 +139,26 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [documents, next, previous, close]);
+  }, [documents, next, previous, close, mode]);
 
   async function fullscreen() {
     if (document.fullscreenElement) return;
-    try { await document.documentElement.requestFullscreen(); setFullscreenError(""); }
-    catch { setFullscreenError("Plein écran indisponible. Utilisez F11 ou réessayez."); }
+    try { await document.documentElement.requestFullscreen(); }
+    catch { /* The browser may deny fullscreen; F11 remains available. */ }
   }
 
   function openSpeaker() {
     if (popup.current && !popup.current.closed) {
-      popup.current.focus(); setSpeakerOpen(true); return;
+      popup.current.focus(); return;
     }
     const opened = window.open("/presenter#" + encodeURIComponent(sessionId),
       "diaporama-presentateur-" + sessionId, "popup=yes,width=1050,height=740");
-    if (!opened) { setSpeakerOpen(false); return; }
+    if (!opened) return; // Pop-up permission can be retried with N, without public UI.
     popup.current = opened;
-    setSpeakerOpen(true);
     opened.focus();
   }
 
   const active = snapshot.slides[position.slide]!;
-  const count = buildPlaybackPlan(active.document.animations).clicks.length;
-  const atEnd = position.slide === snapshot.slides.length - 1 && position.reveal === count;
 
   return <main className="presentation-public" role="dialog" aria-modal="true"
       aria-label="Projection publique des diapositives">
@@ -175,24 +166,5 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
       onBusyChange={setBusy} title={"Diapositive " + (position.slide + 1)}/>
     {blackout && <div className="presentation-blackout" role="status"
       aria-label="Écran public noir" onClick={() => setBlackout(false)}/>}
-    <nav className="presentation-public-toolbar" aria-label="Commandes de projection">
-      <button aria-label="Diapositive ou apparition précédente" onClick={previous}
-        disabled={busy || (position.slide === 0 && position.reveal === 0)}>←</button>
-      <span aria-label="Position dans la présentation">{position.slide + 1} / {snapshot.slides.length}</span>
-      <button aria-label="Diapositive ou apparition suivante" onClick={next}
-        disabled={busy || atEnd}>→</button>
-      {mode === "speaker" && <button onClick={openSpeaker}>
-        {speakerOpen ? "Afficher les notes privées" : "Ouvrir les notes privées"}
-      </button>}
-      <button onClick={() => void fullscreen()} title="Afficher les diapositives en plein écran">Plein écran</button>
-      <button onClick={close}>Quitter</button>
-    </nav>
-    {mode === "speaker" && !speakerOpen && <aside className="presentation-speaker-warning"
-      role="status">
-      <strong>Fenêtre du présentateur non ouverte</strong>
-      <span>Autorisez les fenêtres pop-up pour afficher vos notes séparément.</span>
-      <button onClick={openSpeaker}>Ouvrir les notes privées</button>
-    </aside>}
-    {fullscreenError && <div className="presentation-fullscreen-error" role="alert">{fullscreenError}</div>}
   </main>;
 }

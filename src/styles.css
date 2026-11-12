@@ -1516,42 +1516,6 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 .presentation-blackout{
   position:absolute;inset:0;z-index:4;background:#000;cursor:pointer;
 }
-.presentation-public-toolbar{
-  position:absolute;bottom:18px;left:50%;transform:translate(-50%,9px);
-  z-index:7;display:flex;align-items:center;gap:8px;max-width:calc(100% - 16px);
-  padding:8px 10px;border:1px solid #ffffff30;border-radius:9px;
-  background:#19241fe8;box-shadow:0 12px 36px #0007;
-  opacity:0;transition:opacity .17s ease,transform .17s ease;
-}
-.presentation-public:hover .presentation-public-toolbar,
-.presentation-public-toolbar:focus-within{
-  opacity:1;transform:translate(-50%,0)
-}
-.presentation-public-toolbar button{
-  min-height:36px;border:1px solid #415248;border-radius:5px;
-  background:#2b4033;color:#f4faf5;padding:6px 12px;
-  font-size:12px;cursor:pointer;white-space:nowrap;
-}
-.presentation-public-toolbar button:hover{background:#47614f}
-.presentation-public-toolbar button:disabled{opacity:.4;cursor:default}
-.presentation-public-toolbar span{
-  font-size:12px;white-space:nowrap;color:#dfe9e2;padding:0 5px;
-}
-.presentation-speaker-warning{
-  position:absolute;z-index:6;top:16px;right:16px;
-  max-width:min(360px,calc(100% - 32px));display:flex;flex-direction:column;gap:8px;
-  background:#fff;color:#27362c;border-radius:9px;padding:14px 16px;
-  box-shadow:0 12px 36px #0005;font-size:13px;
-}
-.presentation-speaker-warning button{
-  align-self:flex-start;padding:8px 12px;border:0;border-radius:5px;
-  color:white;background:#246346;cursor:pointer;
-}
-.presentation-fullscreen-error{
-  position:absolute;z-index:8;top:16px;left:50%;transform:translateX(-50%);
-  background:#fff;color:#6b342b;border-radius:7px;padding:9px 14px;font-size:13px;
-}
-
 /* A private, separate Google-Slides-inspired presenter window. */
 .presenter-console{
   display:flex;flex-direction:column;width:100%;height:100dvh;min-height:0;
@@ -1687,9 +1651,4 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
   .presenter-console-next{display:flex}
   .presenter-console-next>button{width:min(60%,220px)}
   .presenter-console-right{flex:1;min-height:280px}
-  .presentation-public-toolbar{bottom:7px;gap:4px;padding:5px}
-  .presentation-public-toolbar button{padding:7px;font-size:11px}
-}
-@media(hover:none){
-  .presentation-public-toolbar{opacity:.94;transform:translate(-50%,0)}
 }
