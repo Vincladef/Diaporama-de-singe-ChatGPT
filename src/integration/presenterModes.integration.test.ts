@@ -77,11 +77,20 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     await page.locator(".presentation-public").waitFor({ state: "detached" });
     await page.waitForFunction(() => !document.fullscreenElement);
 
+    // Start the second scenario from a fresh editor session, not the browser's
+    // asynchronous post-fullscreen focus transition.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".library-deck-open").first().click();
+    await page.locator(".present-action").waitFor();
+
     // Speaker mode: the original tab remains public; popup alone shows the notes.
     await page.locator(".slides-present-options > summary").click();
     const popupEvent = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Mode Présentateur avec notes" }).click();
     const popup = await popupEvent;
+    popup.on("close", () => console.log("PRESENTER_POPUP_CLOSED"));
+    popup.on("crash", () => console.log("PRESENTER_POPUP_CRASHED"));
+    popup.on("pageerror", error => console.log("PRESENTER_POPUP_PAGEERROR", error.message));
     await popup.getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").waitFor({ timeout: 15000 });
     assert.equal(await page.locator(".presentation-public").count(), 1);
     assert.equal(await page.locator(".presenter-console-notes").count(), 0);
