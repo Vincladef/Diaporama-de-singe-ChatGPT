@@ -186,6 +186,9 @@ export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title,
   useEffect(() => () => {
     players.current.forEach(p => p?.dispose());
     players.current = [null, null];
+    // In React StrictMode, effects are replayed on the same iframe document.
+    // Allow its player to be initialized again after the development-only cleanup.
+    processing.current = new WeakSet<Document>();
     busyCallback.current?.(false);
   }, []);
 
