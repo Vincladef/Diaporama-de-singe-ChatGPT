@@ -57,7 +57,7 @@ Depuis l'éditeur, **+ Image** ouvre une galerie multi-sources (jusqu'à 20 rés
 
 ## Animations et mode présentateur
 
-Depuis chaque diapositive, le panneau **Animations** permet d'ajouter et d'ordonner les apparitions au clic, effets automatiques, fondus, mouvements, masquages et effets personnalisés. Le bouton **▶ Présenter** ouvre la console avec notes, chronomètre, écran public séparé et raccourcis clavier. Les séquences sont compatibles avec le serveur MCP. Voir `docs/ANIMATIONS.md`.
+Depuis chaque diapositive, le panneau **Animations** permet d'ajouter et d'ordonner les apparitions au clic, effets automatiques, fondus, mouvements, masquages et effets personnalisés. Le bouton **▶ Présenter** ouvre directement les diapositives seules en plein écran. La flèche ▾ ouvre le **Mode Présentateur avec notes** : les diapositives occupent la fenêtre principale, tandis qu'une fenêtre privée distincte affiche les notes, le chronomètre et les miniatures synchronisées. En visioconférence, partager uniquement l'onglet ou la fenêtre de projection. Les notes ne sont jamais affichées dans la projection publique ; si le navigateur bloque le pop-up, ouvrir les notes depuis le bouton de secours. Les raccourcis et animations sont conservés. Les séquences sont compatibles avec le serveur MCP. Voir `docs/ANIMATIONS.md`.
 
 ## Étape 8 : import, amélioration et contrôle qualité
 

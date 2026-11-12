@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
-import { PresenterStudio } from "./presenter/PresenterStudio";
+import { PresenterStudio, type PresentMode } from "./presenter/PresenterStudio";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
 import { ImageStudio } from "./editor/ImageStudio";
@@ -53,7 +53,21 @@ export default function App() {
   const [variantSwitching,setVariantSwitching]=useState(false);
   const switchingRef=useRef(false);
   const [historyStudioOpen,setHistoryStudioOpen]=useState(false);
-  const [presenting,setPresenting]=useState(false);
+  const [presenting,setPresenting]=useState<{
+    mode:PresentMode;sessionId:string;popup:Window|null
+  }|null>(null);
+  function beginPresentation(mode:PresentMode){
+    if(!current?.slides.length)return;
+    const sessionId=crypto.randomUUID();
+    // Popup creation requires a direct user gesture.
+    const popup=mode==="speaker"
+      ?window.open("/presenter#"+encodeURIComponent(sessionId),
+        "diaporama-presentateur-"+sessionId,"popup=yes,width=1050,height=740")
+      :null;
+    setPresenting({mode,sessionId,popup});
+    if(mode==="slides"&&!document.fullscreenElement)
+      void document.documentElement.requestFullscreen().catch(()=>{});
+  }
   const [importOpen,setImportOpen]=useState(false);
   const [improveOpen,setImproveOpen]=useState(false);
   const [creationSettingsOpen,setCreationSettingsOpen]=useState(
@@ -777,8 +791,21 @@ export default function App() {
             {!current && <button className="subtle-btn" onClick={()=>setImportOpen(true)}
               disabled={busy}>⇧ Importer</button>}
             {current&&<>
-              <button className="subtle-btn present-action" onClick={()=>setPresenting(true)}
-                disabled={!current.slides.length}>▶ Présenter</button>
+              <div className="slides-present-controls">
+                 <button className="subtle-btn present-action" onClick={()=>beginPresentation("slides")}
+                   disabled={!current.slides.length}>▶ Présenter</button>
+                 <details className="slides-present-options">
+                   <summary aria-label="Options de présentation" title="Options de présentation">▾</summary>
+                   <div className="slides-present-options-menu">
+                     <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");beginPresentation("slides");}}>
+                       Présenter en plein écran
+                     </button>
+                     <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");beginPresentation("speaker");}}>
+                       Mode Présentateur avec notes
+                     </button>
+                   </div>
+                 </details>
+               </div>
               <details className="slides-export-menu">
                 <summary>↓ Exporter</summary>
                 <div className="slides-export-options">
@@ -914,7 +941,7 @@ export default function App() {
                     </div>
                   </div>
                   {animationPanelOpen&&!previewVariant&&<div className="editor-animation-drawer"><AnimationTimeline document={draft} selectedIds={selectedIds}
-                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>setPresenting(true)}/></div>}
+                    onChange={editDocument} onSelect={setSelectedIds} onPreview={()=>beginPresentation("slides")}/></div>}
                   <SpeakerNotesPane value={previewVariant?.notes??notes} readOnly={variantSwitching}
                     onChange={value=>{versionRef.current++;notesRef.current=value;setNotes(value);dirtyRef.current=true;setDirty(true);}}/>
                 </> : <div className="no-slide">Aucune diapositive. <button className="primary" onClick={() => void slideAction("addSlide")}>Ajouter une diapositive</button></div>}
@@ -982,7 +1009,9 @@ export default function App() {
         {presenting&&current&&current.slides.length>0&&<PresenterStudio
           detail={{...current,slides:current.slides.map(s=>s.id===slideId&&draft?
             {...s,document:draft,notes}:s)}}
-          initialSlideId={slideId} onClose={()=>setPresenting(false)}/>}
+          initialSlideId={slideId} mode={presenting.mode}
+           sessionId={presenting.sessionId} initialPopup={presenting.popup}
+           onClose={()=>setPresenting(null)}/>}
         <footer className="footer">Diaporama de singe · Version ChatGPT <span>Neon · Netlify</span></footer>
       </main>
     </div>

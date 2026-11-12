@@ -1,171 +1,193 @@
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PresentationDetail } from "../lib/api";
-import { buildPlaybackPlan,gotoSlide,nextPosition,previousPosition,type PlaybackPosition } from "../animation/timeline";
+import { buildPlaybackPlan, gotoSlide, nextPosition, previousPosition,
+  type PlaybackPosition } from "../animation/timeline";
 import { ProjectionStage } from "./ProjectionStage";
-import { SlideThumbnail } from "../editor/SlideThumbnail";
+import { presenterChannel, type PresenterMessage, type SessionSlide } from "./session";
 
-type Props={detail:PresentationDetail;initialSlideId?:string|null;onClose:()=>void};
-type Message=
-  |{type:"hello";sessionId:string}
-  |{type:"init";sessionId:string;title:string;slides:{id:string;document:PresentationDetail["slides"][number]["document"]}[];position:PlaybackPosition;blackout:boolean}
-  |{type:"state";sessionId:string;position:PlaybackPosition;blackout:boolean}
-  |{type:"command";sessionId:string;command:"next"|"previous"|"toggleBlackout"}
-  |{type:"close";sessionId:string};
-function formatSeconds(value:number):string{
-  const s=Math.max(0,value);
-  return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
-}
-export function PresenterStudio({detail,initialSlideId,onClose}:Props){
-  const [snapshot]=useState(()=>({
-    title:detail.presentation.title,
-    slides:detail.slides.map(s=>({id:s.id,document:structuredClone(s.document),notes:s.notes})),
+export type PresentMode = "slides" | "speaker";
+type Props = { detail: PresentationDetail; initialSlideId?: string | null;
+  mode: PresentMode; sessionId: string; initialPopup?: Window | null; onClose: () => void };
+
+/** Only the projected slide is mounted in this window.
+ * The private speaker notes are rendered exclusively in /presenter.
+ */
+export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initialPopup, onClose }: Props) {
+  const [snapshot] = useState(() => ({
+    title: detail.presentation.title,
+    slides: detail.slides.map((s): SessionSlide => ({
+      id: s.id, document: structuredClone(s.document), notes: s.notes
+    }))
   }));
-  const docs=useMemo(()=>snapshot.slides.map(s=>s.document),[snapshot]);
-  const initial=Math.max(0,snapshot.slides.findIndex(s=>s.id===initialSlideId));
-  const [position,setPosition]=useState<PlaybackPosition>({slide:initial,reveal:0});
-  const [busy,setBusy]=useState(false);
-  const busyRef=useRef(false);
-  busyRef.current=busy;
-  const [seconds,setSeconds]=useState(0);
-  const [timerPaused,setTimerPaused]=useState(false);
-  const [blackout,setBlackout]=useState(false);
-  const blackoutRef=useRef(false);
-  blackoutRef.current=blackout;
-  const [popupOpen,setPopupOpen]=useState(false);
-  const [error,setError]=useState("");
-  const popup=useRef<Window|null>(null);
-  const channel=useRef<BroadcastChannel|null>(null);
-  const sid=useMemo(()=>crypto.randomUUID(),[]);
-  const modal=useRef<HTMLDivElement>(null);
-  const posRef=useRef(position);
-  posRef.current=position;
-  const next=useCallback(()=>{
-    if(busyRef.current)return;
-    setPosition(p=>nextPosition(docs,p));
-  },[docs]);
-  const previous=useCallback(()=>{
-    if(busyRef.current)return;
-    setPosition(p=>previousPosition(docs,p));
-  },[docs]);
-  const close=useCallback(()=>{
-    channel.current?.postMessage({type:"close",sessionId:sid} satisfies Message);
-    try{popup.current?.close();}catch{/* browser may restrict popup close */}
-    if(document.fullscreenElement===modal.current)void document.exitFullscreen().catch(()=>{});
+  const documents = useMemo(() => snapshot.slides.map(s => s.document), [snapshot]);
+  const first = Math.max(0, snapshot.slides.findIndex(s => s.id === initialSlideId));
+  const [position, setPosition] = useState<PlaybackPosition>({ slide: first, reveal: 0 });
+  const [blackout, setBlackout] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [speakerOpen, setSpeakerOpen] = useState(Boolean(initialPopup && !initialPopup.closed));
+  const [fullscreenError, setFullscreenError] = useState("");
+  const channel = useRef<BroadcastChannel | null>(null);
+  const popup = useRef<Window | null>(initialPopup ?? null);
+  const positionRef = useRef(position);
+  const blackoutRef = useRef(blackout);
+  const busyRef = useRef(busy);
+  const enteredFullscreen = useRef(Boolean(document.fullscreenElement));
+  const ending = useRef(false);
+  positionRef.current = position;
+  blackoutRef.current = blackout;
+  busyRef.current = busy;
+
+  const next = useCallback(() => {
+    if (!busyRef.current) setPosition(old => nextPosition(documents, old));
+  }, [documents]);
+  const previous = useCallback(() => {
+    if (!busyRef.current) setPosition(old => previousPosition(documents, old));
+  }, [documents]);
+
+  const close = useCallback(() => {
+    if (ending.current) return;
+    ending.current = true;
+    channel.current?.postMessage({ type: "close", sessionId } satisfies PresenterMessage);
+    try { popup.current?.close(); } catch { /* blocked cross-window close */ }
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     onClose();
-  },[sid,onClose]);
-  useEffect(()=>{
-    const ch=new BroadcastChannel("singe-projection:"+sid);
-    channel.current=ch;
-    ch.onmessage=(event:MessageEvent<Message>)=>{
-      const data=event.data;
-      if(!data||data.sessionId!==sid)return;
-      if(data.type==="hello"){
-        ch.postMessage({type:"init",sessionId:sid,title:snapshot.title,
-          slides:snapshot.slides.map(s=>({id:s.id,document:s.document})),
-          position:posRef.current,blackout:blackoutRef.current} satisfies Message);
-      }else if(data.type==="command"){
-        if(data.command==="next")next();
-        if(data.command==="previous")previous();
-        if(data.command==="toggleBlackout")setBlackout(value=>!value);
-      }
-    };
-    return()=>{ch.close();channel.current=null;};
-  },[sid,snapshot,next,previous]);
-  useEffect(()=>{
-    channel.current?.postMessage({type:"state",sessionId:sid,position,blackout} satisfies Message);
-  },[position,blackout,sid]);
-  useEffect(()=>{
-    if(timerPaused)return;
-    const clock=window.setInterval(()=>setSeconds(v=>v+1),1000);
-    return()=>window.clearInterval(clock);
-  },[timerPaused]);
-  useEffect(()=>{
-    const handle=(event:KeyboardEvent)=>{
-      const target=event.target;
-      if(target instanceof HTMLElement&&target.closest("input,textarea,select,[contenteditable=true]"))return;
-      if(["ArrowRight","PageDown"," ","Enter"].includes(event.key)){
-        event.preventDefault();next();
-      }else if(["ArrowLeft","PageUp","Backspace"].includes(event.key)){
-        event.preventDefault();previous();
-      }else if(event.key==="Home"){
-        event.preventDefault();setPosition({slide:0,reveal:0});
-      }else if(event.key==="End"){
-        event.preventDefault();setPosition(p=>({slide:snapshot.slides.length-1,
-          reveal:buildPlaybackPlan(docs[snapshot.slides.length-1]!.animations).clicks.length}));
-      }else if(event.key.toLowerCase()==="f"&&!event.ctrlKey&&!event.metaKey){
-        event.preventDefault();if(!document.fullscreenElement)void modal.current?.requestFullscreen().catch(()=>{});
-      }else if(event.key.toLowerCase()==="b"&&!event.ctrlKey&&!event.metaKey){
-        event.preventDefault();setBlackout(value=>!value);
-      }else if(event.key.toLowerCase()==="g"&&!event.ctrlKey&&!event.metaKey){
-        event.preventDefault();
-        const requested=window.prompt("Aller à la diapositive (1 à "+snapshot.slides.length+")",String(posRef.current.slide+1));
-        if(requested!==null){
-          const index=Number(requested)-1;
-          if(Number.isInteger(index)&&index>=0&&index<snapshot.slides.length)
-            setPosition({slide:index,reveal:0});
+  }, [onClose, sessionId]);
+
+  useEffect(() => {
+    const bus = new BroadcastChannel(presenterChannel(sessionId));
+    channel.current = bus;
+    bus.onmessage = (event: MessageEvent<PresenterMessage>) => {
+      const message = event.data;
+      if (!message || message.sessionId !== sessionId) return;
+      if (message.type === "hello" && mode === "speaker") {
+        bus.postMessage({
+          type: "init", sessionId, title: snapshot.title, slides: snapshot.slides,
+          position: positionRef.current, blackout: blackoutRef.current, busy: busyRef.current
+        } satisfies PresenterMessage);
+      } else if (message.type === "command" && mode === "speaker") {
+        if (message.command === "next") next();
+        if (message.command === "previous") previous();
+        if (message.command === "toggleBlackout") setBlackout(value => !value);
+        if (message.command === "goto" && !busyRef.current &&
+          typeof message.slide === "number" && Number.isInteger(message.slide) &&
+          message.slide >= 0 && message.slide < documents.length) {
+          setPosition(gotoSlide(documents, message.slide));
         }
-      }else if(event.key==="Escape"&&!document.fullscreenElement){
-        event.preventDefault();close();
       }
     };
-    window.addEventListener("keydown",handle,true);
-    return()=>window.removeEventListener("keydown",handle,true);
-  },[docs,next,previous,snapshot.slides.length,close]);
-  function openProjection(){
-    const dest="/projection#"+encodeURIComponent(sid);
-    const opened=window.open(dest,"diaporama-projection-"+sid,"popup=yes,width=1440,height=900");
-    if(!opened){setError("Le navigateur a bloqué la fenêtre. Autorisez les pop-ups pour ce site.");return;}
-    popup.current=opened;setPopupOpen(true);setError("");
+    return () => { bus.close(); if (channel.current === bus) channel.current = null; };
+  }, [mode, sessionId, snapshot, documents, next, previous]);
+
+  useEffect(() => {
+    channel.current?.postMessage({
+      type: "state", sessionId, position, blackout, busy
+    } satisfies PresenterMessage);
+  }, [sessionId, position, blackout, busy]);
+
+  useEffect(() => {
+    if (mode !== "speaker") return;
+    const check = () => setSpeakerOpen(Boolean(popup.current && !popup.current.closed));
+    check();
+    const timer = window.setInterval(check, 1000);
+    return () => window.clearInterval(timer);
+  }, [mode]);
+
+  useEffect(() => {
+    const onFullscreen = () => {
+      if (document.fullscreenElement) enteredFullscreen.current = true;
+      else if (enteredFullscreen.current) close();
+    };
+    document.addEventListener("fullscreenchange", onFullscreen);
+    // If fullscreen was entered before the component was mounted, retain that state.
+    if (document.fullscreenElement) enteredFullscreen.current = true;
+    return () => document.removeEventListener("fullscreenchange", onFullscreen);
+  }, [close]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.target instanceof HTMLElement &&
+          event.target.closest("input,textarea,select,[contenteditable=true]")) return;
+      if (["ArrowRight", "PageDown", " ", "Enter"].includes(event.key)) {
+        event.preventDefault(); next();
+      } else if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) {
+        event.preventDefault(); previous();
+      } else if (event.key === "Home") {
+        event.preventDefault(); setPosition({ slide: 0, reveal: 0 });
+      } else if (event.key === "End") {
+        event.preventDefault(); setPosition({
+          slide: documents.length - 1,
+          reveal: buildPlaybackPlan(documents[documents.length - 1]!.animations).clicks.length
+        });
+      } else if (event.key.toLowerCase() === "b") {
+        event.preventDefault(); setBlackout(value => !value);
+      } else if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        void fullscreen();
+      } else if (event.key.toLowerCase() === "g") {
+        event.preventDefault();
+        const answer = window.prompt("Aller à la diapositive (1 à " +
+          documents.length + ")", String(positionRef.current.slide + 1));
+        if (answer !== null) {
+          const index = Number(answer) - 1;
+          if (Number.isInteger(index) && index >= 0 && index < documents.length) {
+            setPosition(gotoSlide(documents, index));
+          }
+        }
+      } else if (event.key === "Escape" && !document.fullscreenElement) {
+        event.preventDefault(); close();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [documents, next, previous, close]);
+
+  async function fullscreen() {
+    if (document.fullscreenElement) return;
+    try { await document.documentElement.requestFullscreen(); setFullscreenError(""); }
+    catch { setFullscreenError("Plein écran indisponible. Utilisez F11 ou réessayez."); }
+  }
+
+  function openSpeaker() {
+    if (popup.current && !popup.current.closed) {
+      popup.current.focus(); setSpeakerOpen(true); return;
+    }
+    const opened = window.open("/presenter#" + encodeURIComponent(sessionId),
+      "diaporama-presentateur-" + sessionId, "popup=yes,width=1050,height=740");
+    if (!opened) { setSpeakerOpen(false); return; }
+    popup.current = opened;
+    setSpeakerOpen(true);
     opened.focus();
   }
-  const active=snapshot.slides[position.slide]!;
-  const following=snapshot.slides[position.slide+1];
-  const groupCount=buildPlaybackPlan(active.document.animations).clicks.length;
-  return <div className="presenter-overlay" role="dialog" aria-modal="true" aria-label="Mode présentateur" ref={modal}>
-    <header className="presenter-topbar">
-      <div><strong>{snapshot.title}</strong>
-        <span>Diapositive {position.slide+1} / {snapshot.slides.length} · apparition {position.reveal} / {groupCount}</span></div>
-      <div className="presenter-top-actions">
-        <span className="presenter-clock" aria-label="Durée de présentation">{formatSeconds(seconds)}</span>
-        <button className="subtle-btn" onClick={()=>setTimerPaused(value=>!value)}>{timerPaused?"Reprendre":"Pause"}</button>
-        <button className="subtle-btn" onClick={()=>setSeconds(0)} title="Remettre le chronomètre à zéro">↺</button>
-        <button className="subtle-btn" onClick={()=>setBlackout(value=>!value)}
-          aria-pressed={blackout}>{blackout?"Rallumer l'écran":"Écran noir (B)"}</button>
-        <button className="subtle-btn" onClick={openProjection}>{popupOpen?"Réouvrir l'écran public":"Ouvrir l'écran public"}</button>
-        <button className="subtle-btn" onClick={()=>void modal.current?.requestFullscreen().catch(()=>{})}>Plein écran</button>
-        <button className="subtle-btn" onClick={close} aria-label="Quitter la présentation">Quitter</button>
-      </div>
-    </header>
-    <div className="presenter-content">
-      <div className="presenter-main-stage">
-        <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
-          onBusyChange={setBusy} title={"Diapositive "+(position.slide+1)}/>
-        {blackout&&<div aria-label="Écran public noir" style={{position:"absolute",inset:"0 0 52px",background:"#000",
-          pointerEvents:"none",zIndex:3}}/>}
-        <div className="presenter-controls">
-          <button aria-label="Étape précédente" onClick={previous} disabled={busy||(position.slide===0&&position.reveal===0)}>← Précédent</button>
-          <span>{busy?"Animation en cours…":position.reveal<groupCount?"Cliquez pour révéler l'idée suivante":"Avancer vers la diapositive suivante"}</span>
-          <button aria-label="Étape suivante" onClick={next} disabled={busy||(position.slide===snapshot.slides.length-1&&position.reveal===groupCount)}>Suivant →</button>
-        </div>
-      </div>
-      <aside className="presenter-side">
-        <section className="presenter-notes">
-          <span className="presenter-overline">NOTES DU PRÉSENTATEUR</span>
-          <div className="presenter-notes-text">{active.notes?.trim()||"Aucune note pour cette diapositive."}</div>
-        </section>
-        <section className="presenter-next">
-          <span className="presenter-overline">DIAPOSITIVE SUIVANTE</span>
-          {following?<div className="presenter-next-slide">
-            <SlideThumbnail document={following.document} index={position.slide+2}/>
-          </div>:<p>Fin du diaporama</p>}
-        </section>
-        <section className="presenter-shortcuts">
-          <span className="presenter-overline">RACCOURCIS</span>
-          <p>→ ou Espace : révéler / avancer<br/>← : revenir<br/>G : aller à une diapositive<br/>B : écran noir<br/>F : plein écran<br/>Échap : quitter</p>
-          {popupOpen&&<p>La fenêtre publique affiche uniquement les diapositives. Les notes restent ici.</p>}
-          {error&&<p role="alert" className="presenter-error">{error}</p>}
-        </section>
-      </aside>
-    </div>
-  </div>;
+
+  const active = snapshot.slides[position.slide]!;
+  const count = buildPlaybackPlan(active.document.animations).clicks.length;
+  const atEnd = position.slide === snapshot.slides.length - 1 && position.reveal === count;
+
+  return <main className="presentation-public" role="dialog" aria-modal="true"
+      aria-label="Projection publique des diapositives">
+    <ProjectionStage slide={active} reveal={position.reveal} onAdvance={next}
+      onBusyChange={setBusy} title={"Diapositive " + (position.slide + 1)}/>
+    {blackout && <div className="presentation-blackout" role="status"
+      aria-label="Écran public noir" onClick={() => setBlackout(false)}/>}
+    <nav className="presentation-public-toolbar" aria-label="Commandes de projection">
+      <button aria-label="Diapositive ou apparition précédente" onClick={previous}
+        disabled={busy || (position.slide === 0 && position.reveal === 0)}>←</button>
+      <span aria-label="Position dans la présentation">{position.slide + 1} / {snapshot.slides.length}</span>
+      <button aria-label="Diapositive ou apparition suivante" onClick={next}
+        disabled={busy || atEnd}>→</button>
+      {mode === "speaker" && <button onClick={openSpeaker}>
+        {speakerOpen ? "Afficher les notes privées" : "Ouvrir les notes privées"}
+      </button>}
+      <button onClick={() => void fullscreen()} title="Afficher les diapositives en plein écran">Plein écran</button>
+      <button onClick={close}>Quitter</button>
+    </nav>
+    {mode === "speaker" && !speakerOpen && <aside className="presentation-speaker-warning"
+      role="status">
+      <strong>Fenêtre du présentateur non ouverte</strong>
+      <span>Autorisez les fenêtres pop-up pour afficher vos notes séparément.</span>
+      <button onClick={openSpeaker}>Ouvrir les notes privées</button>
+    </aside>}
+    {fullscreenError && <div className="presentation-fullscreen-error" role="alert">{fullscreenError}</div>}
+  </main>;
 }

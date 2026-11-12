@@ -2,10 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { AudienceWindow } from "./presenter/AudienceWindow";
+import { PresenterConsole } from "./presenter/PresenterConsole";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {window.location.pathname==="/projection"?<AudienceWindow/>:<App />}
+    {window.location.pathname==="/presenter"?<PresenterConsole/>:
+      window.location.pathname==="/projection"?<AudienceWindow/>:<App />}
   </StrictMode>
 );
