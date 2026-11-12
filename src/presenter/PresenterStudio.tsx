@@ -49,8 +49,13 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
     ending.current = true;
     channel.current?.postMessage({ type: "close", sessionId } satisfies PresenterMessage);
     try { popup.current?.close(); } catch { /* blocked cross-window close */ }
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    onClose();
+    // Do not mount another presentation while the previous fullscreen session
+    // is still exiting. Its late fullscreenchange could close the next session.
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {}).finally(onClose);
+    } else {
+      onClose();
+    }
   }, [onClose, sessionId]);
 
   useEffect(() => {
