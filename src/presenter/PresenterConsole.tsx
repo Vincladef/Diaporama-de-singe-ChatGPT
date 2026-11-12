@@ -70,9 +70,9 @@ export function PresenterConsole() {
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       if (event.target instanceof HTMLElement &&
           event.target.closest("input,select,textarea,[contenteditable=true]")) return;
-      if (["ArrowRight", "PageDown", " ", "Enter"].includes(event.key)) {
+      if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(event.key)) {
         event.preventDefault(); send("next");
-      } else if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) {
+      } else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(event.key)) {
         event.preventDefault(); send("previous");
       } else if (event.key.toLowerCase() === "b") {
         event.preventDefault(); send("toggleBlackout");
