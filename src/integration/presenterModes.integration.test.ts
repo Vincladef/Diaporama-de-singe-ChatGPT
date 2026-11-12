@@ -73,7 +73,9 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     assert.equal(await page.locator(".presentation-public").count(), 1);
     assert.equal(await page.locator(".presenter-console-notes").count(), 0);
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
-    await popup.getByRole("button", { name: "Suivant →" }).click();
+    // These slides contain click-by-click animation cues, so use the explicit
+    // slide selector to test inter-window navigation independently of reveals.
+    await popup.locator("#presenter-slide-select").selectOption("1");
     await popup.getByText("NOTE_SUIVANTE_PRIVEE_456").waitFor({ timeout: 12000 });
     await page.locator(".presentation-public-toolbar").getByText("2 / 2").waitFor({ timeout: 12000 });
     await popup.close();
