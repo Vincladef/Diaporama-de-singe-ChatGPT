@@ -74,6 +74,8 @@ test("public fullscreen has no visible notes; speaker notes stay in separate win
     assert.equal(await page.locator(".presentation-public").getByText("NOTE_PRIVEE_CONFIDENTIELLE_123").count(), 0);
     await page.locator(".presentation-public-toolbar").getByRole("button", { name: "Quitter" })
       .click({ force: true });
+    await page.locator(".presentation-public").waitFor({ state: "detached" });
+    await page.waitForFunction(() => !document.fullscreenElement);
 
     // Speaker mode: the original tab remains public; popup alone shows the notes.
     await page.locator(".slides-present-options > summary").click();
