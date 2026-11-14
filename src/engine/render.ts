@@ -1,4 +1,5 @@
 import type { SlideDocument, SlideElement } from "../domain/slide.ts";
+import {getSlideTheme} from "../editor/slideThemes.ts";
 
 /** Isolated, deterministic rendering. The consuming iframe MUST use sandbox="" without allow-scripts. */
 function escapeHtml(value: string): string {
@@ -49,12 +50,13 @@ function renderObjects(document: SlideDocument): string {
 }
 export function renderSlideHtml(document: SlideDocument): string {
   const { width, height } = document.canvas;
+  const theme=getSlideTheme(document.themeId);
   const free = document.mode === "structured" ? undefined : document.freeform;
   // Prevent user CSS from escaping the style element. User HTML may be arbitrary inside the sandbox.
   const css = (free?.css ?? "").replace(/<\/style/gi, "<\\/style");
   const body = (free ? "<!--singe-free-start-->" + free.html + "<!--singe-free-end-->" : "") + (document.mode === "freeform" ? "" : renderObjects(document));
   const csp = "default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:; media-src https: data: blob:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
   return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + escapeHtml(csp) + '"><meta name="viewport" content="width=' + width + ',initial-scale=1">' +
-    '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative;background:#101715;}' +
+    '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative;background:' + (theme?.background??'#101715') + ';color:' + (theme?.foreground??'#f5f7f3') + ';font-family:' + (theme?.font??'Arial, sans-serif') + ';} :root{--slide-accent:' + (theme?.accent??'#a4bdac') + ';--slide-muted:' + (theme?.muted??'#c6d0c9') + ';}' +
     css + '</style></head><body>' + body + '</body></html>';
 }
