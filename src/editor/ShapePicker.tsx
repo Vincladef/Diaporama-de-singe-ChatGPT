@@ -21,7 +21,7 @@ export const SHAPES:ShapePreset[]=[
 ];
 export function shapeStyles(preset:ShapePreset,color="#a4bdac"):SlideElement["styles"]{
  return {left:"200px",top:"260px",width:(preset.width??520)+"px",height:(preset.height??260)+"px",
-   backgroundColor:color,borderRadius:preset.radius??"0px",clipPath:preset.clipPath??"none"};
+   backgroundColor:color,borderRadius:preset.radius??"0px",...(preset.clipPath?{clipPath:preset.clipPath}:{})};
 }
 export function ShapePicker({onPick,label="+ Forme"}:{onPick:(preset:ShapePreset)=>void;label?:string}){
  return <details className="shape-picker">
