@@ -46,6 +46,8 @@ export const SlideDocumentSchema = z.object({
   elements: z.array(SlideElementSchema).max(1000),
   freeform: z.object({ html: z.string(), css: z.string() }).strict().optional(),
   animations: z.array(AnimationStepSchema).max(1000),
+  /** Optional visual theme, independent from authored elements and freeform CSS. */
+  themeId: z.string().max(48).optional(),
   /** Stable variant selection; saved with the slide so exports use the selected composition. */
   variantSelection: z.object({
     originalId: z.uuid(),
@@ -64,5 +66,6 @@ export function createEmptySlideDocument(): SlideDocument {
     canvas: { width: 1920, height: 1080 },
     elements: [],
     animations: [],
+    themeId: "blanc",
   };
 }
