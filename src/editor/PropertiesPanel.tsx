@@ -164,7 +164,7 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
                 onChange={e=>patchStyle("backgroundColor",e.target.value)}/>
             </label>}
             {selected.type==="shape"&&<ShapePicker label="Changer de forme" onPick={preset=>
-              patchObject({name:preset.name,styles:{...selected.styles,clipPath:preset.clipPath??"none",
+              patchObject({name:preset.name,styles:{...selected.styles,clipPath:preset.clipPath??"",
                 borderRadius:preset.radius??"0px",
                 ...(preset.width?{width:preset.width+"px"}:{}),
                 ...(preset.height?{height:preset.height+"px"}:{})}})}/>}
