@@ -710,6 +710,18 @@ export default function App() {
   },[dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
 
   useEffect(()=>{
+    const handler=(event:ClipboardEvent)=>{
+      if(!draftRef.current||!currentRef.current)return;
+      const target=event.target instanceof HTMLElement?event.target:null;
+      if(target?.closest("input,textarea,select,[contenteditable='true']"))return;
+      const file=Array.from(event.clipboardData?.items??[]).find(item=>item.type.startsWith("image/"))?.getAsFile();
+      if(file){event.preventDefault();void insertImageFromFile(file);}
+    };
+    window.addEventListener("paste",handler);
+    return()=>window.removeEventListener("paste",handler);
+  },[selectedIds,slideId]);
+
+  useEffect(()=>{
     const handler=(e:KeyboardEvent)=>{
       if(!draftRef.current||!currentRef.current)return;
       const target=e.target instanceof HTMLElement?e.target:null;
@@ -764,6 +776,11 @@ export default function App() {
   return (
     <div className={"app app-slides-style "+(current?"is-editing":"is-library")}>
       <main className="workspace">
+         <input type="file" hidden ref={imageInputRef} accept="image/png,image/jpeg,image/webp,image/gif"
+           aria-label="Importer une image" onChange={event=>{
+             const file=event.currentTarget.files?.[0];event.currentTarget.value="";
+             if(file)void insertImageFromFile(file);
+           }}/>
         <header className="topbar slides-header">
           <button className="app-brand" title="Retour à l'accueil"
             aria-label="Diaporama de singe : accueil" onClick={()=>void goHome()}>
@@ -821,16 +838,14 @@ export default function App() {
               <details className="slides-extra-actions">
                 <summary title="Autres actions">⋯</summary>
                 <div>
-                  <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
+
                   <button onClick={()=>{setImportOpen(true);}}>Importer</button>
                   <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
-                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void openPromptPage();}}>Bibliothèque de prompts</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void openPromptPage();}}>Consignes de création (MCP)</button>
                   <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void logout();}}>Quitter</button>
                 </div>
               </details>
             </>}
-            <button className="subtle-btn creation-settings-open" title="Instructions de création des diapositives"
-              onClick={()=>void openPromptPage()}>Bibliothèque de prompts</button>
             <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
           </div>
         </header>
@@ -890,9 +905,9 @@ export default function App() {
                     <div className="visual-toolbar-group">
                       <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"☰ Diapos":"☰ Pages"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
-                      <button onClick={()=>setImageStudioOpen(true)} title="Rechercher des photographies">+ Image</button>
-                       <button onClick={()=>setDiagramStudioOpen(true)} title="Générer un schéma avec des nœuds modifiables">+ Schéma</button>
-                      <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
+                       <button onClick={()=>imageInputRef.current?.click()} title="Importer une image">+ Image</button>
+                       <ShapePicker onPick={preset=>addObject("shape",preset)}/>
+                       <button onClick={()=>setThemeStudioOpen(true)} className="toolbar-theme-button" title="Arrière-plan et thèmes">◐ Thèmes</button>
                     </div>
                     <div className="visual-toolbar-group">
                       <button onClick={undo} disabled={historyRef.current.undo.length===0} title="Annuler (Ctrl+Z)">↶</button>
@@ -921,7 +936,12 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                  <div className="canvas-stage-shell">
+                  <div className="canvas-stage-shell"
+                     onDragOver={event=>{if(Array.from(event.dataTransfer.types).includes("Files"))event.preventDefault();}}
+                     onDrop={event=>{
+                       const file=Array.from(event.dataTransfer.files).find(item=>item.type.startsWith("image/"));
+                       if(file){event.preventDefault();void insertImageFromFile(file);}
+                     }}>
                     <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
                       onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
                   </div>
@@ -963,8 +983,9 @@ export default function App() {
                     onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>:
                   <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                     onChange={editDocument} tab={tab} onTabChange={setTab}
-                    onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                    onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
+                    onAdd={type=>addObject(type)} onAddShape={preset=>addObject("shape",preset)}
+                     onDelete={removeSelection} onArrange={arrangeSelection}
+                     onOpenImages={()=>imageInputRef.current?.click()} onGroup={groupSelection}/>}
               </section>}
             </div>
             <nav className="mobile-editor-navigation" aria-label="Navigation de l'éditeur sur téléphone">
@@ -991,16 +1012,11 @@ export default function App() {
             </nav>
           </div>
         )}
-
-        {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
-          onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
           onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
-        {diagramStudioOpen&&current&&<DiagramStudio onClose={()=>setDiagramStudioOpen(false)}
-          onCreate={createDiagramSlide}/>}
-        {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
-          selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
-          onPick={chooseImage}/>}
+         {themeStudioOpen&&draft&&current&&<ThemeStudio currentTheme={draft.themeId}
+           slideCount={current.slides.length} busy={busy} onClose={()=>setThemeStudioOpen(false)}
+           onApply={(id,scope)=>void applyTheme(id,scope)}/>}
         {historyStudioOpen&&token&&slideId&&current&&active&&<HistoryStudio key={slideId} token={token}
           slideId={slideId} revision={active.revision} dirty={dirty} onClose={()=>setHistoryStudioOpen(false)}
           onRestored={async()=>{await loadDeck(current.presentation.id,slideId);await refreshList();}}/>}
