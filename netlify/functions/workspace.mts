@@ -177,7 +177,7 @@ export default async function workspace(request: Request): Promise<Response> {
       return result({ok:true,reference:await addCreationReference(file.name,new Uint8Array(await file.arrayBuffer()))},201);
     }
     const body = await request.text();
-    if (body.length > 1800000) return result({ ok: false, error: "payload_too_large" }, 413);
+    if (body.length > 5200000) return result({ ok: false, error: "payload_too_large" }, 413);
     let data: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(body);

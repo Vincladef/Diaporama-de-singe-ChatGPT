@@ -157,9 +157,9 @@ test("real built React app is usable on phones: library, editor, tabs, tools, va
      const end=await fitCheck(page,"closed-"+size.name);
      assert.ok(end.maxScrollWidth<=size.width+2,"no overflow after interactions");
      await page.locator(".slides-extra-actions summary").click();
-     await page.getByRole("button",{name:"Bibliothèque de prompts"}).waitFor({timeout:5000});
+     await page.getByRole("button",{name:"Consignes de création (MCP)"}).waitFor({timeout:5000});
      await page.getByRole("button",{name:"Quitter"}).waitFor({timeout:5000});
-     await page.getByRole("button",{name:"Bibliothèque de prompts"}).click();
+     await page.getByRole("button",{name:"Consignes de création (MCP)"}).click();
      await page.getByRole("heading",{name:"Socle général"}).waitFor({timeout:5000});
      await page.getByRole("button",{name:/Styles graphiques/}).click();
      await page.getByRole("button",{name:/Voir l.exemple 2 de Éditorial suisse/}).click();
@@ -221,7 +221,9 @@ test("prompt gallery uses exactly two columns on desktop and loads its SVG examp
   const page=await browser.newPage({viewport:{width:1540,height:900}});
   await mockPrivateWorkspace(page);
   await page.goto("http://127.0.0.1:5194/",{waitUntil:"domcontentloaded"});
-  await page.getByRole("button",{name:"Bibliothèque de prompts"}).click();
+  await page.locator(".library-deck-open").first().click();
+  await page.locator(".slides-extra-actions summary").click();
+  await page.getByRole("button",{name:"Consignes de création (MCP)"}).click();
   await page.getByRole("button",{name:/Styles graphiques/}).click();
   const grid=page.locator(".prompt-card-grid");
   await grid.waitFor();

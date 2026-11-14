@@ -5,17 +5,16 @@ import { AnimationTimeline } from "./editor/AnimationTimeline";
 import { PresenterStudio, type PresentMode } from "./presenter/PresenterStudio";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
 import { SlideThumbnail } from "./editor/SlideThumbnail";
-import { ImageStudio } from "./editor/ImageStudio";
-import { DiagramStudio } from "./editor/DiagramStudio";
+import { ThemeStudio } from "./editor/ThemeStudio";
+import { getSlideTheme } from "./editor/slideThemes";
+import { ShapePicker, shapeStyles, type ShapePreset } from "./editor/ShapePicker";
 import { VariantsStudio } from "./editor/VariantsStudio";
 import { VariantGallery, useSlideVariants, useVariantKeyboard, type VariantChoice } from "./editor/VariantDock";
 import { SpeakerNotesPane } from "./editor/SpeakerNotesPane";
 import { HistoryStudio } from "./editor/HistoryStudio";
 import { ImportStudio } from "./import/ImportStudio";
-import { ImprovementStudio } from "./improve/ImprovementStudio";
 import { HomeLibrary } from "./home/HomeLibrary";
 import { CreationInstructionsStudio } from "./editor/CreationInstructionsStudio";
-import type { ImageCandidate } from "./images/search";
 import { alignElements, distributeElements, duplicateElements, transformBox, withElementBoxes, worldBox, type Box } from "./editor/geometry";
 import { buildPowerPoint, exportPowerPoint, type ExportReport } from "./export/pptx";
 import { buildHtmlArchive } from "./export/html";
@@ -45,8 +44,8 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<InspectorTab>("design");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [imageStudioOpen,setImageStudioOpen]=useState(false);
-  const [diagramStudioOpen,setDiagramStudioOpen]=useState(false);
+  const [themeStudioOpen,setThemeStudioOpen]=useState(false);
+  const imageInputRef=useRef<HTMLInputElement>(null);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
   const [previewVariant,setPreviewVariant]=useState<VariantChoice|null>(null);
   const [variantRefreshKey,setVariantRefreshKey]=useState(0);
@@ -69,7 +68,6 @@ export default function App() {
       void document.documentElement.requestFullscreen().catch(()=>{});
   }
   const [importOpen,setImportOpen]=useState(false);
-  const [improveOpen,setImproveOpen]=useState(false);
   const [creationSettingsOpen,setCreationSettingsOpen]=useState(
     ()=>new URLSearchParams(window.location.search).get("view")==="prompts");
   useEffect(()=>{
@@ -304,20 +302,6 @@ export default function App() {
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
   }
-  async function createDiagramSlide(document:SlideDocument,sourceNotes:string){
-    if(!current||!await flushPending())return;
-    const presentationId=current.presentation.id;
-    setBusy(true);setError("");
-    try{
-      const created=await command<{slide:{id:string}}>(token,{action:"addSlide",presentationId});
-      if(!created.slide?.id)throw Error("La nouvelle diapositive n'a pas été créée.");
-      await command(token,{action:"saveSlide",id:created.slide.id,revision:1,document,
-        notes:sourceNotes.slice(0,30000)});
-      await loadDeck(presentationId,created.slide.id);
-      await refreshList();setDiagramStudioOpen(false);
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
-  }
   function editDocument(next:SlideDocument,key="change"){
     const previous=draftRef.current;
     if(previous===next)return;
@@ -345,52 +329,78 @@ export default function App() {
     const freeform = { html: draft.freeform?.html ?? "", css: draft.freeform?.css ?? "", [part]: value };
     editDocument({ ...draft, freeform, mode: draft.elements.length ? "hybrid" : "freeform" });
   }
-  function addObject(type: "text" | "image" | "shape") {
-    if (!draft) return;
-    const src = type === "image" ? window.prompt("Adresse HTTPS de l'image") : null;
-    if (type === "image" && !src) return;
-    const id = crypto.randomUUID();
-    const element: SlideElement = {
-      id, type,
-      ...(type === "text" ? { text: "Nouveau texte" } : {}),
-      ...(type === "image" ? { src: src ?? "" } : {}),
-      styles: type === "text"
-        ? { top: "120px", left: "130px", fontSize: "84px", fontFamily: "Georgia, serif", color: "#192a21", width: "1450px" }
-        : type === "image"
-        ? { top: "220px", left: "130px", width: "840px", height: "500px", objectFit: "cover" }
-        : { top: "260px", left: "200px", width: "520px", height: "260px", backgroundColor: "#a4bdac", borderRadius: "8px" },
-    };
-    editDocument({ ...draft, mode: draft.mode === "freeform" ? "hybrid" : draft.mode, elements: [...draft.elements, element] });
+  function addObject(type:"text"|"image"|"shape",preset?:ShapePreset){
+    const doc=draftRef.current;if(!doc)return;
+    if(type==="image"){imageInputRef.current?.click();return;}
+    const id=crypto.randomUUID(),theme=getSlideTheme(doc.themeId);
+    const element:SlideElement={id,type,
+      ...(type==="text"?{text:"Nouveau texte"}:{name:preset?.name??"Rectangle"}),
+      styles:type==="text"?{top:"120px",left:"130px",width:"1450px",fontSize:"84px",
+        color:theme?.foreground??"#192a21",fontFamily:theme?.font??"Georgia, serif"}
+        :shapeStyles(preset??{id:"rectangle",name:"Rectangle"},theme?.accent??"#a4bdac")};
+    editDocument({...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,elements:[...doc.elements,element]},"insert");
     setTab("design");setSelectedIds([id]);
   }
-  function chooseImage(photo:ImageCandidate) {
-    const doc=draftRef.current;
-    if(!doc||!current)return;
+  async function insertImageFromFile(file:File){
+    if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)){setError("Choisissez une image JPG, PNG, WebP ou GIF.");return;}
+    if(file.size>25*1024*1024){setError("L'image dépasse 25 Mo.");return;}
     try{
-      if(new URL(photo.imageUrl).protocol!=="https:")throw Error("L'image doit utiliser une adresse HTTPS.");
-      const single=selectedIds.length===1?doc.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined;
-      const id=single?.id??crypto.randomUUID();
-      const focalPosition=photo.focalX!==undefined&&photo.focalY!==undefined
-        ?Math.round(photo.focalX)+"% "+Math.round(photo.focalY)+"%":undefined;
-      const next:SlideDocument=single?
-        {...doc,elements:doc.elements.map(e=>e.id===id?{...e,src:photo.imageUrl,
-          styles:{...e.styles,...(focalPosition?{objectPosition:focalPosition}:{})}}:e)}:
-        {...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,
-          elements:[...doc.elements,{id,type:"image",src:photo.imageUrl,
-            styles:{left:"120px",top:"210px",width:"1000px",height:"600px",objectFit:"cover",objectPosition:focalPosition??"50% 50%"}}]};
-      editDocument(next,"photo");
-      setSelectedIds([id]);setTab("design");setImageStudioOpen(false);
-      if(photo.provider==="unsplash"&&photo.downloadLocation){
-        void fetch("/.netlify/functions/image-search",{method:"POST",cache:"no-store",
-          headers:{authorization:"Bearer "+token,"Content-Type":"application/json"},
-          body:JSON.stringify({action:"trackUnsplash",downloadLocation:photo.downloadLocation})
-        }).catch(()=>{});
+      const bitmap=await createImageBitmap(file);let data="",width=0,height=0;
+      try{
+        const ratio=Math.min(1,1800/Math.max(bitmap.width,bitmap.height));
+        width=Math.max(1,Math.round(bitmap.width*ratio));
+        height=Math.max(1,Math.round(bitmap.height*ratio));
+        const canvas=document.createElement("canvas");
+        canvas.width=width;canvas.height=height;
+        const ctx=canvas.getContext("2d");
+        if(!ctx)throw Error("Impossible de préparer l'image.");
+        ctx.drawImage(bitmap,0,0,width,height);
+        let quality=.82;
+        data=canvas.toDataURL("image/webp",quality);
+        while(data.length>720000&&quality>.48){
+          quality-=.1;data=canvas.toDataURL("image/webp",quality);
+        }
+        while(data.length>720000&&Math.max(canvas.width,canvas.height)>520){
+          const ratio=.82;canvas.width=Math.round(canvas.width*ratio);
+          canvas.height=Math.round(canvas.height*ratio);
+          ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+          data=canvas.toDataURL("image/webp",.62);
+        }
+        if(data.length>900000)throw Error("L'image demeure trop lourde après compression.");
+      }finally{bitmap.close();}
+      const doc=draftRef.current;if(!doc)return;
+      const existing=selectedIds.length===1?doc.elements.find(el=>el.id===selectedIds[0]&&el.type==="image"):undefined;
+      const id=existing?.id??crypto.randomUUID();
+      const elements:SlideElement[]=existing
+        ?doc.elements.map(el=>el.id===id?{...el,src:data,alt:file.name}:el)
+        :[...doc.elements,{id,type:"image",src:data,alt:file.name,
+          styles:{left:"180px",top:"180px",width:Math.min(1150,Math.max(350,width))+"px",
+            height:Math.min(700,Math.max(200,height))+"px",objectFit:"contain"}}];
+      editDocument({...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,elements},"image-file");
+      setSelectedIds([id]);setTab("design");
+    }catch(error){setError(error instanceof Error?error.message:"Impossible d'ouvrir l'image.");}
+  }
+  async function applyTheme(themeId:string,scope:"slide"|"deck"){
+    const doc=draftRef.current,deck=currentRef.current;
+    if(!doc||!deck)return;
+    if(scope==="slide"){
+      editDocument({...doc,themeId},"theme");setThemeStudioOpen(false);return;
+    }
+    if(!await flushPending())return;
+    setBusy(true);setError("");
+    const id=deck.presentation.id,selected=slideId;
+    try{
+      const fresh=await readPresentation(token,id);
+      for(const slide of fresh.slides){
+        await command(token,{action:"saveSlide",id:slide.id,revision:slide.revision,
+          document:{...slide.document,themeId},notes:slide.notes??""});
       }
-      void command(token,{action:"saveAssets",presentationId:current.presentation.id,assets:[{
-        url:photo.imageUrl,label:photo.title,source:photo.pageUrl,
-        rights:photo.attribution+" ; "+photo.license,
-      }]}).catch(()=>setError("Image insérée, mais sa référence n'a pas pu être ajoutée au catalogue."));
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
+      setThemeStudioOpen(false);
+    }catch(error){setError(error instanceof Error?error.message:"Impossible d'appliquer le thème à toute la présentation.");}
+    finally{
+      try{await loadDeck(id,selected??undefined);}catch(error){setError(error instanceof Error?error.message:String(error));}
+      setBusy(false);
+    }
   }
   async function selectVariant(variant:VariantChoice|null):Promise<boolean>{
     if(switchingRef.current||!slideId)return false;
@@ -709,6 +719,18 @@ export default function App() {
   },[dirty,busy,exportBusy,externalChanges,current?.presentation.id,slideId,draft,notes]);
 
   useEffect(()=>{
+    const handler=(event:ClipboardEvent)=>{
+      if(!draftRef.current||!currentRef.current)return;
+      const target=event.target instanceof HTMLElement?event.target:null;
+      if(target?.closest("input,textarea,select,[contenteditable='true']"))return;
+      const file=Array.from(event.clipboardData?.items??[]).find(item=>item.type.startsWith("image/"))?.getAsFile();
+      if(file){event.preventDefault();void insertImageFromFile(file);}
+    };
+    window.addEventListener("paste",handler);
+    return()=>window.removeEventListener("paste",handler);
+  },[selectedIds,slideId]);
+
+  useEffect(()=>{
     const handler=(e:KeyboardEvent)=>{
       if(!draftRef.current||!currentRef.current)return;
       const target=e.target instanceof HTMLElement?e.target:null;
@@ -763,6 +785,11 @@ export default function App() {
   return (
     <div className={"app app-slides-style "+(current?"is-editing":"is-library")}>
       <main className="workspace">
+         <input type="file" hidden ref={imageInputRef} accept="image/png,image/jpeg,image/webp,image/gif"
+           aria-label="Importer une image" onChange={event=>{
+             const file=event.currentTarget.files?.[0];event.currentTarget.value="";
+             if(file)void insertImageFromFile(file);
+           }}/>
         <header className="topbar slides-header">
           <button className="app-brand" title="Retour à l'accueil"
             aria-label="Diaporama de singe : accueil" onClick={()=>void goHome()}>
@@ -820,16 +847,14 @@ export default function App() {
               <details className="slides-extra-actions">
                 <summary title="Autres actions">⋯</summary>
                 <div>
-                  <button onClick={()=>{setImproveOpen(true);}}>Améliorer la présentation</button>
+
                   <button onClick={()=>{setImportOpen(true);}}>Importer</button>
                   <button onClick={()=>{setNewDeckTitle(current.presentation.title);setEditingDeckTitle(true);}}>Renommer</button>
-                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void openPromptPage();}}>Bibliothèque de prompts</button>
+                  <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void openPromptPage();}}>Consignes de création (MCP)</button>
                   <button onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void logout();}}>Quitter</button>
                 </div>
               </details>
             </>}
-            <button className="subtle-btn creation-settings-open" title="Instructions de création des diapositives"
-              onClick={()=>void openPromptPage()}>Bibliothèque de prompts</button>
             <button className="text-btn slides-logout" onClick={()=>void logout()}>Quitter</button>
           </div>
         </header>
@@ -889,9 +914,9 @@ export default function App() {
                     <div className="visual-toolbar-group">
                       <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"☰ Diapos":"☰ Pages"}</button>
                       <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
-                      <button onClick={()=>setImageStudioOpen(true)} title="Rechercher des photographies">+ Image</button>
-                       <button onClick={()=>setDiagramStudioOpen(true)} title="Générer un schéma avec des nœuds modifiables">+ Schéma</button>
-                      <button onClick={()=>addObject("shape")} title="Insérer une forme">+ Forme</button>
+                       <button onClick={()=>imageInputRef.current?.click()} title="Importer une image">+ Image</button>
+                       <ShapePicker onPick={preset=>addObject("shape",preset)}/>
+                       <button onClick={()=>setThemeStudioOpen(true)} className="toolbar-theme-button" title="Arrière-plan et thèmes">◐ Thèmes</button>
                     </div>
                     <div className="visual-toolbar-group">
                       <button onClick={undo} disabled={historyRef.current.undo.length===0} title="Annuler (Ctrl+Z)">↶</button>
@@ -920,7 +945,12 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                  <div className="canvas-stage-shell">
+                  <div className="canvas-stage-shell"
+                     onDragOver={event=>{if(Array.from(event.dataTransfer.types).includes("Files"))event.preventDefault();}}
+                     onDrop={event=>{
+                       const file=Array.from(event.dataTransfer.files).find(item=>item.type.startsWith("image/"));
+                       if(file){event.preventDefault();void insertImageFromFile(file);}
+                     }}>
                     <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
                       onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
                   </div>
@@ -962,8 +992,9 @@ export default function App() {
                     onSelect={variant=>{void selectVariant(variant);}} onCompare={()=>setVariantsStudioOpen(true)}/>:
                   <PropertiesPanel document={draft} selectedIds={selectedIds} onSelect={setSelectedIds}
                     onChange={editDocument} tab={tab} onTabChange={setTab}
-                    onAdd={type=>type==="image"?setImageStudioOpen(true):addObject(type)} onDelete={removeSelection} onArrange={arrangeSelection}
-                    onOpenImages={()=>setImageStudioOpen(true)} onGroup={groupSelection}/>}
+                    onAdd={type=>addObject(type)} onAddShape={preset=>addObject("shape",preset)}
+                     onDelete={removeSelection} onArrange={arrangeSelection}
+                     onOpenImages={()=>imageInputRef.current?.click()} onGroup={groupSelection}/>}
               </section>}
             </div>
             <nav className="mobile-editor-navigation" aria-label="Navigation de l'éditeur sur téléphone">
@@ -990,16 +1021,11 @@ export default function App() {
             </nav>
           </div>
         )}
-
-        {improveOpen&&token&&current&&<ImprovementStudio token={token} detail={current}
-          onClose={()=>setImproveOpen(false)} onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
         {importOpen&&token&&<ImportStudio token={token} onClose={()=>setImportOpen(false)}
           onCreated={async id=>{await refreshList();await loadDeck(id);}}/>}
-        {diagramStudioOpen&&current&&<DiagramStudio onClose={()=>setDiagramStudioOpen(false)}
-          onCreate={createDiagramSlide}/>}
-        {imageStudioOpen&&token&&<ImageStudio token={token} onClose={()=>setImageStudioOpen(false)}
-          selectedImage={selectedIds.length===1?draft?.elements.find(e=>e.id===selectedIds[0]&&e.type==="image"):undefined}
-          onPick={chooseImage}/>}
+         {themeStudioOpen&&draft&&current&&<ThemeStudio currentTheme={draft.themeId}
+           slideCount={current.slides.length} busy={busy} onClose={()=>setThemeStudioOpen(false)}
+           onApply={(id,scope)=>void applyTheme(id,scope)}/>}
         {historyStudioOpen&&token&&slideId&&current&&active&&<HistoryStudio key={slideId} token={token}
           slideId={slideId} revision={active.revision} dirty={dirty} onClose={()=>setHistoryStudioOpen(false)}
           onRestored={async()=>{await loadDeck(current.presentation.id,slideId);await refreshList();}}/>}

@@ -9,6 +9,7 @@ import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 import { buildExportFrames, type RevealExportMode } from "./reveals";
 import { addNativeAnimationsToPptx, canUseNativeAnimations } from "./nativeAnimations";
+import {getSlideTheme} from "../editor/slideThemes";
 
 export type PowerPointMode = "faithful" | "editable";
 export interface ExportProgress { completed: number; total: number; }
@@ -269,7 +270,15 @@ export async function buildPowerPoint(
     const source = deck.slides[frame.sourceIndex]!;
     const document = source.document;
     const slide = pptx.addSlide();
-    slide.background = { color: "FFFFFF" };
+    const theme=getSlideTheme(document.themeId);
+    const swatches=theme?.background.match(/#[0-9a-fA-F]{6}/g)??[];
+    slide.background={color:swatches[0]?.slice(1).toUpperCase()??"FFFFFF"};
+    if(mode==="editable"&&theme?.background.startsWith("linear-gradient(")&&swatches.length>=2){
+      const angle=Number(theme.background.match(/linear-gradient\((\d+)deg/)?.[1]??90);
+      appendNativeShape(pptx,slide,"Fond du thème",{x:0,y:0,w:slideW,h:slideH},{
+        backgroundColor:"linear-gradient("+angle+"deg,"+swatches[0]+" 0%,"+swatches[swatches.length-1]+" 100%)",
+      });
+    }
     if (source.notes?.trim()) slide.addNotes(safeNotes(source.notes));
     const number = frame.sourceIndex + 1;
     const ratio = document.canvas.width / document.canvas.height;
