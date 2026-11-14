@@ -355,9 +355,18 @@ export default function App() {
         const ctx=canvas.getContext("2d");
         if(!ctx)throw Error("Impossible de préparer l'image.");
         ctx.drawImage(bitmap,0,0,width,height);
-        data=canvas.toDataURL("image/webp",.82);
-        if(data.length>2500000)data=canvas.toDataURL("image/webp",.62);
-        if(data.length>3500000)throw Error("L'image demeure trop lourde après compression.");
+        let quality=.82;
+        data=canvas.toDataURL("image/webp",quality);
+        while(data.length>720000&&quality>.48){
+          quality-=.1;data=canvas.toDataURL("image/webp",quality);
+        }
+        while(data.length>720000&&Math.max(canvas.width,canvas.height)>520){
+          const ratio=.82;canvas.width=Math.round(canvas.width*ratio);
+          canvas.height=Math.round(canvas.height*ratio);
+          ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+          data=canvas.toDataURL("image/webp",.62);
+        }
+        if(data.length>900000)throw Error("L'image demeure trop lourde après compression.");
       }finally{bitmap.close();}
       const doc=draftRef.current;if(!doc)return;
       const existing=selectedIds.length===1?doc.elements.find(el=>el.id===selectedIds[0]&&el.type==="image"):undefined;
