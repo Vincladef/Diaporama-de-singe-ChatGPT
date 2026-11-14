@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { elementBox } from "./geometry";
 import { cropCoordinates, changeFilter, readFilter, type ImageFilterKey } from "../images/edit";
+import {ShapePicker,type ShapePreset} from "./ShapePicker";
 
 export type InspectorTab = "design" | "layers" | "html" | "css";
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onAdd: (type:"text"|"image"|"shape") => void;
+  onAddShape?: (preset:ShapePreset)=>void;
   onDelete: () => void;
   onArrange: (direction:"front"|"back"|"forward"|"backward") => void;
   onOpenImages?: () => void;
@@ -28,7 +30,7 @@ function indentCode(e:KeyboardEvent<HTMLTextAreaElement>,apply:(value:string)=>v
   apply(next);
   window.requestAnimationFrame(()=>{if(el.isConnected)el.setSelectionRange(start+2,start+2);});
 }
-export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,onTabChange,onAdd,onDelete,onArrange,onOpenImages,onGroup}:Props) {
+export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,onTabChange,onAdd,onDelete,onArrange,onOpenImages,onGroup,onAddShape}:Props) {
   const [expandedCode,setExpandedCode]=useState<{type:"html"|"css";value:string}|null>(null);
   const [layerQuery,setLayerQuery]=useState("");
   const [renamingId,setRenamingId]=useState<string|null>(null);
@@ -89,7 +91,7 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
           <div className="object-buttons">
             <button onClick={()=>onAdd("text")}>+ Texte</button>
             <button onClick={()=>onAdd("image")}>+ Image</button>
-            <button onClick={()=>onAdd("shape")}>+ Forme</button>
+            {onAddShape?<ShapePicker onPick={onAddShape}/>:<button onClick={()=>onAdd("shape")}>+ Forme</button>}
           </div>
         </div>
         {selected ? <>
@@ -115,10 +117,8 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
               <textarea rows={3} value={selected.text??""} onChange={e=>patchObject({text:e.target.value})}/>
             </label>}
             {selected.type==="image" && <>
-              <button type="button" className="primary" onClick={onOpenImages}>Rechercher ou remplacer une image</button>
-              <label>Adresse de l'image
-                <input type="url" value={selected.src??""} onChange={e=>patchObject({src:e.target.value})}/>
-              </label>
+              <button type="button" className="primary" onClick={onOpenImages}>Remplacer avec un fichier</button>
+              <small>Vous pouvez aussi coller une image avec Ctrl+V dans l'éditeur.</small>
               <label>Description accessible de l'image
                 <input type="text" maxLength={350} value={selected.alt??""}
                   placeholder="Décrire l'information portée par l'image"
@@ -163,6 +163,11 @@ export function PropertiesPanel({document:doc,selectedIds,onSelect,onChange,tab,
               <input aria-label="Couleur de remplissage" type="color" value={cleanHex(selected.styles.backgroundColor,"#a4bdac")}
                 onChange={e=>patchStyle("backgroundColor",e.target.value)}/>
             </label>}
+            {selected.type==="shape"&&<ShapePicker label="Changer de forme" onPick={preset=>
+              patchObject({name:preset.name,styles:{...selected.styles,clipPath:preset.clipPath??"none",
+                borderRadius:preset.radius??"0px",
+                ...(preset.width?{width:preset.width+"px"}:{}),
+                ...(preset.height?{height:preset.height+"px"}:{})}})}/>}
             {selected.type==="shape" && <label>Angles arrondis (px)
               <input type="number" min="0" max="1000" value={parseFloat(String(selected.styles.borderRadius??"0"))||0}
                 onChange={e=>patchStyle("borderRadius",Math.max(0,numeric(e.target.value,0))+"px")}/></label>}
