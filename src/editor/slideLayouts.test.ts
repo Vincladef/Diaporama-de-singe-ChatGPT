@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applySlideLayout, SLIDE_LAYOUTS } from "./slideLayouts.ts";
-import { createEmptySlideDocument } from "../domain/slide.ts";
+import { createEmptySlideDocument, type SlideDocument } from "../domain/slide.ts";
 
 test("native layouts have a unique id and preserve document dimensions",()=>{
   assert.equal(new Set(SLIDE_LAYOUTS.map(layout=>layout.id)).size,SLIDE_LAYOUTS.length);
@@ -20,7 +20,7 @@ test("title and content creates distinct editable text placeholders",()=>{
 });
 test("changing layout preserves existing text, photos, notes-independent HTML, and animations",()=>{
   const empty=createEmptySlideDocument();
-  const doc={...empty,mode:"hybrid" as const,
+  const doc:SlideDocument={...empty,mode:"hybrid",
     elements:[
       {id:"t1",type:"text" as const,text:"Mon titre",styles:{left:"10px",top:"10px"}},
       {id:"p1",type:"image" as const,src:"https://example.org/photo.jpg",styles:{width:"400px"}},
@@ -42,7 +42,7 @@ test("image-caption offers an editable image slot and keeps a pre-existing image
   const out=applySlideLayout(empty,"image-caption");
   assert.equal(out.elements.filter(e=>e.type==="image").length,1);
   assert.equal(out.elements.find(e=>e.type==="image")?.src,undefined);
-  const added={...empty,elements:[{id:"photo",type:"image" as const,src:"https://example.org/p.jpg",styles:{}}]};
+  const added:SlideDocument={...empty,elements:[{id:"photo",type:"image",src:"https://example.org/p.jpg",styles:{}}]};
   assert.equal(applySlideLayout(added,"image-caption").elements.find(e=>e.type==="image")?.id,"photo");
 });
 test("blank layout is a no-op; freeform layout becomes hybrid without flattening",()=>{
