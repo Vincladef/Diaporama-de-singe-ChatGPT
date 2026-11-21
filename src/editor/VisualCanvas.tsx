@@ -225,6 +225,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 onPointerCancel={end}
                 onDoubleClick={e=>{e.stopPropagation();beginInlineEdit(element);}}
               >
+                {element.type==="text"&&!element.text&&<span className="visual-empty-placeholder" aria-hidden="true">{element.name==="Titre"?"Cliquez pour ajouter un titre":"Cliquez pour ajouter du texte"}</span>}
                 {picked && <span className="visual-selection-name">{getVisualLabel(element).slice(0,32)}</span>}
                 {picked && selectedIds.length===1 && handles.map(mode=>(
                   <span key={mode} data-handle={mode} className={"visual-resize-handle handle-"+mode}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
+import { SlidesChrome } from "./editor/SlidesChrome";
+import { applySlideLayout, type LayoutId } from "./editor/slideLayouts";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
 import { PresenterStudio, type PresentMode } from "./presenter/PresenterStudio";
 import { PropertiesPanel, type InspectorTab } from "./editor/PropertiesPanel";
@@ -77,11 +79,13 @@ export default function App() {
   },[]);
   const [animationPanelOpen,setAnimationPanelOpen]=useState(false);
   const [showSlideRail,setShowSlideRail]=useState(()=>!window.matchMedia("(max-width:760px)").matches);
-  const [showInspector,setShowInspector]=useState(()=>window.innerWidth>760);
+  const [showInspector,setShowInspector]=useState(false);
   const [rightPane,setRightPane]=useState<"variants"|"tools">("variants");
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(10);
   const [externalChanges, setExternalChanges] = useState(false);
+  const objectClipboardRef=useRef<SlideElement[]>([]);
+  const pasteCountRef=useRef(0);
   const draftRef = useRef<SlideDocument | null>(null);
   const currentRef = useRef<PresentationDetail | null>(null);
   const dirtyRef = useRef(false);
@@ -287,6 +291,52 @@ export default function App() {
       await refreshList();return true;
     }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }
+  function applyLayout(layout:LayoutId){
+    const currentDoc=draftRef.current;
+    if(!currentDoc)return;
+    const next=applySlideLayout(currentDoc,layout);
+    if(next!==currentDoc){editDocument(next,"layout");setSelectedIds([]);}
+  }
+  async function addSlideWithLayout(layout:LayoutId){
+    const deck=currentRef.current;
+    if(!deck||!await flushPending())return;
+    setBusy(true);setError("");
+    try{
+      const result=await command<{slide?:{id:string}}>(token,{
+        action:"addSlide",presentationId:deck.presentation.id
+      });
+      await loadDeck(deck.presentation.id,result.slide?.id);
+      const base=draftRef.current;
+      if(base)editDocument(applySlideLayout(base,layout),"layout");
+      await refreshList();
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
+  async function pasteObjects(items:SlideElement[]){
+    const doc=draftRef.current;
+    if(!doc||!items.length)return;
+    pasteCountRef.current+=1;
+    const ids=new Map(items.map(e=>[e.id,crypto.randomUUID()]));
+    const offset=24*pasteCountRef.current;
+    const cloned=items.map(e=>({...structuredClone(e),id:ids.get(e.id)!,
+      parentId:e.parentId?(ids.get(e.parentId)??undefined):undefined,
+      groupId:e.groupId?(ids.get(e.groupId)??crypto.randomUUID()):undefined,
+      styles:{...e.styles,
+        left:(parseFloat(String(e.styles.left??"0"))+offset)+"px",
+        top:(parseFloat(String(e.styles.top??"0"))+offset)+"px"}}));
+    editDocument({...doc,elements:[...doc.elements,...cloned]},"paste");
+    setSelectedIds(cloned.map(e=>e.id));
+  }
+  function copyObjects(){
+    const doc=draftRef.current;if(!doc||!selectedIds.length)return;
+    const ids=new Set(selectedIds);
+    objectClipboardRef.current=doc.elements.filter(e=>ids.has(e.id)).map(e=>structuredClone(e));
+    pasteCountRef.current=0;
+    const serialized="SINGE_OBJECTS:"+JSON.stringify(objectClipboardRef.current);
+    if(navigator.clipboard?.writeText)void navigator.clipboard.writeText(serialized).catch(()=>{});
+  }
+  function pasteFromMemory(){void pasteObjects(objectClipboardRef.current);}
+  function cutObjects(){copyObjects();removeSelection();}
   async function slideAction(action: "addSlide" | "duplicateSlide" | "deleteSlide") {
     if (!current || !await flushPending()) return;
     const currentId = current.presentation.id;
@@ -334,8 +384,8 @@ export default function App() {
     if(type==="image"){imageInputRef.current?.click();return;}
     const id=crypto.randomUUID(),theme=getSlideTheme(doc.themeId);
     const element:SlideElement={id,type,
-      ...(type==="text"?{text:"Nouveau texte"}:{name:preset?.name??"Rectangle"}),
-      styles:type==="text"?{top:"120px",left:"130px",width:"1450px",fontSize:"84px",
+      ...(type==="text"?{text:"",name:"Zone de texte"}:{name:preset?.name??"Rectangle"}),
+      styles:type==="text"?{top:(130+Math.floor(doc.elements.length%7)*46)+"px",left:(150+Math.floor(doc.elements.length%7)*38)+"px",width:"1240px",height:"140px",fontSize:"66px",
         color:theme?.foreground??"#192a21",fontFamily:theme?.font??"Georgia, serif"}
         :shapeStyles(preset??{id:"rectangle",name:"Rectangle"},theme?.accent??"#a4bdac")};
     editDocument({...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,elements:[...doc.elements,element]},"insert");
@@ -724,7 +774,27 @@ export default function App() {
       const target=event.target instanceof HTMLElement?event.target:null;
       if(target?.closest("input,textarea,select,[contenteditable='true']"))return;
       const file=Array.from(event.clipboardData?.items??[]).find(item=>item.type.startsWith("image/"))?.getAsFile();
-      if(file){event.preventDefault();void insertImageFromFile(file);}
+      if(file){event.preventDefault();void insertImageFromFile(file);return;}
+      const raw=event.clipboardData?.getData("text/plain")??"";
+      if(raw.startsWith("SINGE_OBJECTS:")){
+        try{
+          const value=JSON.parse(raw.slice("SINGE_OBJECTS:".length)) as SlideElement[];
+          if(Array.isArray(value)&&value.every(e=>e&&typeof e.id==="string"&&typeof e.type==="string")){
+            event.preventDefault();void pasteObjects(value);return;
+          }
+        }catch{/* Invalid external clipboard; leave it untouched. */}
+      }
+      if(raw&&selectedIds.length===0){
+        const doc=draftRef.current;
+        if(doc){
+          event.preventDefault();
+          const id=crypto.randomUUID();
+          editDocument({...doc,elements:[...doc.elements,{id,type:"text",text:raw.slice(0,20000),
+            styles:{left:"180px",top:"190px",width:"1200px",height:"440px",fontSize:"54px",
+              color:"#202124",fontFamily:"Arial, sans-serif",whiteSpace:"pre-wrap"}}]},"paste");
+          setSelectedIds([id]);
+        }
+      }
     };
     window.addEventListener("paste",handler);
     return()=>window.removeEventListener("paste",handler);
@@ -740,6 +810,10 @@ export default function App() {
       if(writing||target?.closest(".slide-list"))return;
       if(mod&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return;}
       if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return;}
+      if(mod&&e.key.toLowerCase()==="c"&&selectedIds.length){e.preventDefault();copyObjects();return;}
+      if(mod&&e.key.toLowerCase()==="x"&&selectedIds.length){e.preventDefault();cutObjects();return;}
+      if(mod&&e.key.toLowerCase()==="v"&&objectClipboardRef.current.length){e.preventDefault();pasteFromMemory();return;}
+      if(mod&&e.key.toLowerCase()==="a"){e.preventDefault();setSelectedIds(draftRef.current.elements.filter(e=>!e.hidden&&!e.locked).map(e=>e.id));return;}
       if(mod&&e.key.toLowerCase()==="d"){e.preventDefault();copySelection();return;}
       if(e.key==="Delete"||e.key==="Backspace"){if(selectedIds.length){e.preventDefault();removeSelection();}return;}
       if(e.key.startsWith("Arrow")&&selectedIds.length){
@@ -888,6 +962,29 @@ export default function App() {
               <div><strong>Archive HTML/CSS prête</strong><button aria-label="Fermer" onClick={()=>setHtmlExportReport(null)}>×</button></div>
               <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>↓ Télécharger le fichier</a>
             </div>}
+            {draft&&<SlidesChrome document={draft} selectedIds={selectedIds} onChange={editDocument}
+              actions={{
+                addSlide:()=>void slideAction("addSlide"),duplicateSlide:()=>void slideAction("duplicateSlide"),
+                deleteSlide:()=>void slideAction("deleteSlide"),
+                layout:applyLayout,addText:()=>addObject("text"),addImage:()=>imageInputRef.current?.click(),
+                addShape:preset=>addObject("shape",preset),
+                undo,redo,canUndo:historyRef.current.undo.length>0,canRedo:historyRef.current.redo.length>0,
+                save:()=>void save(),import:()=>setImportOpen(true),
+                export:()=>void downloadPowerPoint(),copy:copyObjects,paste:pasteFromMemory,
+                duplicate:copySelection,remove:removeSelection,
+                group:()=>groupSelection("group"),ungroup:()=>groupSelection("ungroup"),
+                arrange:arrangeSelection,align:alignSelection,distribute:distributeSelection,
+                openTheme:()=>setThemeStudioOpen(true),
+                openVariants:()=>{setShowInspector(true);setRightPane("variants");},
+                openInspector:()=>{setShowInspector(v=>!v);setRightPane("tools");setTab("design");},
+                openLayers:()=>{setShowInspector(true);setRightPane("tools");setTab("layers");},
+                openHistory:()=>setHistoryStudioOpen(true),
+                openAnimations:()=>setAnimationPanelOpen(v=>!v),
+                openExpert:()=>{setShowInspector(true);setRightPane("tools");setTab("html");},
+                present:()=>beginPresentation("slides"),
+                toggleSlideRail:()=>setShowSlideRail(v=>!v),slideRailVisible:showSlideRail,
+                grid,setGrid,
+              }}/>}
             <div className={"editor-layout"+(!showSlideRail?" slide-rail-collapsed":"")+(!showInspector?" inspector-collapsed":"")}>
               {showSlideRail&&<aside className="slide-rail">
                 <div className="rail-heading"><span>DIAPOSITIVES</span><button onClick={() => void slideAction("addSlide")} disabled={busy}>+</button></div>
@@ -910,41 +1007,6 @@ export default function App() {
               </aside>}
               <section className="editor-main">
                 {draft ? <>
-                  <div className="visual-toolbar" style={previewVariant?{pointerEvents:"none",opacity:.55}:undefined}>
-                    <div className="visual-toolbar-group">
-                      <button onClick={()=>setShowSlideRail(v=>!v)} title="Afficher ou masquer les diapositives">{showSlideRail?"☰ Diapos":"☰ Pages"}</button>
-                      <button onClick={()=>addObject("text")} title="Insérer une zone de texte">+ Texte</button>
-                       <button onClick={()=>imageInputRef.current?.click()} title="Importer une image">+ Image</button>
-                       <ShapePicker onPick={preset=>addObject("shape",preset)}/>
-                       <button onClick={()=>setThemeStudioOpen(true)} className="toolbar-theme-button" title="Arrière-plan et thèmes">◐ Thèmes</button>
-                    </div>
-                    <div className="visual-toolbar-group">
-                      <button onClick={undo} disabled={historyRef.current.undo.length===0} title="Annuler (Ctrl+Z)">↶</button>
-                      <button onClick={redo} disabled={historyRef.current.redo.length===0} title="Rétablir (Ctrl+Y)">↷</button>
-                      <button onClick={copySelection} disabled={!selectedIds.length} title="Dupliquer (Ctrl+D)">⧉</button>
-                      <button onClick={removeSelection} disabled={!selectedIds.length} title="Supprimer (Suppr)">⌫</button>
-                    </div>
-                    <div className="visual-toolbar-group">
-                      <button onClick={()=>{setRightPane("tools");setShowInspector(true);setTab("layers");}} title="Afficher les calques">Calques</button>
-                      <button onClick={()=>setAnimationPanelOpen(v=>!v)} aria-pressed={animationPanelOpen}>Animations</button>
-                      <details className="editor-more">
-                        <summary>Autres outils ▾</summary>
-                        <div className="editor-more-menu">
-                          <button onClick={()=>{setRightPane("tools");setShowInspector(true);}}>Propriétés des objets</button>
-                          <button onClick={()=>setHistoryStudioOpen(true)}>Historique</button>
-                          <button onClick={()=>setShowInspector(v=>!v)}>{showInspector?"Masquer le panneau latéral":"Afficher le panneau latéral"}</button>
-                          <button disabled={!selectedIds.length} onClick={animateSelection}>+ Animer la sélection</button>
-                          <button disabled={selectedIds.length!==2} onClick={connectSelection}>Relier les objets →</button>
-                          <select aria-label="Aligner les objets" defaultValue="" disabled={selectedIds.length<2}
-                            onChange={e=>{if(e.target.value==="distribute-h")distributeSelection("horizontal");else if(e.target.value==="distribute-v")distributeSelection("vertical");else if(e.target.value)alignSelection(e.target.value as "left"|"center"|"right"|"top"|"middle"|"bottom");e.target.value="";}}>
-                            <option value="">Aligner les objets</option><option value="left">À gauche</option><option value="center">Centrer horizontalement</option>
-                            <option value="right">À droite</option><option value="top">En haut</option><option value="middle">Centrer verticalement</option><option value="bottom">En bas</option><option value="distribute-h">Répartir horizontalement</option><option value="distribute-v">Répartir verticalement</option>
-                          </select>
-                          <label className="snap-control"><input type="checkbox" checked={grid>0} onChange={e=>setGrid(e.target.checked?10:0)}/> Grille d'alignement</label>
-                        </div>
-                      </details>
-                    </div>
-                  </div>
                   <div className="canvas-stage-shell"
                      onDragOver={event=>{if(Array.from(event.dataTransfer.types).includes("Files"))event.preventDefault();}}
                      onDrop={event=>{
