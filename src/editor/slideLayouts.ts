@@ -11,12 +11,12 @@ export const SLIDE_LAYOUTS = [
   { id:"quote", name:"Citation", description:"Citation et auteur" },
   { id:"image-caption", name:"Image et légende", description:"Image avec texte" },
   { id:"comparison", name:"Comparaison", description:"Deux parties équilibrées" },
-  { id:"three-cards", name:"Trois cartes", description:"Trois zones sous un titre" },
+  { id:"three-cards", name:"Titre et trois cartes", description:"Un titre et trois cartes avec fond" },
 ] as const;
 export type LayoutId = typeof SLIDE_LAYOUTS[number]["id"];
 
 type Slot = { name:string; x:number;y:number;w:number;h:number;size:number;align?:"left"|"center"; weight?:string;type?:"text"|"image" };
-function slotsFor(layout:LayoutId):Slot[] {
+export function layoutPreviewSlots(layout:LayoutId):Slot[] {
   const title:Slot={name:"Titre",x:.085,y:.09,w:.83,h:.14,size:68,weight:"bold"};
   switch(layout){
     case "blank": return [];
@@ -38,7 +38,7 @@ function slotsFor(layout:LayoutId):Slot[] {
 const px=(value:number)=>Math.round(value)+"px";
 export function applySlideLayout(doc:SlideDocument,layout:LayoutId,mode:"new"|"existing"="new"):SlideDocument {
   if(layout==="blank")return doc;
-  const slots=slotsFor(layout);
+  const slots=layoutPreviewSlots(layout);
   const theme=getSlideTheme(doc.themeId);
   const consumed=new Set<string>();
   const knownSlots=new Set(["Titre","Contenu","Colonne gauche","Colonne droite","Titre de section",
@@ -57,6 +57,10 @@ export function applySlideLayout(doc:SlideDocument,layout:LayoutId,mode:"new"|"e
       fontSize:px(slot.size*doc.canvas.width/1920),fontFamily:String(theme?.font??"Arial, sans-serif"),
       color:String(theme?.foreground??"#203127"),textAlign:slot.align??"left",
       fontWeight:slot.weight??"normal",whiteSpace:"pre-wrap",lineHeight:"1.18",
+      ...(slot.name.startsWith("Carte")?{
+        backgroundColor:"#edf2f7",border:"2px solid #cbd5e1",borderRadius:"18px",
+        padding:"26px",color:"#25364b",fontSize:px(35*doc.canvas.width/1920)
+      }:{})
     };
     if(mode==="existing"&&!old)continue;
     generated.push(old?{...old,name:slot.name,styles:{...old.styles,...styles}}:

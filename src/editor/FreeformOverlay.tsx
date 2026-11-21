@@ -15,6 +15,9 @@ export type FreeformHandle = {
   currentLayer:()=>number;
   duplicate:()=>void;
   remove:()=>void;
+  layerItems:()=>Array<{id:string;zIndex:number}>;
+  selectedLayerIds:()=>string[];
+  setLayerRanks:(ranks:Record<string,number>)=>string|null;
   refresh: ()=>void;
   clear: ()=>void;
 };
@@ -201,6 +204,50 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     }
     if(copied.length){updateSelected(copied);commit();}
   }
+  function layerItems():Array<{id:string;zIndex:number}>{
+    const doc=frameRef.current?.contentDocument;
+    if(!doc)return [];
+    const result:Array<{id:string;zIndex:number}>=[];
+    const all=Array.from(doc.body.children) as HTMLElement[];
+    for(const el of all){
+      if(!safeTag(el))continue;
+      if(isBackground(el,slideRef.current.canvas))continue;
+      const size=el.getBoundingClientRect();
+      if(size.width<2||size.height<2)continue;
+      const id=stableId(el);
+      const z=parseInt(el.ownerDocument.defaultView?.getComputedStyle(el).zIndex??"",10);
+      result.push({id,zIndex:Number.isFinite(z)?z:0});
+    }
+    // An explicitly selected child of a composite must also be orderable.
+    for(const selection of selectionsRef.current){
+      if(result.some(item=>item.id===selection.id))continue;
+      const el=getElement(selection.id);
+      if(el){const z=parseInt(el.ownerDocument.defaultView?.getComputedStyle(el).zIndex??"",10);
+        result.push({id:selection.id,zIndex:Number.isFinite(z)?z:0});
+      }
+    }
+    return result;
+  }
+  function setLayerRanks(ranks:Record<string,number>):string|null{
+    const doc=frameRef.current?.contentDocument;
+    if(!doc)return null;
+    // The full-slide master/background is always beneath editable content.
+    for(const el of Array.from(doc.body.children) as HTMLElement[]){
+      if(isBackground(el,slideRef.current.canvas)){
+        el.style.setProperty("z-index","0","important");
+        if(el.ownerDocument.defaultView?.getComputedStyle(el).position==="static")
+          el.style.setProperty("position","absolute","important");
+      }
+    }
+    for(const [id,rank] of Object.entries(ranks)){
+      const el=getElement(id);if(!el)continue;
+      if(el.ownerDocument.defaultView?.getComputedStyle(el).position==="static")
+        el.style.setProperty("position","relative","important");
+      el.style.setProperty("z-index",String(rank),"important");
+    }
+    emit(selectionsRef.current);
+    return serializeFreeform(doc);
+  }
   function remove(){
     const selected=selectionsRef.current;
     if(!selected.length)return;
@@ -208,19 +255,10 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     clear();commit();
   }
   useImperativeHandle(ref,()=>({selectAt,selectWithin,selectForContext,
-    style:styleSelected,arrange,currentLayer,duplicate,remove,refresh,clear}));
+    style:styleSelected,arrange,currentLayer,duplicate,remove,layerItems,
+    selectedLayerIds:()=>selectionsRef.current.map(item=>item.id),
+    setLayerRanks,refresh,clear}));
   useEffect(()=>{if(slide.mode==="structured")clear();},[slide.mode]);
-  useEffect(()=>{
-    const doc=frameRef.current?.contentDocument;
-    if(!doc)return;
-    const onSelection=()=>{
-      if(!editingRef.current)return;
-      const s=doc.getSelection();
-      if(s&&s.rangeCount&&!s.isCollapsed)savedRange.current=s.getRangeAt(0).cloneRange();
-    };
-    doc.addEventListener("selectionchange",onSelection);
-    return()=>doc.removeEventListener("selectionchange",onSelection);
-  },[frameRef,slide.freeform?.html]);
   useEffect(()=>{
     const handler=(event:KeyboardEvent)=>{
       if(!["Delete","Backspace"].includes(event.key)||event.defaultPrevented||editingRef.current)return;
@@ -351,18 +389,6 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
       onDoubleClick={e=>{e.stopPropagation();editHtml();}}
       title="Double-cliquez pour modifier le texte HTML">
       <span className="visual-selection-name">HTML · {selected.tag}{selections.length>1?" · "+selections.length+" objets":""}</span>
-      <div className="freeform-quickbar" onPointerDown={e=>e.stopPropagation()}>
-        <button title="Modifier le texte" onClick={e=>{e.stopPropagation();editHtml();}}>Texte</button>
-        <button title="Gras" onClick={e=>{e.stopPropagation();styleSelected("fontWeight","bold");}}>B</button>
-        <button title="Diminuer le texte" onClick={e=>{
-          e.stopPropagation();const font=activeElement.current?.ownerDocument.defaultView?.getComputedStyle(activeElement.current).fontSize??"48px";
-          styleSelected("fontSize",Math.max(8,parseFloat(font)-8)+"px");
-        }}>A−</button>
-        <button title="Augmenter le texte" onClick={e=>{
-          e.stopPropagation();const font=activeElement.current?.ownerDocument.defaultView?.getComputedStyle(activeElement.current).fontSize??"48px";
-          styleSelected("fontSize",Math.min(500,parseFloat(font)+8)+"px");
-        }}>A+</button>
-      </div>
       {handles.map(mode=><span key={mode} className={"visual-resize-handle handle-"+mode}
         onPointerDown={e=>begin(e,mode)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}/>)}
     </div>)}

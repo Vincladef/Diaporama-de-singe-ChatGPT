@@ -164,7 +164,7 @@ test("AI HTML, native text, palettes, marquee, shapes and layouts behave as edit
     await page.getByRole("menuitem",{name:"Mettre à l’arrière-plan"}).click();
     await page.waitForFunction(()=>document.querySelector<HTMLIFrameElement>(
       ".visual-artboard iframe")?.contentDocument?.querySelector('[data-id="native-text"]')
-      ?.getAttribute("style")?.includes("z-index:-1"));
+      ?.getAttribute("style")?.includes("z-index:10"));
     assert.equal(await page.locator(".visual-artboard iframe").count(),1);
 
     await page.locator(".singe-layout-picker summary").click();

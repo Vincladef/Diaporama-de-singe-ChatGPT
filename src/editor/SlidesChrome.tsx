@@ -1,10 +1,10 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { ShapePicker, type ShapePreset } from "./ShapePicker";
 import { ColorPalette } from "./ColorPalette";
 import type { HtmlSelectionInfo } from "./FreeformOverlay";
 import type { TextSelectionRange } from "./richText";
-import { SLIDE_LAYOUTS, type LayoutId } from "./slideLayouts";
+import { SLIDE_LAYOUTS, layoutPreviewSlots, type LayoutId } from "./slideLayouts";
 
 type Arrange="front"|"back"|"forward"|"backward";
 type Align="left"|"center"|"right"|"top"|"middle"|"bottom";
@@ -34,24 +34,54 @@ const fonts=[
   ["Palatino Linotype, serif","Palatino"],["Impact, sans-serif","Impact"],
   ["Roboto, sans-serif","Roboto"],["Open Sans, sans-serif","Open Sans"]
 ] as const;
-function Menu({title,children}: {title:string;children:ReactNode}){
-  return <details className="singe-top-menu">
-    <summary>{title}</summary><div className="singe-top-menu-popup"
-      onClick={e=>(e.target as HTMLElement).closest("button")?.closest("details")?.removeAttribute("open")}>
-      {children}
-    </div>
-  </details>;
-}
-function Action({children,onClick,disabled=false}:{
-  children:ReactNode;onClick:()=>void;disabled?:boolean
-}){return <button type="button" onClick={onClick} disabled={disabled}>{children}</button>;}
 export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange,onChange,actions:a}:Props){
   const selected=doc.elements.filter(e=>selectedIds.includes(e.id));
   const text=selected.find(e=>e.type==="text"||(e.type==="shape"&&!!e.text));
   const first=selected[0];
   const hasText=selected.some(e=>e.type==="text"||(e.type==="shape"&&!!e.text))||!!htmlSelection?.text;
   const hasAny=selected.length>0||!!htmlSelection;
-  const activeStyle=htmlSelection?.styles??text?.styles??{};
+  const selectedRun=(()=>{
+    if(!nativeRange||!text||text.id!==nativeRange.id||!text.textRuns?.length)return null;
+    let index=0;
+    for(const run of text.textRuns){
+      const end=index+run.text.length;
+      if(nativeRange.start<end&&nativeRange.end>index)return run.styles;
+      index=end;
+    }
+    return null;
+  })();
+  const activeStyle=htmlSelection?.styles??(selectedRun?{...text?.styles,...selectedRun}:text?.styles)??{};
+  const bold=/(?:bold|[6-9]00)/i.test(String(activeStyle.fontWeight??""));
+  const [sizeDraft,setSizeDraft]=useState<string|null>(null);
+  const chromeRef=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    // Only one dropdown can be open; clicking anywhere else closes it.
+    const root=chromeRef.current;
+    if(!root)return;
+    const closeAll=(except?:HTMLDetailsElement)=>{
+      for(const details of Array.from(root.querySelectorAll<HTMLDetailsElement>("details[open]"))){
+        if(details!==except)details.open=false;
+      }
+    };
+    const toggle=(event:Event)=>{
+      const details=event.target;
+      if(details instanceof HTMLDetailsElement&&root.contains(details)&&details.open)
+        closeAll(details);
+    };
+    const outside=(event:PointerEvent)=>{
+      if(!(event.target instanceof Element)||!event.target.closest(".singe-google-chrome details"))
+        closeAll();
+    };
+    const key=(event:KeyboardEvent)=>{if(event.key==="Escape")closeAll();};
+    document.addEventListener("toggle",toggle,true);
+    document.addEventListener("pointerdown",outside,true);
+    document.addEventListener("keydown",key,true);
+    return()=>{
+      document.removeEventListener("toggle",toggle,true);
+      document.removeEventListener("pointerdown",outside,true);
+      document.removeEventListener("keydown",key,true);
+    };
+  },[]);
   function style(prop:string,value:string|number,onlyText=false){
     if(!hasAny)return;
     const ids=new Set(selectedIds);
@@ -65,70 +95,7 @@ export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange
   }
   const colorValue=(candidate:unknown,fallback:string)=>typeof candidate==="string"&&/^#[0-9a-f]{6}$/i.test(candidate)?candidate:fallback;
   const numberSize=Math.max(6,parseInt(String(activeStyle.fontSize??"48"),10)||48);
-  return <div className="singe-google-chrome" role="region" aria-label="Menus et outils de présentation">
-    <nav className="singe-menubar" aria-label="Menus principaux">
-      <Menu title="Fichier">
-        <Action onClick={a.save}>Enregistrer · Ctrl+S</Action>
-        <Action onClick={a.import}>Importer une présentation</Action>
-        <Action onClick={a.export}>Exporter</Action>
-      </Menu>
-      <Menu title="Édition">
-        <Action onClick={a.undo} disabled={!a.canUndo}>Annuler · Ctrl+Z</Action>
-        <Action onClick={a.redo} disabled={!a.canRedo}>Rétablir · Ctrl+Y</Action>
-        <Action onClick={a.copy} disabled={!hasAny}>Copier · Ctrl+C</Action>
-        <Action onClick={a.paste}>Coller · Ctrl+V</Action>
-        <Action onClick={a.duplicate} disabled={!hasAny}>Dupliquer · Ctrl+D</Action>
-        <Action onClick={a.remove} disabled={!hasAny}>Supprimer</Action>
-      </Menu>
-      <Menu title="Affichage">
-        <Action onClick={a.toggleSlideRail}>{a.slideRailVisible?"Masquer":"Afficher"} les diapositives</Action>
-        <Action onClick={()=>a.setGrid(a.grid?0:10)}>{a.grid?"Désactiver":"Activer"} l'alignement magnétique</Action>
-        <Action onClick={a.openInspector}>Afficher les propriétés</Action>
-        <Action onClick={a.present}>Lancer la présentation</Action>
-      </Menu>
-      <Menu title="Insertion">
-        <Action onClick={a.addText}>Zone de texte</Action>
-        <Action onClick={a.addImage}>Image</Action>
-        <Action onClick={a.addSlide}>Nouvelle diapositive</Action>
-      </Menu>
-      <Menu title="Format">
-        <Action onClick={()=>style("fontWeight",activeStyle.fontWeight==="bold"?"normal":"bold",true)} disabled={!hasText}>Gras</Action>
-        <Action onClick={()=>style("fontStyle",activeStyle.fontStyle==="italic"?"normal":"italic",true)} disabled={!hasText}>Italique</Action>
-        <Action onClick={()=>style("textDecoration",activeStyle.textDecoration==="underline"?"none":"underline",true)} disabled={!hasText}>Souligner</Action>
-        <Action onClick={()=>style("textAlign","left",true)} disabled={!hasText}>Aligner à gauche</Action>
-        <Action onClick={()=>style("textAlign","center",true)} disabled={!hasText}>Centrer</Action>
-        <Action onClick={()=>style("textAlign","right",true)} disabled={!hasText}>Aligner à droite</Action>
-      </Menu>
-      <Menu title="Diapositive">
-        <Action onClick={a.addSlide}>Nouvelle diapositive</Action>
-        <Action onClick={a.duplicateSlide}>Dupliquer la diapositive</Action>
-        <Action onClick={a.deleteSlide}>Supprimer la diapositive</Action>
-        <Action onClick={a.openTheme}>Modifier le thème</Action>
-        {SLIDE_LAYOUTS.map(l=><Action key={"new-"+l.id} onClick={()=>a.newSlideWithLayout(l.id)}>Nouvelle : {l.name}</Action>)}
-        {SLIDE_LAYOUTS.map(l=><Action key={"apply-"+l.id} onClick={()=>a.layout(l.id)}>Disposition actuelle : {l.name}</Action>)}
-      </Menu>
-      <Menu title="Réorganiser">
-        <Action onClick={a.group} disabled={selected.length<2}>Grouper</Action>
-        <Action onClick={a.ungroup} disabled={!selected.some(e=>e.groupId)}>Dégrouper</Action>
-        <Action onClick={()=>a.arrange("front")} disabled={!hasAny}>Mettre au premier plan</Action>
-        <Action onClick={()=>a.arrange("back")} disabled={!hasAny}>Mettre à l'arrière-plan</Action>
-        <Action onClick={()=>a.align("left")} disabled={selected.length<2}>Aligner à gauche</Action>
-        <Action onClick={()=>a.align("center")} disabled={selected.length<2}>Centrer horizontalement</Action>
-        <Action onClick={()=>a.align("top")} disabled={selected.length<2}>Aligner en haut</Action>
-        <Action onClick={()=>a.distribute("horizontal")} disabled={selected.length<3}>Répartir horizontalement</Action>
-        <Action onClick={()=>a.distribute("vertical")} disabled={selected.length<3}>Répartir verticalement</Action>
-      </Menu>
-      <Menu title="Outils">
-        <Action onClick={a.openLayers}>Calques</Action>
-        <Action onClick={a.openHistory}>Historique</Action>
-        <Action onClick={a.openAnimations}>Animations</Action>
-        <Action onClick={a.openExpert}>Éditeur HTML / CSS</Action>
-      </Menu>
-      <Menu title="IA">
-        <Action onClick={a.openVariants}>Variantes A / B / C</Action>
-        <Action onClick={a.openTheme}>Thèmes visuels</Action>
-      </Menu>
-    </nav>
+  return <div ref={chromeRef} className="singe-google-chrome" role="region" aria-label="Outils de présentation">
     <div className="singe-formatbar" role="toolbar" aria-label="Mise en forme rapide"
       onMouseDownCapture={e=>{
         // Formatting buttons must not collapse a selected word in the canvas.
@@ -136,8 +103,8 @@ export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange
         if(target?.closest("button")&&!target.closest(".shape-picker-menu"))e.preventDefault();
       }}>
       <div className="singe-format-group">
-        <button title="Annuler" onClick={a.undo} disabled={!a.canUndo} aria-label="Annuler">↶</button>
-        <button title="Rétablir" onClick={a.redo} disabled={!a.canRedo} aria-label="Rétablir">↷</button>
+        <button title="Annuler" onClick={()=>{setSizeDraft(null);a.undo();}} disabled={!a.canUndo} aria-label="Annuler">↶</button>
+        <button title="Rétablir" onClick={()=>{setSizeDraft(null);a.redo();}} disabled={!a.canRedo} aria-label="Rétablir">↷</button>
         <button title="Afficher ou masquer les diapositives" onClick={a.toggleSlideRail}>▤</button>
         <button title="Nouvelle diapositive" onClick={a.addSlide}>＋</button>
         <details className="singe-layout-picker">
@@ -146,7 +113,12 @@ export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange
             {SLIDE_LAYOUTS.map(l=><button type="button" key={l.id} onClick={e=>{
               a.newSlideWithLayout(l.id);e.currentTarget.closest("details")?.removeAttribute("open");
             }} title={l.description}>
-              <span className={"singe-layout-mini layout-"+l.id} aria-hidden="true"><i/><i/><i/></span>
+              <span className="singe-layout-mini" aria-hidden="true">
+                {layoutPreviewSlots(l.id).map((slot,index)=><i key={index}
+                  className={"singe-layout-mini-slot"+(slot.name.startsWith("Carte")?" is-card":"")}
+                  style={{left:slot.x*100+"%",top:slot.y*100+"%",
+                    width:slot.w*100+"%",height:slot.h*100+"%"}}/>)}
+              </span>
               <span>{l.name}</span>
             </button>)}
           </div>
@@ -167,9 +139,23 @@ export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange
           {fonts.map(([value,label])=><option value={value} key={value}>{label}</option>)}
         </select>
         <input aria-label="Taille de police" title="Taille de police" type="number" min="6" max="600"
-          disabled={!hasText} value={numberSize} onChange={e=>style("fontSize",String(Math.max(6,Math.min(600,Number(e.target.value)||6)))+"px",true)}/>
-        <button title="Gras" aria-pressed={activeStyle.fontWeight==="bold"} disabled={!hasText}
-          onClick={()=>style("fontWeight",activeStyle.fontWeight==="bold"?"normal":"bold",true)}><strong>G</strong></button>
+          disabled={!hasText} value={sizeDraft??String(numberSize)}
+          onFocus={()=>setSizeDraft(String(numberSize))}
+          onChange={e=>{
+            setSizeDraft(e.target.value);
+            const number=Number(e.target.value);
+            if(e.target.value.trim()&&Number.isFinite(number)&&number>=6)
+              style("fontSize",Math.max(6,Math.min(600,number))+"px",true);
+          }}
+          onBlur={()=>setSizeDraft(null)}
+          onKeyDown={e=>{
+            if((e.ctrlKey||e.metaKey)&&["z","y"].includes(e.key.toLowerCase()))
+              setSizeDraft(null);
+            if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}
+            if(e.key==="Escape"){setSizeDraft(null);e.currentTarget.blur();}
+          }}/>
+        <button title="Gras" aria-pressed={bold} disabled={!hasText}
+          onClick={()=>style("fontWeight",bold?"normal":"bold",true)}><strong>G</strong></button>
         <button title="Italique" aria-pressed={activeStyle.fontStyle==="italic"} disabled={!hasText}
           onClick={()=>style("fontStyle",activeStyle.fontStyle==="italic"?"normal":"italic",true)}><em>I</em></button>
         <button title="Souligné" aria-pressed={activeStyle.textDecoration==="underline"} disabled={!hasText}

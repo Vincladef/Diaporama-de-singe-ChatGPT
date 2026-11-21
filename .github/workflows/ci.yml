@@ -29,6 +29,9 @@ jobs:
       - name: Verify AI HTML and native editor gestures in Chromium
         timeout-minutes: 3
         run: npm run test:editor
+      - name: Verify editor usability and foreground layers in Chromium
+        timeout-minutes: 3
+        run: npm run test:usability
       - name: Test public projection vs private presenter notes and synchronized controls
         timeout-minutes: 3
         run: npm run test:presenter

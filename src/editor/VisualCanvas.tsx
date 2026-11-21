@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
 import { updateLiveSlideFrame } from "./liveSlideFrame";
+import { reorderForegroundLayers } from "./layerOrder";
 import { elementBox, transformBox, withElementBoxes, worldBox, type Box, type TransformMode } from "./geometry";
 import { FreeformOverlay, type FreeformHandle, type HtmlSelectionInfo } from "./FreeformOverlay";
 import type { ShapePreset } from "./ShapePicker";
@@ -141,36 +142,35 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   function menuAction(action:"front"|"back"|"forward"|"backward"|"duplicate"|"delete"){
     const menu=contextMenu;if(!menu)return;
     setContextMenu(null);
-    if(menu.type==="html"){
-      if(action==="duplicate")freeRef.current?.duplicate();
-      else if(action==="delete")freeRef.current?.remove();
-      else{
-        const nodes=Array.from(frameRef.current?.contentDocument?.querySelectorAll<HTMLElement>("[data-id],[data-singe-id]")??[]);
-        const levels=nodes.map(node=>parseInt(node.ownerDocument.defaultView?.getComputedStyle(node).zIndex??"",10)).filter(Number.isFinite);
-        const values=levels.length?levels:[0];
-        const current=freeRef.current?.currentLayer()??0;
-        const z=action==="front"?Math.max(0,...values)+1:
-          action==="back"?Math.min(0,...values)-1:
-          action==="forward"?current+1:current-1;
-        freeRef.current?.arrange(z);
-      }
+    if(action==="duplicate"||action==="delete"){
+      if(menu.type==="html"){
+        if(action==="duplicate")freeRef.current?.duplicate();
+        else freeRef.current?.remove();
+      }else onContextNativeAction?.(action);
       return;
     }
-    if(action==="duplicate"||action==="delete"){
-      onContextNativeAction?.(action);return;
-    }
-    const frame=frameRef.current?.contentDocument;
-    const nodes=Array.from(frame?.querySelectorAll<HTMLElement>("[data-id],[data-singe-id]")??[]);
-    const levels=nodes.map(node=>parseInt(node.ownerDocument.defaultView?.getComputedStyle(node).zIndex??"",10)).filter(Number.isFinite);
-    const values=levels.length?levels:[0];
-    const active=doc.elements.find(e=>menu.ids.includes(e.id));
-    const current=Number(active?.styles.zIndex??0)||0;
-    const z=action==="front"?Math.max(0,...values)+1:
-      action==="back"?Math.min(0,...values)-1:
-      action==="forward"?current+1:current-1;
-    const picked=new Set(menu.ids);
-    onChange({...documentRef.current,elements:documentRef.current.elements.map(e=>
-      picked.has(e.id)&&!e.locked?{...e,styles:{...e.styles,zIndex:z}}:e)},"layers");
+    // Reorder all editable foreground layers together, never the master
+    // background. Even the lowest object has a positive z-index.
+    const nativeLayers=documentRef.current.elements.filter(e=>!e.hidden&&!e.parentId)
+      .map(e=>({id:"native:"+e.id,zIndex:Number(e.styles.zIndex??0)||0}));
+    const freeLayers=freeRef.current?.layerItems()??[];
+    const all=[...freeLayers.map(e=>({id:"html:"+e.id,zIndex:e.zIndex})),...nativeLayers];
+    const selected=menu.type==="html"
+      ?(freeRef.current?.selectedLayerIds()??[]).map(id=>"html:"+id)
+      :menu.ids.map(id=>"native:"+id);
+    const order=reorderForegroundLayers(all,selected,action);
+    const nativeRanks=new Map(order.filter(x=>x.id.startsWith("native:"))
+      .map(x=>[x.id.slice(7),x.zIndex]));
+    const htmlRanks=Object.fromEntries(order.filter(x=>x.id.startsWith("html:"))
+      .map(x=>[x.id.slice(5),x.zIndex]));
+    const html=freeRef.current?.setLayerRanks(htmlRanks);
+    const current=documentRef.current;
+    onChange({...current,
+      elements:current.elements.map(e=>nativeRanks.has(e.id)&&!e.locked
+        ?{...e,styles:{...e.styles,zIndex:nativeRanks.get(e.id)!}}:e),
+      ...(html!==null&&html!==undefined&&current.freeform
+        ?{freeform:{...current.freeform,html}}:{})
+    },"layers");
   }
 
   function updateIframePreview(boxes: Record<string,Box>) {
@@ -371,12 +371,14 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
       onContextMenu={openContextMenu}
       onPointerDown={e=>{
         if(readOnly||editingHtml)return;
-        // The gray pasteboard is part of the editing surface: clicking it must
-        // clear both native-object and freeform-HTML selections.
+        // A selection rectangle may begin on the grey pasteboard,
+        // continue across the slide and finish outside it.
         if((e.target as HTMLElement).closest(".visual-artboard"))return;
-        wrapperRef.current?.focus({preventScroll:true});
-        onSelect([]);setEditId(null);freeRef.current?.clear();
-      }}>
+        setEditId(null);
+        startMarquee(e);
+      }}
+      onPointerMove={moveMarquee} onPointerUp={stopMarquee}
+      onPointerCancel={stopMarquee}>
       <div className="visual-stage" style={{minWidth:Math.max(viewport.width,displayWidth+40),
         minHeight:Math.max(viewport.height,displayHeight+40)}}>
       <div className="visual-scale-bounds" style={{width:displayWidth,height:displayHeight}}>
@@ -434,6 +436,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 {((element.type==="text"&&!element.text)||(element.type==="image"&&!element.src))&&
                   <span className="visual-empty-placeholder" aria-hidden="true">
                     {element.type==="image"?"Sélectionnez cette zone pour ajouter une image":
+                     element.name?.startsWith("Carte")?element.name+" : cliquez pour ajouter du texte":
                      element.name?.includes("Titre")?"Cliquez pour ajouter un titre":"Cliquez pour ajouter du texte"}
                   </span>}
                 {picked && <span className="visual-selection-name">{getVisualLabel(element).slice(0,32)}</span>}

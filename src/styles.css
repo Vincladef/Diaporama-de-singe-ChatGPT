@@ -1859,3 +1859,24 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 }
 .singe-object-context-separator{height:1px;background:#e8eaed;margin:5px 0}
 .singe-object-context-menu button.danger{color:#a61c2a}
+
+
+/* The main menu bar was redundant; one compact editing toolbar saves space. */
+.app-slides-style.is-editing .singe-google-chrome{min-height:0}
+.app-slides-style.is-editing .singe-formatbar{height:45px;min-height:45px;padding:4px 10px}
+.app-slides-style.is-editing .singe-menubar{display:none!important}
+/* The thumbnails are built from exactly the same slots as the resulting slide. */
+.singe-layout-mini{
+  position:relative;display:block!important;width:100px;height:56px;
+  background:#fff;border:1px solid #bdc7d1;border-radius:3px;
+  padding:0;flex:none;overflow:hidden;
+}
+.singe-layout-mini .singe-layout-mini-slot{
+  display:block!important;position:absolute;margin:0;background:#9daec3;
+  border-radius:2px;min-width:0;min-height:0;max-width:none;max-height:none;
+}
+.singe-layout-mini .singe-layout-mini-slot.is-card{background:#dbe4ee;border:1px solid #a1b3c6}
+.singe-layout-grid{grid-template-columns:repeat(3,minmax(120px,1fr));gap:7px}
+.singe-layout-grid button{padding:8px 6px;min-height:104px}
+.singe-layout-grid button span:last-child{line-height:1.3;text-align:center}
+.freeform-quickbar{display:none!important}
