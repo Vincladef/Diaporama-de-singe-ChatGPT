@@ -7,7 +7,7 @@ type Arrange="front"|"back"|"forward"|"backward";
 type Align="left"|"center"|"right"|"top"|"middle"|"bottom";
 type Actions={
   addSlide:()=>void; duplicateSlide:()=>void; deleteSlide:()=>void;
-  layout:(id:LayoutId)=>void; addText:()=>void; addImage:()=>void; addShape:(preset:ShapePreset)=>void;
+  layout:(id:LayoutId)=>void; newSlideWithLayout:(id:LayoutId)=>void; addText:()=>void; addImage:()=>void; addShape:(preset:ShapePreset)=>void;
   undo:()=>void; redo:()=>void; canUndo:boolean; canRedo:boolean;
   save:()=>void; import:()=>void; export:()=>void;
   copy:()=>void; paste:()=>void; duplicate:()=>void; remove:()=>void;
@@ -90,7 +90,8 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
         <Action onClick={a.duplicateSlide}>Dupliquer la diapositive</Action>
         <Action onClick={a.deleteSlide}>Supprimer la diapositive</Action>
         <Action onClick={a.openTheme}>Modifier le thème</Action>
-        {SLIDE_LAYOUTS.map(l=><Action key={l.id} onClick={()=>a.layout(l.id)}>Disposition : {l.name}</Action>)}
+        {SLIDE_LAYOUTS.map(l=><Action key={"new-"+l.id} onClick={()=>a.newSlideWithLayout(l.id)}>Nouvelle : {l.name}</Action>)}
+        {SLIDE_LAYOUTS.map(l=><Action key={"apply-"+l.id} onClick={()=>a.layout(l.id)}>Appliquer : {l.name}</Action>)}
       </Menu>
       <Menu title="Réorganiser">
         <Action onClick={a.group} disabled={selected.length<2}>Grouper</Action>

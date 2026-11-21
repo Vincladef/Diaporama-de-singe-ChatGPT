@@ -784,7 +784,7 @@ export default function App() {
           }
         }catch{/* Invalid external clipboard; leave it untouched. */}
       }
-      if(raw&&selectedIds.length===0){
+      if(raw){
         const doc=draftRef.current;
         if(doc){
           event.preventDefault();
@@ -812,7 +812,6 @@ export default function App() {
       if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return;}
       if(mod&&e.key.toLowerCase()==="c"&&selectedIds.length){e.preventDefault();copyObjects();return;}
       if(mod&&e.key.toLowerCase()==="x"&&selectedIds.length){e.preventDefault();cutObjects();return;}
-      if(mod&&e.key.toLowerCase()==="v"&&objectClipboardRef.current.length){e.preventDefault();pasteFromMemory();return;}
       if(mod&&e.key.toLowerCase()==="a"){e.preventDefault();setSelectedIds(draftRef.current.elements.filter(e=>!e.hidden&&!e.locked).map(e=>e.id));return;}
       if(mod&&e.key.toLowerCase()==="d"){e.preventDefault();copySelection();return;}
       if(e.key==="Delete"||e.key==="Backspace"){if(selectedIds.length){e.preventDefault();removeSelection();}return;}
@@ -966,7 +965,7 @@ export default function App() {
               actions={{
                 addSlide:()=>void slideAction("addSlide"),duplicateSlide:()=>void slideAction("duplicateSlide"),
                 deleteSlide:()=>void slideAction("deleteSlide"),
-                layout:applyLayout,addText:()=>addObject("text"),addImage:()=>imageInputRef.current?.click(),
+                layout:applyLayout,newSlideWithLayout:id=>void addSlideWithLayout(id),addText:()=>addObject("text"),addImage:()=>imageInputRef.current?.click(),
                 addShape:preset=>addObject("shape",preset),
                 undo,redo,canUndo:historyRef.current.undo.length>0,canRedo:historyRef.current.redo.length>0,
                 save:()=>void save(),import:()=>setImportOpen(true),

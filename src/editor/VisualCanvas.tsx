@@ -8,8 +8,9 @@ type Gesture = {
   pointerId: number;
   x: number;
   y: number;
-  mode: TransformMode;
+  mode: TransformMode | "rotate";
   initial: Record<string, Box>;
+  centerX?:number;centerY?:number;startAngle?:number;baseAngle?:number;latestAngle?:number;rotationId?:string;
   latest: Record<string, Box>;
   moved: boolean;
 };
@@ -35,6 +36,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   const [editingHtml,setEditingHtml]=useState(false);
   const [viewport, setViewport] = useState({width:840,height:460});
   const [live, setLive] = useState<Record<string, Box>>({});
+  const [liveRotation,setLiveRotation]=useState<Record<string,string>>({});
+  const [guides,setGuides]=useState<{x?:number;y?:number}>({});
+  const [marquee,setMarquee]=useState<{x:number;y:number;w:number;h:number}|null>(null);
+  const marqueeRef=useRef<{pointerId:number;x:number;y:number;shift:boolean;oldIds:string[]}|null>(null);
   const gesture = useRef<Gesture | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -58,6 +63,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
   useEffect(() => {
     gesture.current = null;
     setLive({});
+    setLiveRotation({});
+    setGuides({});
+    setMarquee(null);
+    marqueeRef.current=null;
     setEditId(null);
   },[doc.canvas.width,doc.canvas.height]);
   // Fit both dimensions, not only the width. The zoom multiplier is relative
@@ -95,7 +104,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
       el.style.height=box.h+"px";
     }
   }
-  function begin(e: PointerEvent<HTMLElement>, id: string, mode: TransformMode) {
+  function begin(e: PointerEvent<HTMLElement>, id: string, mode: TransformMode | "rotate") {
     if (readOnly || editId) return;
     const clicked=doc.elements.find(item=>item.id===id);
     if(!clicked||clicked.locked||clicked.hidden)return;
@@ -124,19 +133,67 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
       const element=doc.elements.find(x=>x.id===member);
       if (element) initial[member]=worldBox(element,doc);
     }
-    gesture.current={pointerId:e.pointerId,x:e.clientX,y:e.clientY,mode,initial,latest:initial,moved:false};
+    const box=worldBox(clicked,doc);
+    const artRect=wrapperRef.current?.querySelector(".visual-artboard")?.getBoundingClientRect();
+    const centerX=(artRect?.left??0)+(box.x+box.w/2)*fit;
+    const centerY=(artRect?.top??0)+(box.y+box.h/2)*fit;
+    gesture.current={pointerId:e.pointerId,x:e.clientX,y:e.clientY,mode,initial,
+      latest:initial,moved:false,centerX,centerY,rotationId:id,
+      startAngle:Math.atan2(e.clientY-centerY,e.clientX-centerX)*180/Math.PI,
+      baseAngle:parseFloat(String(clicked.styles.rotate??"0"))||0};
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function move(e: PointerEvent<HTMLElement>) {
     const g=gesture.current;
     if (!g || e.pointerId!==g.pointerId) return;
     e.preventDefault();
+    if(g.mode==="rotate"){
+      const angle=Math.atan2(e.clientY-(g.centerY??0),e.clientX-(g.centerX??0))*180/Math.PI;
+      const value=Math.round(((g.baseAngle??0)+angle-(g.startAngle??0))*10)/10;
+      if(!g.rotationId)return;
+      g.latestAngle=value;g.moved=true;
+      const rotateValue=value+"deg";
+      setLiveRotation({[g.rotationId]:rotateValue});
+      const el=Array.from(frameRef.current?.contentDocument?.querySelectorAll<HTMLElement>("[data-id]")??[])
+        .find(x=>x.dataset.id===g.rotationId);
+      if(el)el.style.rotate=rotateValue;
+      return;
+    }
     const dx=(e.clientX-g.x)/fit,dy=(e.clientY-g.y)/fit;
     if (Math.abs(dx)<.75 && Math.abs(dy)<.75 && !g.moved) return;
     const next:Record<string,Box>={};
     for (const [id,origin] of Object.entries(g.initial)) {
       next[id]=transformBox(origin,dx,dy,g.mode,grid);
     }
+    const nextGuides:{x?:number;y?:number}={};
+    if(g.mode==="move"){
+      const ids=new Set(Object.keys(next));
+      const moving=Object.values(next);
+      const bounds={x:Math.min(...moving.map(b=>b.x)),y:Math.min(...moving.map(b=>b.y)),
+        right:Math.max(...moving.map(b=>b.x+b.w)),bottom:Math.max(...moving.map(b=>b.y+b.h))};
+      const mx=[bounds.x,(bounds.x+bounds.right)/2,bounds.right];
+      const my=[bounds.y,(bounds.y+bounds.bottom)/2,bounds.bottom];
+      let nearX=9,nearY=9,adjustX=0,adjustY=0;
+      for(const item of doc.elements){
+        if(ids.has(item.id)||item.hidden)continue;
+        const other=worldBox(item,doc);
+        for(const x of [other.x,other.x+other.w/2,other.x+other.w]){
+          for(const pos of mx){
+            const dist=x-pos;
+            if(Math.abs(dist)<nearX){nearX=Math.abs(dist);adjustX=dist;nextGuides.x=x;}
+          }
+        }
+        for(const y of [other.y,other.y+other.h/2,other.y+other.h]){
+          for(const pos of my){
+            const dist=y-pos;
+            if(Math.abs(dist)<nearY){nearY=Math.abs(dist);adjustY=dist;nextGuides.y=y;}
+          }
+        }
+      }
+      if(nextGuides.x!==undefined||nextGuides.y!==undefined)
+        for(const box of Object.values(next)){box.x+=adjustX;box.y+=adjustY;}
+    }
+    setGuides(nextGuides);
     g.latest=next;g.moved=true;
     updateIframePreview(next);
     setLive(next);
@@ -146,9 +203,57 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     if (!g || e.pointerId!==g.pointerId) return;
     e.stopPropagation();
     gesture.current=null;
-    if (g.moved) onChange(withElementBoxes(documentRef.current,g.latest),"transform");
+    if(g.moved){
+      if(g.mode==="rotate"&&g.rotationId&&g.latestAngle!==undefined){
+        const id=g.rotationId,rot=g.latestAngle+"deg";
+        onChange({...documentRef.current,elements:documentRef.current.elements.map(element=>
+          element.id===id?{...element,styles:{...element.styles,rotate:rot}}:element)},"rotate");
+      }else onChange(withElementBoxes(documentRef.current,g.latest),"transform");
+    }
     setLive({});
+    setLiveRotation({});
+    setGuides({});
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  }
+  function pointOnArtboard(e:PointerEvent<HTMLElement>){
+    const rect=wrapperRef.current?.querySelector(".visual-artboard")?.getBoundingClientRect();
+    return {x:(e.clientX-(rect?.left??0))/fit,y:(e.clientY-(rect?.top??0))/fit};
+  }
+  function startMarquee(e:PointerEvent<HTMLDivElement>){
+    if(readOnly||editingHtml)return;
+    e.preventDefault();
+    wrapperRef.current?.focus({preventScroll:true});
+    const point=pointOnArtboard(e);
+    marqueeRef.current={pointerId:e.pointerId,x:point.x,y:point.y,shift:e.shiftKey,oldIds:selectionRef.current};
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setMarquee(null);
+  }
+  function moveMarquee(e:PointerEvent<HTMLDivElement>){
+    const start=marqueeRef.current;
+    if(!start||e.pointerId!==start.pointerId)return;
+    const p=pointOnArtboard(e);
+    if(Math.abs(p.x-start.x)<6&&Math.abs(p.y-start.y)<6&&!marquee)return;
+    setMarquee({x:Math.min(p.x,start.x),y:Math.min(p.y,start.y),
+      w:Math.abs(p.x-start.x),h:Math.abs(p.y-start.y)});
+  }
+  function stopMarquee(e:PointerEvent<HTMLDivElement>){
+    const start=marqueeRef.current;
+    if(!start||e.pointerId!==start.pointerId)return;
+    const p=pointOnArtboard(e);
+    const rect={x:Math.min(p.x,start.x),y:Math.min(p.y,start.y),w:Math.abs(p.x-start.x),h:Math.abs(p.y-start.y)};
+    marqueeRef.current=null;setMarquee(null);
+    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    if(rect.w>6||rect.h>6){
+      const picked=doc.elements.filter(el=>{
+        if(el.hidden||el.locked)return false;
+        const b=worldBox(el,doc);
+        return b.x<rect.x+rect.w&&b.x+b.w>rect.x&&b.y<rect.y+rect.h&&b.y+b.h>rect.y;
+      }).map(el=>el.id);
+      onSelect(start.shift?[...new Set([...start.oldIds,...picked])]:picked);
+    }else{
+      if(!start.shift)onSelect([]);
+      freeRef.current?.selectAt(p.x,p.y);
+    }
   }
   function beginInlineEdit(element: SlideElement) {
     if (readOnly || element.locked || element.hidden || element.type!=="text") return;
@@ -183,6 +288,14 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
       <div className="visual-stage" style={{minWidth:Math.max(viewport.width,displayWidth+40),
         minHeight:Math.max(viewport.height,displayHeight+40)}}>
       <div className="visual-scale-bounds" style={{width:displayWidth,height:displayHeight}}>
+      <div className="visual-ruler horizontal" aria-hidden="true" style={{width:displayWidth}}>
+        {Array.from({length:Math.floor(doc.canvas.width/200)+1},(_,i)=>
+          <span key={i} style={{left:i*200*fit}}>{i*200}</span>)}
+      </div>
+      <div className="visual-ruler vertical" aria-hidden="true" style={{height:displayHeight}}>
+        {Array.from({length:Math.floor(doc.canvas.height/200)+1},(_,i)=>
+          <span key={i} style={{top:i*200*fit}}>{i*200}</span>)}
+      </div>
       <div className="visual-artboard" data-testid="visual-artboard" style={{
         width:doc.canvas.width,height:doc.canvas.height,
         transform:"scale("+fit+")",transformOrigin:"top left",
@@ -197,13 +310,8 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
           style={{position:"absolute",inset:0,border:0,width:doc.canvas.width,height:doc.canvas.height,pointerEvents:editingHtml?"auto":"none"}}
         />
         <div className="visual-hit-layer" style={{pointerEvents:editingHtml?"none":"auto"}}
-          onPointerDown={e=>{
-            if(readOnly)return;
-            wrapperRef.current?.focus({preventScroll:true});
-            onSelect([]);setEditId(null);
-            const rect=e.currentTarget.getBoundingClientRect();
-            freeRef.current?.selectAt((e.clientX-rect.left)/fit,(e.clientY-rect.top)/fit);
-          }}>
+          onPointerDown={startMarquee} onPointerMove={moveMarquee}
+          onPointerUp={stopMarquee} onPointerCancel={stopMarquee}>
           {!readOnly && doc.elements.filter(el=>!el.parentId&&!el.hidden).concat(doc.elements.filter(el=>!!el.parentId&&!el.hidden)).map(element=>{
             const box=live[element.id]??worldBox(element,doc);
             const picked=selectedIds.includes(element.id);
@@ -212,7 +320,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 key={element.id}
                 data-visual-id={element.id}
                 className={"visual-object-hit"+(picked?" is-selected":"")}
-                style={{left:box.x,top:box.y,width:box.w,height:box.h,pointerEvents:element.locked?"none":"auto"}}
+                style={{left:box.x,top:box.y,width:box.w,height:box.h,pointerEvents:element.locked?"none":"auto",rotate:liveRotation[element.id]??String(element.styles.rotate??"0deg")}}
                 title={getVisualLabel(element)}
                 aria-label={getVisualLabel(element)}
                 role="button" tabIndex={element.locked?-1:0} aria-pressed={picked}
@@ -225,7 +333,11 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                 onPointerCancel={end}
                 onDoubleClick={e=>{e.stopPropagation();beginInlineEdit(element);}}
               >
-                {element.type==="text"&&!element.text&&<span className="visual-empty-placeholder" aria-hidden="true">{element.name==="Titre"?"Cliquez pour ajouter un titre":"Cliquez pour ajouter du texte"}</span>}
+                {((element.type==="text"&&!element.text)||(element.type==="image"&&!element.src))&&
+                  <span className="visual-empty-placeholder" aria-hidden="true">
+                    {element.type==="image"?"Sélectionnez cette zone pour ajouter une image":
+                     element.name?.includes("Titre")?"Cliquez pour ajouter un titre":"Cliquez pour ajouter du texte"}
+                  </span>}
                 {picked && <span className="visual-selection-name">{getVisualLabel(element).slice(0,32)}</span>}
                 {picked && selectedIds.length===1 && handles.map(mode=>(
                   <span key={mode} data-handle={mode} className={"visual-resize-handle handle-"+mode}
@@ -236,9 +348,17 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
                     title={"Redimensionner "+mode}
                   />
                 ))}
+                {picked&&selectedIds.length===1&&<span className="visual-rotate-handle"
+                  role="button" aria-label="Faire pivoter l'objet" title="Faire pivoter"
+                  onPointerDown={e=>begin(e,element.id,"rotate")}
+                  onPointerMove={move} onPointerUp={end} onPointerCancel={end}/>}
+                
               </div>
             );
           })}
+          {guides.x!==undefined&&<div className="visual-snap-guide vertical" style={{left:guides.x}}/>}
+          {guides.y!==undefined&&<div className="visual-snap-guide horizontal" style={{top:guides.y}}/>}
+          {marquee&&<div className="visual-marquee" style={{left:marquee.x,top:marquee.y,width:marquee.w,height:marquee.h}}/>}
           {!readOnly && <FreeformOverlay ref={freeRef} document={doc} frameRef={frameRef} scale={fit} grid={grid}
             onChange={onChange} onSelectStructured={onSelect} onEditingChange={setEditingHtml}/>}
           {!readOnly && editId && editBox && chosen && <textarea
