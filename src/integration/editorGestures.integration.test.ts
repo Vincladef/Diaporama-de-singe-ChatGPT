@@ -128,16 +128,28 @@ test("AI HTML, native text, palettes, marquee, shapes and layouts behave as edit
     assert.equal(await shapes.count(),4);
     await shapes.last().dblclick();
     await page.locator("textarea[data-testid='canvas-inline-text']").fill("Mon rectangle");
+    const shapeSaved=page.waitForResponse(response=>{
+      const req=response.request();
+      if(req.method()!=="POST"||!req.url().includes("/.netlify/functions/workspace"))return false;
+      try{
+        const body=JSON.parse(req.postData()??"{}") as {action?:string;document?:SlideDocument};
+        return body.action==="saveSlide"&&!!body.document?.elements.some(e=>e.text==="Mon rectangle");
+      }catch{return false;}
+    },{timeout:15000});
     await page.locator("textarea[data-testid='canvas-inline-text']").press("Enter");
     await page.waitForFunction(()=>Array.from(document.querySelector<HTMLIFrameElement>(".visual-artboard iframe")?.contentDocument?.querySelectorAll("[data-id]")??[]).some(n=>n.textContent==="Mon rectangle"));
     const formText=await page.locator(".visual-artboard iframe").evaluate(f=>
       Array.from((f as HTMLIFrameElement).contentDocument?.querySelectorAll("[data-id]")??[])
         .some(node=>node.textContent==="Mon rectangle"));
     assert.equal(formText,true);
-    await page.waitForTimeout(2300);
+    // CI runners can be slower than local Chromium; wait for the real save response.
+    await shapeSaved;
+    await page.getByText("✓ Enregistré",{exact:true}).waitFor({timeout:7000});
     await page.reload({waitUntil:"domcontentloaded"});
     await page.locator(".slide-tile").nth(2).click();
-    await page.locator(".visual-object-hit").last().waitFor();
+    await page.waitForFunction(()=>Array.from(document.querySelector<HTMLIFrameElement>(
+      ".visual-artboard iframe")?.contentDocument?.querySelectorAll("[data-id]")??[])
+      .some(node=>node.textContent==="Mon rectangle"),undefined,{timeout:9000});
     const persisted=await page.locator(".visual-artboard iframe").evaluate(f=>
       Array.from((f as HTMLIFrameElement).contentDocument?.querySelectorAll("[data-id]")??[])
         .some(node=>node.textContent==="Mon rectangle"));
