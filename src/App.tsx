@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SlideDocumentSchema, type SlideDocument, type SlideElement } from "./domain/slide";
+import { SlideDocumentSchema, SlideElementSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
 import { SlidesChrome } from "./editor/SlidesChrome";
 import { applySlideLayout, type LayoutId } from "./editor/slideLayouts";
@@ -317,10 +317,11 @@ export default function App() {
     if(!doc||!items.length)return;
     pasteCountRef.current+=1;
     const ids=new Map(items.map(e=>[e.id,crypto.randomUUID()]));
+    const groups=new Map(items.filter(e=>e.groupId).map(e=>[e.groupId!,crypto.randomUUID()]));
     const offset=24*pasteCountRef.current;
     const cloned=items.map(e=>({...structuredClone(e),id:ids.get(e.id)!,
       parentId:e.parentId?(ids.get(e.parentId)??undefined):undefined,
-      groupId:e.groupId?(ids.get(e.groupId)??crypto.randomUUID()):undefined,
+      groupId:e.groupId?groups.get(e.groupId):undefined,
       styles:{...e.styles,
         left:(parseFloat(String(e.styles.left??"0"))+offset)+"px",
         top:(parseFloat(String(e.styles.top??"0"))+offset)+"px"}}));
@@ -779,7 +780,7 @@ export default function App() {
       if(raw.startsWith("SINGE_OBJECTS:")){
         try{
           const value=JSON.parse(raw.slice("SINGE_OBJECTS:".length)) as SlideElement[];
-          if(Array.isArray(value)&&value.every(e=>e&&typeof e.id==="string"&&typeof e.type==="string")){
+          if(Array.isArray(value)&&value.length<=1000&&value.every(e=>SlideElementSchema.safeParse(e).success)){
             event.preventDefault();void pasteObjects(value);return;
           }
         }catch{/* Invalid external clipboard; leave it untouched. */}

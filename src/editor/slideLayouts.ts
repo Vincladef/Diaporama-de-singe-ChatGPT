@@ -1,5 +1,5 @@
-import type { SlideDocument, SlideElement } from "../domain/slide";
-import { getSlideTheme } from "./slideThemes";
+import type { SlideDocument, SlideElement } from "../domain/slide.ts";
+import { getSlideTheme } from "./slideThemes.ts";
 
 /** Native, editable layouts. They never flatten HTML or generated objects. */
 export const SLIDE_LAYOUTS = [
