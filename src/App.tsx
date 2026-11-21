@@ -1041,11 +1041,13 @@ export default function App() {
                        const file=Array.from(event.dataTransfer.files).find(item=>item.type.startsWith("image/"));
                        if(file){event.preventDefault();void insertImageFromFile(file);}
                      }}>
-                    <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
+                    <VisualCanvas key={slideId+":"+(previewVariant?.id??"editor")}
+                      document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
                       onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}
                       htmlControlRef={htmlControlRef} onHtmlSelectionChange={setHtmlSelection}
                       onNativeRangeChange={setNativeRange}
-                      drawShape={drawingShape} onDrawShape={drawNativeShape} onDrawFinished={()=>setDrawingShape(null)}/>
+                      drawShape={drawingShape} onDrawShape={drawNativeShape} onDrawFinished={()=>setDrawingShape(null)}
+                      onContextNativeAction={action=>action==="duplicate"?copySelection():removeSelection()}/>
                   </div>
                   <div className="canvas-statusbar">
                     <span>Diapositive {current.slides.findIndex(slide=>slide.id===slideId)+1} / {current.slides.length} · {draft.canvas.width} × {draft.canvas.height}
@@ -1058,7 +1060,7 @@ export default function App() {
                       <button type="button" onClick={()=>{
                         const w=document.querySelector<HTMLElement>(".visual-viewport")?.clientWidth??800;
                         const h=document.querySelector<HTMLElement>(".visual-viewport")?.clientHeight??450;
-                        const fit=Math.min(Math.max(40,w-40)/draft.canvas.width,Math.max(40,h-40)/draft.canvas.height);
+                        const fit=Math.min(Math.max(40,w-12)/draft.canvas.width,Math.max(40,h-24)/draft.canvas.height);
                         setZoom(Math.min(8,Math.max(.25,1/fit)));
                       }}>100 % réel</button>
                     </div>

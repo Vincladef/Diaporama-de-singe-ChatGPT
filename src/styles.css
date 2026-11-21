@@ -1810,3 +1810,52 @@ button:focus-visible,select:focus-visible,[role="button"]:focus-visible,summary:
 .freeform-multi-outline{outline:3px dashed #1a73e8;outline-offset:2px;pointer-events:none;z-index:20}
 @media(max-width:1100px){.singe-formatbar{gap:3px;padding:4px 7px}.singe-format-group{gap:1px;padding-right:3px}
  .singe-formatbar select{max-width:102px}.singe-google-chrome{overflow:visible}}
+
+
+/* 2026-11-21: allow the slide itself to occupy the working area.
+   Keep a narrow 20 px strip above for the ruler, instead of a thick
+   symmetric grey border around every slide. */
+.app-slides-style.is-editing .editor-main{padding:4px 7px 2px}
+.app-slides-style.is-editing .visual-stage{padding:20px 6px 4px}
+.app-slides-style.is-editing .canvas-statusbar{min-height:26px}
+.app-slides-style.is-editing .canvas-zoom-controls button{min-height:25px;padding:2px 6px}
+.app-slides-style.is-editing .speaker-notes-pane{min-height:24px}
+.app-slides-style.is-editing .speaker-notes-handle{height:8px;min-height:8px}
+.app-slides-style.is-editing .speaker-notes-heading{min-height:16px;padding:0 8px}
+.app-slides-style.is-editing .speaker-notes-heading strong{font-size:10px}
+.app-slides-style.is-editing .speaker-notes-heading button{font-size:9px;padding:0 3px}
+.app-slides-style.is-editing .visual-ruler.horizontal{top:-19px;height:17px}
+.app-slides-style.is-editing .visual-ruler.vertical{left:-19px;width:17px}
+@media(min-width:901px){
+  .app-slides-style.is-editing .slides-header{
+    height:51px;min-height:51px;padding:4px 14px;gap:10px
+  }
+  .app-slides-style.is-editing .app-brand{min-height:37px}
+  .singe-menubar{height:29px;flex-basis:29px;padding:0 16px}
+  .singe-formatbar{height:43px;min-height:43px;padding:3px 10px}
+}
+@media(max-width:900px){
+  .app-slides-style.is-editing .visual-stage{padding:18px 5px 4px}
+}
+
+/* Context menu deliberately lives in a body portal: it cannot be clipped by
+   the transformed slide or the scrollable editing viewport. */
+.singe-object-context-menu{
+  z-index:10050;width:237px;padding:6px;display:flex;flex-direction:column;
+  background:#fff;color:#202124;border:1px solid #dadce0;border-radius:8px;
+  box-shadow:0 10px 35px #1c28332f;font-family:Arial,sans-serif;font-size:13px;
+}
+.singe-object-context-caption{
+  padding:7px 10px 8px;color:#687178;font-size:11px;font-weight:650;
+}
+.singe-object-context-menu button{
+  width:100%;border:0;background:transparent;color:#202124;
+  text-align:left;padding:9px 11px;min-height:34px;border-radius:4px;
+  cursor:pointer;font:inherit
+}
+.singe-object-context-menu button:hover,
+.singe-object-context-menu button:focus-visible{
+  background:#e8f0fe;color:#174ea6;outline:0
+}
+.singe-object-context-separator{height:1px;background:#e8eaed;margin:5px 0}
+.singe-object-context-menu button.danger{color:#a61c2a}

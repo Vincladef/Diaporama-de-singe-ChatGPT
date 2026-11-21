@@ -5,7 +5,7 @@ type Props={
   onChange:(next:string)=>void;
   readOnly?:boolean;
 };
-const MIN=36;
+const MIN=24;
 const INITIAL_OPEN=172;
 
 /** An editor-bottom splitter, like the speaker notes divider in Google Slides. */

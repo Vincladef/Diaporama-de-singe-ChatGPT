@@ -10,6 +10,11 @@ export type FreeformHandle = {
   selectAt: (x:number,y:number,additive?:boolean)=>boolean;
   selectWithin: (box:Box,additive?:boolean)=>number;
   style: (property:string,value:string)=>void;
+  selectForContext:(x:number,y:number)=>boolean;
+  arrange:(zIndex:number)=>void;
+  currentLayer:()=>number;
+  duplicate:()=>void;
+  remove:()=>void;
   refresh: ()=>void;
   clear: ()=>void;
 };
@@ -146,7 +151,64 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     updateSelected(next);
     return items.length;
   }
-  useImperativeHandle(ref,()=>({selectAt,selectWithin,style:styleSelected,refresh,clear}));
+  function selectForContext(x:number,y:number){
+    const document=frameRef.current?.contentDocument;
+    const node=document?.elementFromPoint(x,y) as HTMLElement|null;
+    if(!node||!safeTag(node)||isBackground(node,slideRef.current.canvas))return false;
+    const selected=selectionsRef.current.some(s=>{
+      const el=getElement(s.id);
+      return el===node||!!el?.contains(node);
+    });
+    return selected||selectNode(node,false);
+  }
+  function currentLayer(){
+    const el=activeElement.current;
+    if(!el)return 0;
+    return parseInt(el.ownerDocument.defaultView?.getComputedStyle(el).zIndex??"",10)||0;
+  }
+  function arrange(zIndex:number){
+    const doc=frameRef.current?.contentDocument;
+    if(!doc)return;
+    for(const s of selectionsRef.current){
+      const el=getElement(s.id);
+      if(!el)continue;
+      const position=el.ownerDocument.defaultView?.getComputedStyle(el).position;
+      if(position==="static")el.style.setProperty("position","relative","important");
+      el.style.setProperty("z-index",String(zIndex),"important");
+    }
+    emit(selectionsRef.current);
+    commit();
+  }
+  function duplicate(){
+    const chosen=selectionsRef.current;
+    if(!chosen.length)return;
+    const copied:Selection[]=[];
+    for(const item of chosen){
+      const element=getElement(item.id);if(!element?.parentNode)continue;
+      const clone=element.cloneNode(true) as HTMLElement;
+      for(const el of [clone,...Array.from(clone.querySelectorAll<HTMLElement>("[data-singe-id]"))])
+        el.removeAttribute("data-singe-id");
+      const id="html-"+crypto.randomUUID();
+      clone.dataset.singeId=id;
+      const computed=element.ownerDocument.defaultView?.getComputedStyle(element);
+      const x=lengthToPx(element.style.left||computed?.left,slide.canvas.width);
+      const y=lengthToPx(element.style.top||computed?.top,slide.canvas.height);
+      clone.style.setProperty("position",computed?.position==="static"?"relative":computed?.position??"relative","important");
+      clone.style.setProperty("left",(x+24)+"px","important");
+      clone.style.setProperty("top",(y+24)+"px","important");
+      element.parentNode.insertBefore(clone,element.nextSibling);
+      copied.push({id,box:rectBox(clone),tag:clone.tagName.toLowerCase()});
+    }
+    if(copied.length){updateSelected(copied);commit();}
+  }
+  function remove(){
+    const selected=selectionsRef.current;
+    if(!selected.length)return;
+    for(const item of selected)getElement(item.id)?.remove();
+    clear();commit();
+  }
+  useImperativeHandle(ref,()=>({selectAt,selectWithin,selectForContext,
+    style:styleSelected,arrange,currentLayer,duplicate,remove,refresh,clear}));
   useEffect(()=>{if(slide.mode==="structured")clear();},[slide.mode]);
   useEffect(()=>{
     const doc=frameRef.current?.contentDocument;
