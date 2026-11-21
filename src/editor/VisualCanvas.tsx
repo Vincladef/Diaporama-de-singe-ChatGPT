@@ -377,6 +377,14 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
           {!readOnly && <FreeformOverlay ref={node=>{freeRef.current=node;if(htmlControlRef)htmlControlRef.current=node;}}
             document={doc} frameRef={frameRef} scale={fit} grid={grid}
             onChange={onChange} onSelectStructured={onSelect} onSelectionChange={onHtmlSelectionChange}
+            onMoveStructured={(base,dx,dy)=>{
+              const changes:Record<string,Box>={};
+              for(const id of selectionRef.current){
+                const element=base.elements.find(e=>e.id===id&&!e.locked&&!e.hidden);
+                if(element){const b=worldBox(element,base);changes[id]=transformBox(b,dx,dy,"move",0);}
+              }
+              return Object.keys(changes).length?withElementBoxes(base,changes):base;
+            }}
             onEditingChange={setEditingHtml}/>}
           {!readOnly && editId && editBox && chosen && <textarea
             autoFocus

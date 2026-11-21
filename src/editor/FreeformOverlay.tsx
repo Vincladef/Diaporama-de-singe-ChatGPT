@@ -20,6 +20,7 @@ type Props = {
   onChange:(next:SlideDocument,key?:string)=>void;
   onSelectStructured:(ids:string[])=>void;
   onSelectionChange?:(info:HtmlSelectionInfo|null)=>void;
+  onMoveStructured?:(document:SlideDocument,dx:number,dy:number)=>SlideDocument;
   onEditingChange:(active:boolean)=>void;
 };
 type Selection={id:string;box:Box;tag:string};
@@ -55,7 +56,7 @@ function valueAsColor(input:string):string{
   return m?"#"+m.slice(1,4).map(x=>Number(x).toString(16).padStart(2,"0")).join(""):input;
 }
 export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformOverlay(
-  {document:slide,frameRef,scale,grid,onChange,onSelectStructured,onSelectionChange,onEditingChange},ref
+  {document:slide,frameRef,scale,grid,onChange,onSelectStructured,onSelectionChange,onMoveStructured,onEditingChange},ref
 ){
   const [selections,setSelections]=useState<Selection[]>([]);
   const selectionsRef=useRef<Selection[]>([]);
@@ -178,12 +179,15 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     window.addEventListener("keydown",handler,true);
     return()=>window.removeEventListener("keydown",handler,true);
   },[frameRef]);
-  function commit(){
+  function commit(move?:{dx:number;dy:number}){
     const content=frameRef.current?.contentDocument;
     if(!content)return;
     const html=serializeFreeform(content);
-    if(html===null||html===slideRef.current.freeform?.html)return;
-    changeRef.current({...slideRef.current,freeform:{html,css:slideRef.current.freeform?.css??""}},"dom-html");
+    if(html===null)return;
+    const next={...slideRef.current,freeform:{html,css:slideRef.current.freeform?.css??""}};
+    const combined=move&&onMoveStructured?onMoveStructured(next,move.dx,move.dy):next;
+    if(html===slideRef.current.freeform?.html&&combined===next)return;
+    changeRef.current(combined,"dom-html");
   }
   function styleSelected(property:string,value:string){
     const doc=frameRef.current?.contentDocument;
@@ -254,7 +258,7 @@ export const FreeformOverlay=forwardRef<FreeformHandle,Props>(function FreeformO
     const g=gesture.current;
     if(!g||g.pointerId!==e.pointerId)return;
     e.stopPropagation();gesture.current=null;
-    if(g.moved)commit();
+    if(g.moved)commit(g.mode==="move"?{dx:g.next.x-g.box.x,dy:g.next.y-g.box.y}:undefined);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
   function editHtml(){
