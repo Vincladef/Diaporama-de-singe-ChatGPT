@@ -26,6 +26,9 @@ jobs:
       - name: Require visible browser app at startup
         timeout-minutes: 2
         run: npm run test:browser-entry
+      - name: Verify AI HTML and native editor gestures in Chromium
+        timeout-minutes: 3
+        run: npm run test:editor
       - name: Test public projection vs private presenter notes and synchronized controls
         timeout-minutes: 3
         run: npm run test:presenter

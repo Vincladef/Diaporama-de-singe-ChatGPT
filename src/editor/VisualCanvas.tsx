@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
 import { elementBox, transformBox, withElementBoxes, worldBox, type Box, type TransformMode } from "./geometry";
-import { FreeformOverlay, type FreeformHandle } from "./FreeformOverlay";
+import { FreeformOverlay, type FreeformHandle, type HtmlSelectionInfo } from "./FreeformOverlay";
+import type { ShapePreset } from "./ShapePicker";
+import { updateTextContent, type TextSelectionRange } from "./richText";
 
 type Gesture = {
   pointerId: number;
@@ -27,9 +29,16 @@ type Props = {
   zoom: number;
   grid: number;
   readOnly?: boolean;
+  htmlControlRef?: {current:FreeformHandle|null};
+  onHtmlSelectionChange?: (selection:HtmlSelectionInfo|null)=>void;
+  onNativeRangeChange?: (range:TextSelectionRange|null)=>void;
+  drawShape?:ShapePreset|null;
+  onDrawShape?: (preset:ShapePreset,box:Box)=>void;
+  onDrawFinished?:()=>void;
 };
 
-export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zoom, grid, readOnly}: Props) {
+export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zoom, grid, readOnly,
+  htmlControlRef,onHtmlSelectionChange,onNativeRangeChange,drawShape,onDrawShape,onDrawFinished}: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const freeRef = useRef<FreeformHandle>(null);
@@ -105,14 +114,14 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     }
   }
   function begin(e: PointerEvent<HTMLElement>, id: string, mode: TransformMode | "rotate") {
-    if (readOnly || editId) return;
+    if (readOnly || editId || drawShape) return;
     const clicked=doc.elements.find(item=>item.id===id);
     if(!clicked||clicked.locked||clicked.hidden)return;
     if(clicked.linkFrom&&clicked.linkTo){onSelect([clicked.id]);return;}
     e.preventDefault();
     e.stopPropagation();
     wrapperRef.current?.focus({preventScroll:true});
-    freeRef.current?.clear();
+    freeRef.current?.clear();onNativeRangeChange?.(null);
     const selected=selectionRef.current;
     const group=clicked.groupId && mode==="move"
       ?doc.elements.filter(item=>item.groupId===clicked.groupId&&!item.locked&&!item.hidden).map(item=>item.id)
@@ -243,6 +252,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     const rect={x:Math.min(p.x,start.x),y:Math.min(p.y,start.y),w:Math.abs(p.x-start.x),h:Math.abs(p.y-start.y)};
     marqueeRef.current=null;setMarquee(null);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    if(drawShape){
+      if(rect.w>8&&rect.h>8)onDrawShape?.(drawShape,rect);
+      onDrawFinished?.();return;
+    }
     if(rect.w>6||rect.h>6){
       const picked=doc.elements.filter(el=>{
         if(el.hidden||el.locked)return false;
@@ -250,15 +263,17 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
         return b.x<rect.x+rect.w&&b.x+b.w>rect.x&&b.y<rect.y+rect.h&&b.y+b.h>rect.y;
       }).map(el=>el.id);
       onSelect(start.shift?[...new Set([...start.oldIds,...picked])]:picked);
+      freeRef.current?.selectWithin(rect,start.shift);
     }else{
       if(!start.shift)onSelect([]);
-      freeRef.current?.selectAt(p.x,p.y);
+      freeRef.current?.selectAt(p.x,p.y,start.shift);
     }
   }
   function beginInlineEdit(element: SlideElement) {
-    if (readOnly || element.locked || element.hidden || element.type!=="text") return;
+    if (readOnly || element.locked || element.hidden || element.type!=="text"&&element.type!=="shape") return;
     setEditId(element.id);
     setEditValue(element.text ?? "");
+    onNativeRangeChange?.(null);
     onSelect([element.id]);
   }
   function commitInlineEdit() {
@@ -267,7 +282,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
     setEditId(null);
     const original=documentRef.current.elements.find(e=>e.id===currentId);
     if (original && editValue!==original.text) {
-      onChange({...documentRef.current,elements:documentRef.current.elements.map(e=>e.id===currentId?{...e,text:editValue}:e)},"text");
+      onChange({...documentRef.current,elements:documentRef.current.elements.map(e=>e.id===currentId?updateTextContent(e,editValue):e)},"text");
     }
   }
   const chosen=doc.elements.find(e=>e.id===editId);
@@ -309,7 +324,7 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
           onLoad={()=>freeRef.current?.refresh()}
           style={{position:"absolute",inset:0,border:0,width:doc.canvas.width,height:doc.canvas.height,pointerEvents:editingHtml?"auto":"none"}}
         />
-        <div className="visual-hit-layer" style={{pointerEvents:editingHtml?"none":"auto"}}
+        <div className={"visual-hit-layer"+(drawShape?" is-drawing":"")} style={{pointerEvents:editingHtml?"none":"auto",cursor:drawShape?"crosshair":"default"}}
           onPointerDown={startMarquee} onPointerMove={moveMarquee}
           onPointerUp={stopMarquee} onPointerCancel={stopMarquee}>
           {!readOnly && doc.elements.filter(el=>!el.parentId&&!el.hidden).concat(doc.elements.filter(el=>!!el.parentId&&!el.hidden)).map(element=>{
@@ -359,8 +374,10 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
           {guides.x!==undefined&&<div className="visual-snap-guide vertical" style={{left:guides.x}}/>}
           {guides.y!==undefined&&<div className="visual-snap-guide horizontal" style={{top:guides.y}}/>}
           {marquee&&<div className="visual-marquee" style={{left:marquee.x,top:marquee.y,width:marquee.w,height:marquee.h}}/>}
-          {!readOnly && <FreeformOverlay ref={freeRef} document={doc} frameRef={frameRef} scale={fit} grid={grid}
-            onChange={onChange} onSelectStructured={onSelect} onEditingChange={setEditingHtml}/>}
+          {!readOnly && <FreeformOverlay ref={node=>{freeRef.current=node;if(htmlControlRef)htmlControlRef.current=node;}}
+            document={doc} frameRef={frameRef} scale={fit} grid={grid}
+            onChange={onChange} onSelectStructured={onSelect} onSelectionChange={onHtmlSelectionChange}
+            onEditingChange={setEditingHtml}/>}
           {!readOnly && editId && editBox && chosen && <textarea
             autoFocus
             data-testid="canvas-inline-text"
@@ -375,7 +392,11 @@ export function VisualCanvas({document: doc, selectedIds, onSelect, onChange, zo
             }}
             onPointerDown={e=>e.stopPropagation()}
             value={editValue} onChange={e=>setEditValue(e.target.value)}
+            onSelect={e=>{const start=e.currentTarget.selectionStart,end=e.currentTarget.selectionEnd;
+              if(end>start)onNativeRangeChange?.({id:chosen.id,start,end});}}
             onBlur={commitInlineEdit}
+            onMouseUp={e=>{if(e.currentTarget.selectionStart===e.currentTarget.selectionEnd)
+              onNativeRangeChange?.(null);}}
             onKeyDown={e=>{e.stopPropagation();if(e.key==="Escape"){setEditId(null);}if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commitInlineEdit();}}}
           />}
         </div>

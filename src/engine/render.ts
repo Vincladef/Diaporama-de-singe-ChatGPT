@@ -14,8 +14,8 @@ function safeImageUrl(src: string | undefined): string {
   } catch { /* Invalid URL */ }
   return "";
 }
-function cssStyle(styles: SlideElement["styles"]): string {
-  const result = ["position:absolute"];
+function cssStyle(styles: SlideElement["styles"],absolute=true): string {
+  const result = absolute ? ["position:absolute"] : [];
   for (const [name, value] of Object.entries(styles)) {
     if (!/^(--[\w-]+|[a-zA-Z][a-zA-Z0-9]*)$/.test(name)) continue;
     const key = name.startsWith("--") ? name : name.replace(/[A-Z]/g, x => "-" + x.toLowerCase());
@@ -42,8 +42,16 @@ function renderObjects(document: SlideDocument): string {
       const inner = walk(item.id, depth + 1);
       if (item.type === "image") return item.src ? '<img data-id="' + id + '" alt="' + escapeHtml(item.alt??"") + '" src="' + safeImageUrl(item.src) + '" style="' + style + '"/>' : "";
       if (item.type === "svg") return '<div data-id="' + id + '" style="' + style + '">' + (item.text ?? "") + inner + "</div>";
-      if (item.type === "shape" || item.type === "group") return '<div data-id="' + id + '" style="' + style + '">' + inner + "</div>";
-      return '<div data-id="' + id + '" style="' + style + '">' + escapeHtml(item.text ?? "") + inner + "</div>";
+      if (item.type === "shape" || item.type === "group") {
+        const txt=item.textRuns?.length&&item.textRuns.map(run=>run.text).join("")===(item.text??"")
+          ?item.textRuns.map(run=>'<span style="'+cssStyle(run.styles,false)+'">'+escapeHtml(run.text)+"</span>").join("")
+          :escapeHtml(item.text??"");
+        return '<div data-id="' + id + '" style="' + style + '">' + txt + inner + "</div>";
+      }
+      const txt=item.textRuns?.length&&item.textRuns.map(run=>run.text).join("")===(item.text??"")
+        ?item.textRuns.map(run=>'<span style="'+cssStyle(run.styles,false)+'">'+escapeHtml(run.text)+"</span>").join("")
+        :escapeHtml(item.text??"");
+      return '<div data-id="' + id + '" style="' + style + '">' + txt + inner + "</div>";
     }).join("");
   };
   return walk("_root", 0);

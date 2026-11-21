@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SlideDocumentSchema, SlideElementSchema, type SlideDocument, type SlideElement } from "./domain/slide";
 import { VisualCanvas } from "./editor/VisualCanvas";
+import type { HtmlSelectionInfo, FreeformHandle } from "./editor/FreeformOverlay";
+import { applyTextRange, type TextSelectionRange } from "./editor/richText";
 import { SlidesChrome } from "./editor/SlidesChrome";
 import { applySlideLayout, type LayoutId } from "./editor/slideLayouts";
 import { AnimationTimeline } from "./editor/AnimationTimeline";
@@ -46,6 +48,10 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<InspectorTab>("design");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [htmlSelection,setHtmlSelection]=useState<HtmlSelectionInfo|null>(null);
+  const [nativeRange,setNativeRange]=useState<TextSelectionRange|null>(null);
+  const htmlControlRef=useRef<FreeformHandle|null>(null);
+  const [drawingShape,setDrawingShape]=useState<ShapePreset|null>(null);
   const [themeStudioOpen,setThemeStudioOpen]=useState(false);
   const imageInputRef=useRef<HTMLInputElement>(null);
   const [variantsStudioOpen,setVariantsStudioOpen]=useState(false);
@@ -170,7 +176,7 @@ export default function App() {
     setDraft(next);
     notesRef.current=slide?.notes??"";
     setNotes(notesRef.current);
-    setSelectedIds([]);dirtyRef.current=false;setDirty(false);setTab("design");setExternalChanges(false);
+    setSelectedIds([]);setHtmlSelection(null);setNativeRange(null);setDrawingShape(null);dirtyRef.current=false;setDirty(false);setTab("design");setExternalChanges(false);
     historyRef.current={undo:[],redo:[],key:"",time:0};
     setHistoryTick(v=>v+1);
   }
@@ -294,7 +300,8 @@ export default function App() {
   function applyLayout(layout:LayoutId){
     const currentDoc=draftRef.current;
     if(!currentDoc)return;
-    const next=applySlideLayout(currentDoc,layout);
+    const next=applySlideLayout(currentDoc,layout,"existing");
+    if(next===currentDoc){setError("Cette diapositive ne possède pas de zones réservées. Utilisez la flèche du bouton + pour créer une page avec cette disposition.");return;}
     if(next!==currentDoc){editDocument(next,"layout");setSelectedIds([]);}
   }
   async function addSlideWithLayout(layout:LayoutId){
@@ -375,6 +382,11 @@ export default function App() {
     h.undo.push(structuredClone(now));h.key="";
     draftRef.current=next;versionRef.current++;setDraft(next);dirtyRef.current=true;setDirty(true);setHistoryTick(v=>v+1);
   }
+  function formatNativeSelection(property:string,value:string){
+    const doc=draftRef.current,r=nativeRange;
+    if(!doc||!r||r.end<=r.start)return;
+    editDocument({...doc,elements:doc.elements.map(e=>e.id===r.id?applyTextRange(e,r.start,r.end,property,value):e)},"rich-"+property);
+  }
   function updateFreeform(part: "html" | "css", value: string) {
     if (!draft) return;
     const freeform = { html: draft.freeform?.html ?? "", css: draft.freeform?.css ?? "", [part]: value };
@@ -391,6 +403,16 @@ export default function App() {
         :shapeStyles(preset??{id:"rectangle",name:"Rectangle"},theme?.accent??"#a4bdac")};
     editDocument({...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,elements:[...doc.elements,element]},"insert");
     setTab("design");setSelectedIds([id]);
+  }
+  function drawNativeShape(preset:ShapePreset,box:Box){
+    const doc=draftRef.current;if(!doc)return;
+    const id=crypto.randomUUID();
+    const styles={...shapeStyles(preset,getSlideTheme(doc.themeId)?.accent??"#a4bdac"),
+      left:Math.round(box.x)+"px",top:Math.round(box.y)+"px",
+      width:Math.round(box.w)+"px",height:Math.round(box.h)+"px"};
+    const element:SlideElement={id,type:"shape",name:preset.name,styles,text:""};
+    editDocument({...doc,mode:doc.mode==="freeform"?"hybrid":doc.mode,elements:[...doc.elements,element]},"insert-shape");
+    setSelectedIds([id]);setHtmlSelection(null);setDrawingShape(null);
   }
   async function insertImageFromFile(file:File){
     if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)){setError("Choisissez une image JPG, PNG, WebP ou GIF.");return;}
@@ -808,7 +830,10 @@ export default function App() {
       const writing=!!target?.closest("input, textarea, select, [contenteditable='true']");
       const mod=e.ctrlKey||e.metaKey;
       if(mod&&e.key.toLowerCase()==="s"){e.preventDefault();void save();return;}
-      if(writing||target?.closest(".slide-list"))return;
+      // Undo/redo belong to the slide, even when a formatting control has focus.
+      const formatting=!!target?.closest(".singe-google-chrome");
+      if((writing&&!formatting)||target?.closest(".slide-list"))return;
+      if(e.key==="Escape"&&drawingShape){e.preventDefault();setDrawingShape(null);return;}
       if(mod&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return;}
       if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return;}
       if(mod&&e.key.toLowerCase()==="c"&&selectedIds.length){e.preventDefault();copyObjects();return;}
@@ -823,7 +848,7 @@ export default function App() {
     };
     window.addEventListener("keydown",handler);
     return()=>window.removeEventListener("keydown",handler);
-  },[selectedIds,dirty,current?.presentation.id,notes,busy,externalChanges]);
+  },[selectedIds,dirty,current?.presentation.id,notes,busy,externalChanges,drawingShape]);
 
   async function openPromptPage(){
     if(!await flushPending())return;
@@ -962,12 +987,15 @@ export default function App() {
               <div><strong>Archive HTML/CSS prête</strong><button aria-label="Fermer" onClick={()=>setHtmlExportReport(null)}>×</button></div>
               <a href={htmlExportReport.downloadUrl} download={htmlExportReport.fileName}>↓ Télécharger le fichier</a>
             </div>}
-            {draft&&<SlidesChrome document={draft} selectedIds={selectedIds} onChange={editDocument}
+            {draft&&<SlidesChrome document={draft} selectedIds={selectedIds} htmlSelection={htmlSelection}
+              nativeRange={nativeRange} onChange={editDocument}
               actions={{
                 addSlide:()=>void slideAction("addSlide"),duplicateSlide:()=>void slideAction("duplicateSlide"),
                 deleteSlide:()=>void slideAction("deleteSlide"),
                 layout:applyLayout,newSlideWithLayout:id=>void addSlideWithLayout(id),addText:()=>addObject("text"),addImage:()=>imageInputRef.current?.click(),
-                addShape:preset=>addObject("shape",preset),
+                addShape:preset=>{setDrawingShape(preset);setHtmlSelection(null);},
+                htmlStyle:(property,value)=>htmlControlRef.current?.style(property,value),
+                nativeTextStyle:formatNativeSelection,
                 undo,redo,canUndo:historyRef.current.undo.length>0,canRedo:historyRef.current.redo.length>0,
                 save:()=>void save(),import:()=>setImportOpen(true),
                 export:()=>void downloadPowerPoint(),copy:copyObjects,paste:pasteFromMemory,
@@ -1014,7 +1042,10 @@ export default function App() {
                        if(file){event.preventDefault();void insertImageFromFile(file);}
                      }}>
                     <VisualCanvas document={previewVariant?.document??draft} selectedIds={previewVariant?[]:selectedIds}
-                      onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}/>
+                      onSelect={setSelectedIds} onChange={editDocument} zoom={zoom} grid={grid} readOnly={Boolean(previewVariant)}
+                      htmlControlRef={htmlControlRef} onHtmlSelectionChange={setHtmlSelection}
+                      onNativeRangeChange={setNativeRange}
+                      drawShape={drawingShape} onDrawShape={drawNativeShape} onDrawFinished={()=>setDrawingShape(null)}/>
                   </div>
                   <div className="canvas-statusbar">
                     <span>Diapositive {current.slides.findIndex(slide=>slide.id===slideId)+1} / {current.slides.length} · {draft.canvas.width} × {draft.canvas.height}

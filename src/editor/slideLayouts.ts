@@ -36,16 +36,20 @@ function slotsFor(layout:LayoutId):Slot[] {
   }
 }
 const px=(value:number)=>Math.round(value)+"px";
-export function applySlideLayout(doc:SlideDocument,layout:LayoutId):SlideDocument {
+export function applySlideLayout(doc:SlideDocument,layout:LayoutId,mode:"new"|"existing"="new"):SlideDocument {
   if(layout==="blank")return doc;
   const slots=slotsFor(layout);
   const theme=getSlideTheme(doc.themeId);
   const consumed=new Set<string>();
+  const knownSlots=new Set(["Titre","Contenu","Colonne gauche","Colonne droite","Titre de section",
+    "Citation","Auteur","Légende","Carte 1","Carte 2","Carte 3","Partie gauche","Partie droite","Image"]);
+  if(mode==="existing"&&(!doc.elements.some(e=>knownSlots.has(e.name??""))||doc.freeform?.html))return doc;
   const generated:SlideElement[]=[];
   for(const slot of slots){
     // Preserve text and identity where possible; do not discard extra objects.
     const kind=slot.type??"text";
-    const old=doc.elements.find(element=>element.type===kind&&!element.locked&&!consumed.has(element.id));
+    const old=doc.elements.find(element=>element.type===kind&&!element.locked&&!consumed.has(element.id)
+      &&(mode==="new"||knownSlots.has(element.name??"")));
     if(old)consumed.add(old.id);
     const styles:SlideElement["styles"]={
       left:px(slot.x*doc.canvas.width),top:px(slot.y*doc.canvas.height),
@@ -54,6 +58,7 @@ export function applySlideLayout(doc:SlideDocument,layout:LayoutId):SlideDocumen
       color:String(theme?.foreground??"#203127"),textAlign:slot.align??"left",
       fontWeight:slot.weight??"normal",whiteSpace:"pre-wrap",lineHeight:"1.18",
     };
+    if(mode==="existing"&&!old)continue;
     generated.push(old?{...old,name:slot.name,styles:{...old.styles,...styles}}:
       kind==="image"?{id:crypto.randomUUID(),type:"image",name:slot.name,styles:{...styles,objectFit:"contain"}}:
       {id:crypto.randomUUID(),type:"text",name:slot.name,text:"",styles});

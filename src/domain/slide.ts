@@ -4,6 +4,9 @@ export const SlideElementSchema = z.object({
   id: z.string().min(1).max(128),
   type: z.enum(["text", "image", "shape", "svg", "group"]),
   text: z.string().optional(),
+  textRuns: z.array(z.object({
+    text:z.string(),styles:z.record(z.string(),z.union([z.string(),z.number()])).default({})
+  }).strict()).max(250).optional(),
   src: z.url().optional(),
   alt: z.string().max(350).optional(),
   parentId: z.string().optional(),

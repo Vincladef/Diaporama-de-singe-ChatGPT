@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import type { SlideDocument, SlideElement } from "../domain/slide";
 import { ShapePicker, type ShapePreset } from "./ShapePicker";
+import { ColorPalette } from "./ColorPalette";
+import type { HtmlSelectionInfo } from "./FreeformOverlay";
+import type { TextSelectionRange } from "./richText";
 import { SLIDE_LAYOUTS, type LayoutId } from "./slideLayouts";
 
 type Arrange="front"|"back"|"forward"|"backward";
@@ -9,6 +12,8 @@ type Actions={
   addSlide:()=>void; duplicateSlide:()=>void; deleteSlide:()=>void;
   layout:(id:LayoutId)=>void; newSlideWithLayout:(id:LayoutId)=>void; addText:()=>void; addImage:()=>void; addShape:(preset:ShapePreset)=>void;
   undo:()=>void; redo:()=>void; canUndo:boolean; canRedo:boolean;
+  htmlStyle:(property:string,value:string)=>void;
+  nativeTextStyle:(property:string,value:string)=>void;
   save:()=>void; import:()=>void; export:()=>void;
   copy:()=>void; paste:()=>void; duplicate:()=>void; remove:()=>void;
   group:()=>void; ungroup:()=>void; arrange:(direction:Arrange)=>void;
@@ -17,13 +22,17 @@ type Actions={
   openHistory:()=>void; openAnimations:()=>void; openExpert:()=>void; present:()=>void;
   toggleSlideRail:()=>void; slideRailVisible:boolean; grid:number; setGrid:(n:number)=>void;
 };
-type Props={ document:SlideDocument; selectedIds:string[];
+type Props={ document:SlideDocument; selectedIds:string[]; htmlSelection?:HtmlSelectionInfo|null;
+  nativeRange?:TextSelectionRange|null;
   onChange:(document:SlideDocument,key?:string)=>void; actions:Actions };
-const palette=["#202124","#ffffff","#d93025","#f9ab00","#188038","#1a73e8","#9334e6","#70757a"];
 const fonts=[
   ["Arial, sans-serif","Arial"],["Georgia, serif","Georgia"],["Inter, sans-serif","Inter"],
   ["Helvetica, sans-serif","Helvetica"],["Times New Roman, serif","Times New Roman"],
-  ["Verdana, sans-serif","Verdana"],["Montserrat, sans-serif","Montserrat"]
+  ["Verdana, sans-serif","Verdana"],["Montserrat, sans-serif","Montserrat"],
+  ["Trebuchet MS, sans-serif","Trebuchet MS"],["Tahoma, sans-serif","Tahoma"],
+  ["Garamond, serif","Garamond"],["Courier New, monospace","Courier New"],
+  ["Palatino Linotype, serif","Palatino"],["Impact, sans-serif","Impact"],
+  ["Roboto, sans-serif","Roboto"],["Open Sans, sans-serif","Open Sans"]
 ] as const;
 function Menu({title,children}: {title:string;children:ReactNode}){
   return <details className="singe-top-menu">
@@ -36,18 +45,23 @@ function Menu({title,children}: {title:string;children:ReactNode}){
 function Action({children,onClick,disabled=false}:{
   children:ReactNode;onClick:()=>void;disabled?:boolean
 }){return <button type="button" onClick={onClick} disabled={disabled}>{children}</button>;}
-export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props){
+export function SlidesChrome({document:doc,selectedIds,htmlSelection,nativeRange,onChange,actions:a}:Props){
   const selected=doc.elements.filter(e=>selectedIds.includes(e.id));
-  const text=selected.find(e=>e.type==="text");
+  const text=selected.find(e=>e.type==="text"||(e.type==="shape"&&!!e.text));
   const first=selected[0];
-  const hasText=selected.some(e=>e.type==="text");
-  const hasAny=selected.length>0;
-  const activeStyle=text?.styles??{};
+  const hasText=selected.some(e=>e.type==="text"||(e.type==="shape"&&!!e.text))||!!htmlSelection?.text;
+  const hasAny=selected.length>0||!!htmlSelection;
+  const activeStyle=htmlSelection?.styles??text?.styles??{};
   function style(prop:string,value:string|number,onlyText=false){
     if(!hasAny)return;
     const ids=new Set(selectedIds);
-    onChange({...doc,elements:doc.elements.map(e=>ids.has(e.id)&&!e.locked&&(!onlyText||e.type==="text")
+    const rangeActive=onlyText&&nativeRange&&nativeRange.start<nativeRange.end&&
+      selectedIds.length===1&&selectedIds[0]===nativeRange.id;
+    if(rangeActive)a.nativeTextStyle(prop,String(value));
+    else if(selected.length)onChange({...doc,elements:doc.elements.map(e=>ids.has(e.id)&&!e.locked&&
+      (!onlyText||e.type==="text"||e.type==="shape"&&!!e.text)
       ?{...e,styles:{...e.styles,[prop]:value}}:e)},"style-"+prop);
+    if(htmlSelection)a.htmlStyle(prop,String(value));
   }
   const colorValue=(candidate:unknown,fallback:string)=>typeof candidate==="string"&&/^#[0-9a-f]{6}$/i.test(candidate)?candidate:fallback;
   const numberSize=Math.max(6,parseInt(String(activeStyle.fontSize??"48"),10)||48);
@@ -91,7 +105,7 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
         <Action onClick={a.deleteSlide}>Supprimer la diapositive</Action>
         <Action onClick={a.openTheme}>Modifier le thème</Action>
         {SLIDE_LAYOUTS.map(l=><Action key={"new-"+l.id} onClick={()=>a.newSlideWithLayout(l.id)}>Nouvelle : {l.name}</Action>)}
-        {SLIDE_LAYOUTS.map(l=><Action key={"apply-"+l.id} onClick={()=>a.layout(l.id)}>Appliquer : {l.name}</Action>)}
+        {SLIDE_LAYOUTS.map(l=><Action key={"apply-"+l.id} onClick={()=>a.layout(l.id)}>Disposition actuelle : {l.name}</Action>)}
       </Menu>
       <Menu title="Réorganiser">
         <Action onClick={a.group} disabled={selected.length<2}>Grouper</Action>
@@ -115,17 +129,22 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
         <Action onClick={a.openTheme}>Thèmes visuels</Action>
       </Menu>
     </nav>
-    <div className="singe-formatbar" role="toolbar" aria-label="Mise en forme rapide">
+    <div className="singe-formatbar" role="toolbar" aria-label="Mise en forme rapide"
+      onMouseDownCapture={e=>{
+        // Formatting buttons must not collapse a selected word in the canvas.
+        const target=e.target instanceof HTMLElement?e.target:null;
+        if(target?.closest("button")&&!target.closest(".shape-picker-menu"))e.preventDefault();
+      }}>
       <div className="singe-format-group">
         <button title="Annuler" onClick={a.undo} disabled={!a.canUndo} aria-label="Annuler">↶</button>
         <button title="Rétablir" onClick={a.redo} disabled={!a.canRedo} aria-label="Rétablir">↷</button>
         <button title="Afficher ou masquer les diapositives" onClick={a.toggleSlideRail}>▤</button>
         <button title="Nouvelle diapositive" onClick={a.addSlide}>＋</button>
         <details className="singe-layout-picker">
-          <summary title="Choisir une disposition">Disposition ▾</summary>
+          <summary title="Nouvelle diapositive avec disposition" aria-label="Choisir la disposition de la nouvelle diapositive">▾</summary>
           <div className="singe-layout-grid">
             {SLIDE_LAYOUTS.map(l=><button type="button" key={l.id} onClick={e=>{
-              a.layout(l.id);e.currentTarget.closest("details")?.removeAttribute("open");
+              a.newSlideWithLayout(l.id);e.currentTarget.closest("details")?.removeAttribute("open");
             }} title={l.description}>
               <span className={"singe-layout-mini layout-"+l.id} aria-hidden="true"><i/><i/><i/></span>
               <span>{l.name}</span>
@@ -136,13 +155,15 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
       <div className="singe-format-group">
         <button title="Insérer du texte" onClick={a.addText}>T</button>
         <button title="Importer une image" onClick={a.addImage}>▧</button>
-        <ShapePicker onPick={a.addShape}/>
+        <ShapePicker onPick={a.addShape} label="▢"/>
         <button title="Changer de thème" onClick={a.openTheme}>◐</button>
       </div>
       <div className="singe-format-group singe-text-tools">
         <select aria-label="Police" disabled={!hasText}
-          value={String(activeStyle.fontFamily??"Arial, sans-serif")}
+          value={fonts.some(item=>item[0]===String(activeStyle.fontFamily))?String(activeStyle.fontFamily):String(activeStyle.fontFamily??"Arial, sans-serif")}
           onChange={e=>style("fontFamily",e.target.value,true)}>
+          {!fonts.some(item=>item[0]===String(activeStyle.fontFamily))&&activeStyle.fontFamily&&
+            <option value={String(activeStyle.fontFamily)}>{String(activeStyle.fontFamily)}</option>}
           {fonts.map(([value,label])=><option value={value} key={value}>{label}</option>)}
         </select>
         <input aria-label="Taille de police" title="Taille de police" type="number" min="6" max="600"
@@ -153,15 +174,10 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
           onClick={()=>style("fontStyle",activeStyle.fontStyle==="italic"?"normal":"italic",true)}><em>I</em></button>
         <button title="Souligné" aria-pressed={activeStyle.textDecoration==="underline"} disabled={!hasText}
           onClick={()=>style("textDecoration",activeStyle.textDecoration==="underline"?"none":"underline",true)}><u>S</u></button>
-        <label className="singe-color" title="Couleur du texte"><span>A</span>
-          <input aria-label="Couleur du texte" type="color" disabled={!hasText}
-            value={colorValue(activeStyle.color,"#202124")} onChange={e=>style("color",e.target.value,true)}/>
-        </label>
-        <label className="singe-color" title="Surlignage de la zone"><span>▰</span>
-          <input aria-label="Surlignage de la zone" type="color" disabled={!hasText}
-            value={colorValue(activeStyle.backgroundColor,"#ffffff")}
-            onChange={e=>style("backgroundColor",e.target.value,true)}/>
-        </label>
+        <ColorPalette label="A" title="Couleur du texte" value={colorValue(activeStyle.color,"#202124")}
+          onChange={value=>style("color",value,true)}/>
+        <ColorPalette label="▰" title="Surlignage du texte" value={colorValue(activeStyle.backgroundColor,"#ffffff")}
+          onChange={value=>style("backgroundColor",value,true)} allowTransparent/>
         <button title="Aligner à gauche" disabled={!hasText} onClick={()=>style("textAlign","left",true)}>☰</button>
         <button title="Centrer" disabled={!hasText} onClick={()=>style("textAlign","center",true)}>≡</button>
         <button title="Aligner à droite" disabled={!hasText} onClick={()=>style("textAlign","right",true)}>☷</button>
@@ -171,11 +187,20 @@ export function SlidesChrome({document:doc,selectedIds,onChange,actions:a}:Props
           <option value="1.5">1,5</option><option value="2">2,0</option>
         </select>
       </div>
-      {first&&!hasText&&<div className="singe-format-group">
-        <label className="singe-color" title="Couleur de remplissage"><span>▰</span>
-          <input type="color" aria-label="Remplissage" value={colorValue(first.styles.backgroundColor,"#a4bdac")}
-            onChange={e=>style("backgroundColor",e.target.value)}/>
-        </label>
+      {(first&&!hasText||htmlSelection&&!hasText)&&<div className="singe-format-group">
+        <ColorPalette label="▰" title="Couleur de remplissage"
+          value={colorValue(activeStyle.backgroundColor??first?.styles.backgroundColor,"#a4bdac")}
+          onChange={value=>style("backgroundColor",value)} allowTransparent/>
+      </div>}
+      {(selected.some(e=>e.type==="shape")||htmlSelection)&&<div className="singe-format-group">
+        <ColorPalette label="▢" title="Couleur du contour"
+          value={colorValue(activeStyle.borderColor,"#202124")}
+          onChange={value=>{style("borderStyle","solid");style("borderColor",value);}}/>
+        <select aria-label="Épaisseur du contour" title="Épaisseur du contour"
+          value={String(activeStyle.borderWidth??"0px")}
+          onChange={e=>{style("borderStyle","solid");style("borderWidth",e.target.value);}}>
+          {["0px","1px","2px","3px","4px","6px","8px","12px"].map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
       </div>}
       <div className="singe-format-spacer"/>
       <div className="singe-format-group">

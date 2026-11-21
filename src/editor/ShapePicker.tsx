@@ -21,11 +21,12 @@ export const SHAPES:ShapePreset[]=[
 ];
 export function shapeStyles(preset:ShapePreset,color="#a4bdac"):SlideElement["styles"]{
  return {left:"200px",top:"260px",width:(preset.width??520)+"px",height:(preset.height??260)+"px",
-   backgroundColor:color,borderRadius:preset.radius??"0px",...(preset.clipPath?{clipPath:preset.clipPath}:{})};
+   backgroundColor:color,borderRadius:preset.radius??"0px",display:"flex",justifyContent:"center",alignItems:"center",
+   fontFamily:"Arial, sans-serif",fontSize:"48px",textAlign:"center",color:"#203127",whiteSpace:"pre-wrap",...(preset.clipPath?{clipPath:preset.clipPath}:{})};
 }
-export function ShapePicker({onPick,label="+ Forme"}:{onPick:(preset:ShapePreset)=>void;label?:string}){
+export function ShapePicker({onPick,label="▢"}:{onPick:(preset:ShapePreset)=>void;label?:string}){
  return <details className="shape-picker">
-  <summary>{label} <span aria-hidden="true">▾</span></summary>
+  <summary title="Formes" aria-label="Insérer une forme"><svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="12" height="12"/><circle cx="15" cy="14" r="6"/></svg><span aria-hidden="true">▾</span></summary>
   <div className="shape-picker-menu" role="group" aria-label="Formes disponibles">
    {SHAPES.map(preset=><button type="button" key={preset.id} title={preset.name}
      onClick={event=>{onPick(preset);event.currentTarget.closest("details")?.removeAttribute("open");}}>
