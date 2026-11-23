@@ -87,3 +87,22 @@ Le serveur 0.10.0 publie **37 outils**, dont `compose_diagrams`, `curate_images`
 ## Étape 11 : historique et export fiable
 
 Le serveur 0.11.0 expose 39 outils dont `list_slide_history` et `restore_slide_revision`. L'historique conserve l'état précédent des modifications déjà enregistrées (jusqu'à 60 entrées par diapositive). La restauration exige une révision récente, protège les changements concurrents et archive normalement la version remplacée. `prepare_export` fournit désormais un diagnostic succinct de compatibilité PPTX/Google Slides. L'éditeur et le MCP partagent les points de restauration conservés dans la base Neon ChatGPT. Une modification SQL transactionnelle plus forte exigerait une migration distincte ; l'état de cette limite figure dans [FINALISATION_STEP11.md](FINALISATION_STEP11.md).
+
+
+## Import direct d’images fournies et conservation des originaux (MCP 0.19)
+
+Trois outils évitent d'utiliser Canva ou Adobe comme intermédiaires pour placer un visuel :
+
+- **place_chat_image** : importe directement le fichier joint à la conversation grâce à la métadonnée MCP fileParams, puis l'insère comme image native, sans transfert manuel de Base64.
+- **inventory_source_visuals** : inventorie les images natives, les balises HTML img, les fonds CSS et les schémas SVG ; la réponse contient des empreintes SHA-256, les formats, des index et les révisions, sans divulguer les octets des images.
+- **place_source_image** : insère un original sous forme d'objet natif éditable, en conservant les autres calques, le HTML et les animations. Une révision est obligatoire. Le cadrage par défaut est **contain**, sans couper le visuel.
+
+Fournir exactement une source : **imageBase64** (PNG, JPEG, WebP ou GIF, Base64 ou data URI), **referenceId** (identifiant d'une référence visuelle déjà enregistrée dans l'application), ou **sourceSlideId** (copie de l'image d'une autre diapositive du même diaporama, avec **sourceImageIndex** si nécessaire).
+
+La copie depuis une autre slide évite de retransmettre de longs octets Base64. Le média est conservé durablement dans le document JSON ; aucune table supplémentaire ni hébergeur externe. Limite de 3 Mo par image, avec validation des signatures, de l'encodage et des dimensions. Les SVG non fiables sont refusés en entrée.
+
+**Import automatique des pièces jointes ChatGPT :** l'outil prioritaire **place_chat_image** utilise l'extension officielle MCP `_meta["openai/fileParams"]=["file"]` pour recevoir directement une pièce jointe. Le champ `file` est déclaré avec `download_url` et `file_id` requis, `mime_type` et `file_name` facultatifs. ChatGPT renseigne le lien temporaire et le serveur télécharge le fichier après contrôle des URL HTTPS publiques, redirections, taille, signature et dimensions. Aucun détour par Canva, Adobe ou un lien public manuel. [Spécification ChatGPT](https://developers.openai.com/plugins/reference#define-file-inputs).
+
+Un fichier privé ChatGPT ne peut pas être récupéré à partir de son seul identifiant par un MCP quelconque ; la fonctionnalité **fileParams** est le mécanisme autorisé de transmission. Pour d'autres clients MCP ne prenant pas en charge cette extension, utiliser **place_source_image** avec le Base64, une référence de l'application ou une image d'une autre diapositive.
+
+Avant toute refonte, appeler **get_creation_instructions**, puis **get_improvement_brief** et **inventory_source_visuals**. Pour une pièce jointe au chat, privilégier **place_chat_image**. Après création des variantes, **compare_variants** signale désormais **source_images_missing** ou **source_diagrams_missing** si des figures d'origine ont disparu, y compris dans le HTML et les fonds CSS. Terminer par une inspection Chromium des pixels, jamais par un audit statique seul.
