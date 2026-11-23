@@ -84,3 +84,34 @@ test("integrates animation timing into an actual PptxGenJS generated PowerPoint"
   assert.match(xml,/<p:timing>/);
   assert.equal((xml.match(/nodeType="clickEffect"/g)||[]).length,2);
 });
+
+test("freeform HTML selectors are eligible for native Office timing after isolated capture",()=>{
+  const doc=createEmptySlideDocument();
+  doc.mode="freeform";
+  doc.freeform={html:'<article id="step-1">Première étape</article><article id="step-2">Deuxième étape</article>',css:""};
+  doc.animations=[
+    {id:"html-1",targetSelector:"#step-1",order:0,trigger:"click",effect:"fade",durationMs:320},
+    {id:"html-2",targetSelector:"#step-2",order:1,trigger:"click",effect:"wipe",durationMs:420},
+  ];
+  assert.equal(canUseNativeAnimations(doc),true);
+  assert.deepEqual(buildExportFrames([doc],"native").map(x=>x.revealClickCount),[null]);
+  const xml=baseXml.replace('name="block"','name="singe-html-animation-1"')
+    .replace('name="arrow"','name="singe-html-animation-2"');
+  const patched=buildNativeTimingXml(xml,doc);
+  assert.equal(XMLValidator.validate(patched),true);
+  assert.equal((patched.match(/nodeType="clickEffect"/g)??[]).length,2);
+});
+
+test("animated CSS complexity on another structured object does not multiply the entire slide",()=>{
+  const doc=sample();
+  doc.elements.push({id:"ornament",type:"shape",styles:{filter:"blur(3px)"}});
+  assert.equal(canUseNativeAnimations(doc),true);
+  assert.equal(buildExportFrames([doc],"native").length,1);
+});
+
+test("unsupported native effects still require an explicit staged fallback",()=>{
+  const doc=sample();
+  doc.animations[0]!.effect="highlight";
+  assert.equal(canUseNativeAnimations(doc),false);
+  assert.equal(buildExportFrames([doc],"native").length,3);
+});
