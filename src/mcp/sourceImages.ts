@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { SlideDocument, SlideElement } from "../domain/slide.ts";
 import { inspectMarkupMedia } from "../quality/markupMedia.ts";
 import { getCreationReferenceFile } from "./creationReferences.ts";
-import { getSlide, editSlides } from "./store.ts";
+
 
 const MAX_BYTES = 3_000_000;
 const MAX_PIXELS = 40_000_000;
@@ -102,6 +102,7 @@ async function resolveSource(a: SourceImagePlacement): Promise<{
     if (!reference || !reference.mimeType.startsWith("image/")) throw new Error("reference_image_not_found");
     return decodeSourceImage(reference.base64);
   }
+  const { getSlide } = await import("./store.ts");
   const previous = await getSlide(a.sourceSlideId!, "full");
   if (!("document" in previous)) throw new Error("source_slide_not_found");
   if (previous.presentation_id !== a.presentationId) throw new Error("foreign_source_slide");
@@ -120,6 +121,7 @@ async function resolveSource(a: SourceImagePlacement): Promise<{
 }
 export async function placeSourceImage(raw: SourceImagePlacement) {
   const a = SourceImagePlacementSchema.parse(raw);
+  const { getSlide, editSlides } = await import("./store.ts");
   const slide = await getSlide(a.slideId, "full");
   if (!("document" in slide)) throw new Error("slide_not_found");
   if (slide.presentation_id !== a.presentationId) throw new Error("foreign_presentation");
