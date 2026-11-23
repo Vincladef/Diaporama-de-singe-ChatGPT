@@ -78,7 +78,7 @@ function mimeForImage(bytes: Buffer): string {
 export async function decodeSourceImage(value: string): Promise<{
   src: string; mimeType: string; width: number; height: number; sizeBytes: number; fingerprint: string;
 }> {
-  const raw = value.replace(/^data:image\/(?:png|jpe?g|gif|webp);base64,/i, "").trim();
+  const raw = value.replace(/^data:image\/(?:png|jpe?g|gif|webp);base64,/i, "").replace(/\s+/g, "");
   if (!raw || raw.length > MAX_BASE64_LENGTH || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(raw))
     throw new Error("invalid_image_base64");
   const bytes = Buffer.from(raw, "base64");
