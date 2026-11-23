@@ -2,6 +2,7 @@ import { toPng } from "html-to-image";
 import type { SlideDocument } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
 import { SlideAnimationPlayer } from "../animation/runtime";
+import type { HtmlAnimationTarget } from "./nativeAnimations";
 
 /** A text run measured in the real browser, in source-canvas pixels. */
 export type NativeTextRun = {
@@ -11,7 +12,12 @@ export type NativeTextRun = {
   italic: boolean; color: string; align: "left" | "center" | "right";
   letterSpacing: number;
 };
-export type NativeHtmlCapture = { background: string; texts: NativeTextRun[] };
+export type NativeHtmlAnimationLayer = {
+  objectName: string; image: string; x: number; y: number; w: number; h: number;
+};
+export type NativeHtmlCapture = {
+  background: string; texts: NativeTextRun[]; animatedLayers: NativeHtmlAnimationLayer[];
+};
 
 function visibleText(el: HTMLElement, win: Window): boolean {
   let node: HTMLElement | null = el;
@@ -89,7 +95,10 @@ function extractText(doc: Document, width: number, height: number): { texts: Nat
  * but rebuild every measurable visible text run as an editable PPTX text box.
  * Unsupported masks, pseudo-elements, photos and CSS painting remain raster.
  */
-export async function captureNativeHtml(document: SlideDocument, revealClickCount?: number): Promise<NativeHtmlCapture> {
+export async function captureNativeHtml(
+  document: SlideDocument, revealClickCount?: number,
+  animationTargets: HtmlAnimationTarget[] = [],
+): Promise<NativeHtmlCapture> {
   const { width, height } = document.canvas;
   const frame = window.document.createElement("iframe");
   frame.title = "Extraction de textes modifiables";
@@ -126,12 +135,43 @@ export async function captureNativeHtml(document: SlideDocument, revealClickCoun
       player = new SlideAnimationPlayer(doc, document);
       await player.seek(revealClickCount, { animate: false });
     }
+    // Capture each animated HTML object while it is still visible. Then hide it
+    // from the static backdrop without changing its layout or the CSS grid.
+    // One PowerPoint image per source element, not one slide per click.
+    const animatedLayers: NativeHtmlAnimationLayer[] = [];
+    const nodes: Element[] = [];
+    for(const target of animationTargets){
+      let matches: Element[];
+      try { matches = [...doc.body.querySelectorAll(target.selector)]; }
+      catch { throw new Error("Sélecteur d'animation HTML invalide : " + target.selector); }
+      if(matches.length !== 1)
+        throw new Error("L'animation " + target.selector + " vise " + matches.length +
+          " élément(s) HTML ; un seul élément est requis pour un export PowerPoint natif.");
+      const node = matches[0]!;
+      if(nodes.some(other => other.contains(node) || node.contains(other)))
+        throw new Error("Des animations HTML imbriquées ne peuvent pas être isolées sans doublons : " + target.selector);
+      const box = node.getBoundingClientRect();
+      if(!Number.isFinite(box.x) || !Number.isFinite(box.y) ||
+        box.width < 2 || box.height < 2 ||
+        box.x < -1 || box.y < -1 || box.right > width + 1 || box.bottom > height + 1)
+        throw new Error("L'objet animé " + target.selector + " dépasse le cadre de la diapositive.");
+      const image = await toPng(node as HTMLElement, {
+        width: Math.ceil(box.width), height: Math.ceil(box.height),
+        pixelRatio: 1, cacheBust: false, backgroundColor: "transparent",
+      });
+      animatedLayers.push({
+        objectName: target.objectName, image,
+        x: box.x, y: box.y, w: box.width, h: box.height,
+      });
+      nodes.push(node);
+    }
+    for(const node of nodes)(node as HTMLElement).style.setProperty("visibility","hidden","important");
     const extracted = extractText(doc, width, height);
     extracted.hide();
     const background = await toPng(doc.body, {
       width, height, pixelRatio: 1, cacheBust: false, backgroundColor: "#101715",
     });
-    return { background, texts: extracted.texts };
+    return { background, texts: extracted.texts, animatedLayers };
   } finally {
     player?.dispose();
     frame.remove();

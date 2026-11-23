@@ -1,7 +1,6 @@
 import JSZip from "jszip";
 import type { SlideDocument, AnimationStep } from "../domain/slide.ts";
 import { buildPlaybackPlan } from "../animation/timeline.ts";
-import { isNativePptxObject } from "./preflight.ts";
 
 const supported = new Set<AnimationStep["effect"]>(["appear","fade","move","scale","wipe"]);
 type Preset = { id: number; subtype: number; filter?: string; options?: string };
@@ -13,30 +12,66 @@ const presets: Record<string, Preset> = {
   wipe: {id:22, subtype:1, filter:"wipe(left)"},
 };
 
-function targetId(step: AnimationStep): string | null {
-  if(step.targetElementId) return step.targetElementId;
-  const sel=step.targetSelector?.trim();
-  if(!sel) return null;
-  const data=sel.match(/^\[data-id=["']([^"']{1,128})["']\]$/);
-  if(data)return data[1]!;
-  const simple=sel.match(/^#([A-Za-z][A-Za-z0-9_-]{0,127})$/);
-  return simple?.[1]??null;
+/** Native Office object names for one animation target. Freeform targets are
+ * rasterized independently and named deterministically before OOXML patching. */
+export type HtmlAnimationTarget = { selector: string; objectName: string };
+
+function structuredTargetId(cue: AnimationStep, doc: SlideDocument): string | null {
+  if(doc.mode === "freeform") return null;
+  let id = cue.targetElementId;
+  if(!id && cue.targetSelector){
+    const match = cue.targetSelector.trim().match(/^\\[data-id=["']([^"']{1,128})["']\\]$/);
+    id = match?.[1];
+  }
+  if(!id) return null;
+  const item = doc.elements.find(el => el.id === id);
+  if(!item || item.hidden || item.parentId || item.type === "group" ||
+    !["text","shape","image","svg"].includes(item.type) ||
+    (item.type === "image" && !item.src) ||
+    (item.type === "svg" && !item.text?.trim().startsWith("<svg"))) return null;
+  return id;
 }
 
-/** Only native objects can receive Office animations; arbitrary HTML/CSS is
- * exported as progressive frames until a safe element-level conversion exists.
- */
+function htmlSelector(cue: AnimationStep, doc: SlideDocument): string | null {
+  if(structuredTargetId(cue,doc)) return null;
+  // A structured element deliberately disappears in freeform mode. Never
+  // mistake its targetElementId for an HTML [data-id] animation target.
+  if(doc.mode==="freeform" && cue.targetElementId &&
+    doc.elements.some(el=>el.id===cue.targetElementId)) return null;
+  if(doc.mode === "structured" || !doc.freeform?.html?.trim()) return null;
+  const selector = cue.targetSelector?.trim() ??
+    (cue.targetElementId ? '[data-id=' + JSON.stringify(cue.targetElementId) + ']' : "");
+  if(!selector || selector.length > 240 ||
+    /^(?:html|body|\\*|:root)$/i.test(selector)) return null;
+  return selector;
+}
+
+export function htmlAnimationTargets(doc: SlideDocument): HtmlAnimationTarget[] {
+  const selectors = [...new Set(doc.animations.map(cue => htmlSelector(cue,doc))
+    .filter((selector): selector is string => Boolean(selector)))];
+  return selectors.map((selector,index)=>({
+    selector, objectName:"singe-html-animation-"+(index+1),
+  }));
+}
+
+export function nativeAnimationTargetName(cue: AnimationStep,doc:SlideDocument):string|null {
+  const structured = structuredTargetId(cue,doc);
+  if(structured) return structured;
+  const selector=htmlSelector(cue,doc);
+  if(!selector)return null;
+  return htmlAnimationTargets(doc).find(target=>target.selector===selector)?.objectName??null;
+}
+
+/** Complex HTML can have native click effects after each animated HTML node is
+ * extracted as a separate image. A non-animated CSS decoration is NOT a reason
+ * to reject the entire slide. Nested structured groups remain a raster fallback. */
 export function canUseNativeAnimations(doc: SlideDocument): boolean {
-  if(!doc.animations.length || doc.mode==="freeform" ||
-    doc.elements.some(el=>!isNativePptxObject(el))) return false;
-  const eligible=new Set(doc.elements.filter(el=>el.type!=="group" &&
-    (el.type!=="image" || Boolean(el.src)) && !el.hidden &&
-    !(el.type==="shape" && String(el.styles.background??el.styles.backgroundColor??"").startsWith("linear-gradient("))
-  ).map(el=>el.id));
-  return doc.animations.every(step=>{
-    const id=targetId(step);
-    return Boolean(id&&eligible.has(id)&&supported.has(step.effect));
-  });
+  if(!doc.animations.length) return false;
+  if(doc.mode!=="freeform" && doc.elements.some(el =>
+    el.type==="group" || el.parentId ||
+    doc.elements.some(child=>child.parentId===el.id))) return false;
+  return doc.animations.every(cue=>
+    supported.has(cue.effect) && Boolean(nativeAnimationTargetName(cue,doc)));
 }
 
 function decodeXmlAttr(s:string):string {
@@ -66,7 +101,7 @@ export function buildNativeTimingXml(xml:string,doc:SlideDocument):string {
   let n=2;
   const next=()=>++n;
   const effect=(cue:AnimationStep,nodeType:"clickEffect"|"afterEffect"|"withEffect"):string=>{
-    const name=targetId(cue);
+    const name=nativeAnimationTargetName(cue,doc);
     const id=name?idMap.get(name):undefined;
     if(id===undefined)throw new Error("Objet PowerPoint introuvable pour l'animation : "+(name??cue.id));
     const def=presets[cue.effect]!;

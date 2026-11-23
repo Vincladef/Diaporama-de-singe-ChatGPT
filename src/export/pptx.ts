@@ -8,7 +8,7 @@ import { visibleStructuredElements } from "./nativeSteps";
 import { inspectExport,isNativePptxObject } from "./preflight";
 import { asColor, cssLength, pptxInches, safeDownloadName } from "./geometry";
 import { buildExportFrames, type RevealExportMode } from "./reveals";
-import { addNativeAnimationsToPptx, canUseNativeAnimations } from "./nativeAnimations";
+import { addNativeAnimationsToPptx, canUseNativeAnimations, htmlAnimationTargets } from "./nativeAnimations";
 import {getSlideTheme} from "../editor/slideThemes";
 
 export type PowerPointMode = "faithful" | "editable";
@@ -159,14 +159,17 @@ function safeSvgData(svg:string):string{
 async function appendNativeObjects(
   pptx: pptxgen, slide: ReturnType<pptxgen["addSlide"]>, document: SlideDocument,
   slideW: number, slideH: number,cache:Map<string,Promise<string>>,
+  animatedIds:Set<string> = new Set(),
 ): Promise<void> {
   for (const element of document.elements) {
     if(element.hidden)continue;
     const box = geometry(element, document, slideW, slideH);
     const style = element.styles;
-    if(!isNativePptxObject(element)){
+    const animatedGradient = animatedIds.has(element.id) && element.type==="shape" &&
+      String(style.backgroundColor??style.background??"").startsWith("linear-gradient(");
+    if(!isNativePptxObject(element) || animatedGradient){
       const image=await captureObject(document,element);
-      slide.addImage({data:image,...box,objectName:element.id+" · rendu isolé"});
+      slide.addImage({data:image,...box,objectName:element.id});
       continue;
     }
     if (element.type === "text") {
@@ -256,7 +259,8 @@ export async function buildPowerPoint(
   const imageCache=new Map<string,Promise<string>>();
   if(preflight.animatedSlides && effectiveRevealMode === "native") {
     const nativeCount=deck.slides.filter(s=>canUseNativeAnimations(s.document)).length;
-    warnings.push(nativeCount+" diapositive(s) animées avec des objets PowerPoint natifs ; "+(preflight.animatedSlides-nativeCount)+" diapositive(s) utilisent les étapes de secours pour préserver les animations HTML.");
+    warnings.push(nativeCount+" diapositive(s) avec animations PowerPoint natives ; "+
+      (preflight.animatedSlides-nativeCount)+" diapositive(s) avec états de secours (effet ou cible non convertible).");
   }
   if(preflight.animatedSlides && effectiveRevealMode !== "native")warnings.push(effectiveRevealMode === "steps"
     ? preflight.animatedSlides + " diapositive(s) animées développées en " + frames.length +
@@ -307,10 +311,20 @@ export async function buildPowerPoint(
       } else {
         const hasFreeform = document.mode !== "structured" && !emptyFreeform(document);
         if (hasFreeform) {
+          const nativeHtmlTargets=effectiveRevealMode==="native" && frame.revealClickCount===null
+            && canUseNativeAnimations(document) ? htmlAnimationTargets(document) : [];
           const extracted = await captureNativeHtml(document,
-            frame.revealClickCount === null ? undefined : frame.revealClickCount);
+            frame.revealClickCount === null ? undefined : frame.revealClickCount,nativeHtmlTargets);
           slide.addImage({ data: extracted.background, x: 0, y: 0, w: slideW, h: slideH,
             objectName: "Décor HTML et médias" });
+          // Maintain the original DOM z-order: HTML precedes structured layers.
+          for(const layer of extracted.animatedLayers)
+            slide.addImage({data:layer.image,
+              x:layer.x/document.canvas.width*slideW,
+              y:layer.y/document.canvas.height*slideH,
+              w:layer.w/document.canvas.width*slideW,
+              h:layer.h/document.canvas.height*slideH,
+              objectName:layer.objectName});
           appendNativeHtmlText(slide, extracted.texts, document, slideW, slideH);
           warnings.push("Diapositive " + number +
             " : " + extracted.texts.length + " texte(s) HTML converti(s) en objets modifiables ; photos, diagrammes et effets CSS complexes restent dans le décor.");
@@ -320,8 +334,11 @@ export async function buildPowerPoint(
           fallbacks.length+" objet(s) à effet complexe converti(s) séparément en images ; les autres restent modifiables.");
         const visible = frame.revealClickCount === null ? document.elements :
           visibleStructuredElements(document, frame.revealClickCount);
+        const animatedIds = effectiveRevealMode==="native" && canUseNativeAnimations(document)
+          ? new Set(document.animations.map(cue=>cue.targetElementId)
+            .filter((id):id is string=>Boolean(id))) : new Set<string>();
         await appendNativeObjects(pptx, slide,
-          { ...document, elements: visible }, slideW, slideH, imageCache);
+          { ...document, elements: visible }, slideW, slideH, imageCache, animatedIds);
       }
     }
     if(effectiveRevealMode === "native" && frame.revealClickCount===null && canUseNativeAnimations(document))

@@ -123,9 +123,46 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
        assert.ok(zip.file("ppt/slides/slide"+i+".xml"),"actual slide "+i);
        assert.ok(zip.file("ppt/notesSlides/notesSlide"+i+".xml"),"speaker notes "+i);
      }
+
      await writeFile("artifacts/integration/clark-wells-"+mode+".pptx",bytes);
      console.log("REAL_PPTX_EXPORT",mode,bytes.length,result.warnings.length);
    }
+   // Real browser rasterizes individually animated HTML cards. The output
+   // contains one slide and a genuine OOXML animation timing tree.
+   const hybrid=await page.evaluate(async()=>{
+     const pptxUrl="/src/export/pptx.ts";
+     const {buildPowerPoint}=await import(pptxUrl);
+     const documentUrl="/src/domain/slide.ts";
+     const {createEmptySlideDocument}=await import(documentUrl);
+     const doc=createEmptySlideDocument();
+     doc.mode="freeform";
+     doc.freeform={
+       html:'<main><article id="a">Première carte</article><article id="b">Seconde carte</article></main>',
+       css:'main{padding:80px;display:flex;gap:32px}article{width:500px;height:240px;padding:28px;background:#cee8d3;font:bold 52px Arial;color:#173d22}',
+     };
+     doc.animations=[
+       {id:"a",targetSelector:"#a",order:0,trigger:"click",effect:"fade",durationMs:300},
+       {id:"b",targetSelector:"#b",order:1,trigger:"click",effect:"wipe",durationMs:400},
+     ];
+     const result=await buildPowerPoint({
+       presentation:{id:"a",title:"Animation HTML native",format:"16:9"},
+       slides:[{id:"b",position:0,revision:1,document:doc,notes:"Animées au clic"}],
+     } as any,"editable",undefined,"native");
+     const bytes=new Uint8Array(await result.blob.arrayBuffer());
+     let binary="";
+     for(let i=0;i<bytes.length;i+=8192)
+       binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+     return {slideCount:result.slideCount,sourceCount:result.sourceSlideCount,
+       base64:btoa(binary)};
+   });
+   assert.equal(hybrid.slideCount,1,"HTML with two reveals remains one actual PowerPoint slide");
+   const hybridZip=await JSZip.loadAsync(Buffer.from(hybrid.base64,"base64"));
+   assert.equal(hybridZip.file("ppt/slides/slide2.xml"),null);
+   const hybridXml=await hybridZip.file("ppt/slides/slide1.xml")!.async("string");
+   assert.ok(hybridXml.includes("<p:timing>"),"PowerPoint animation timeline emitted");
+   assert.equal((hybridXml.match(/nodeType="clickEffect"/g)??[]).length,2);
+   assert.ok(hybridXml.includes("singe-html-animation-1"));
+   assert.ok(hybridXml.includes("singe-html-animation-2"));
  }finally{
    await browser?.close().catch(()=>{});
    await server.close();
