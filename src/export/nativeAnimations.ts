@@ -34,6 +34,10 @@ function structuredTargetId(cue: AnimationStep, doc: SlideDocument): string | nu
 
 function htmlSelector(cue: AnimationStep, doc: SlideDocument): string | null {
   if(structuredTargetId(cue,doc)) return null;
+  // A structured element deliberately disappears in freeform mode. Never
+  // mistake its targetElementId for an HTML [data-id] animation target.
+  if(doc.mode==="freeform" && cue.targetElementId &&
+    doc.elements.some(el=>el.id===cue.targetElementId)) return null;
   if(doc.mode === "structured" || !doc.freeform?.html?.trim()) return null;
   const selector = cue.targetSelector?.trim() ??
     (cue.targetElementId ? '[data-id=' + JSON.stringify(cue.targetElementId) + ']' : "");
