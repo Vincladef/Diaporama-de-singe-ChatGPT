@@ -275,22 +275,21 @@ function createServer(request: Request): McpServer {
           .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
           .replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
         const text=s.document.elements.filter(e=>e.type==="text").map(e=>e.text??"").join("\n").trim();
-        const images=s.document.elements.filter(e=>e.type==="image");
-        const domains=images.map(e=>{
-          try{return new URL(e.src??"").protocol==="data:"?"embedded":new URL(e.src??"").hostname;}
-          catch{return "unknown";}
-        });
+        const inventory=inventorySourceVisuals(s.document);
+        const domains=inventory.images.map(image=>image.type==="embedded"?"embedded":image.format);
         return {id:s.id,revision:s.revision,position:s.position,
           mode:s.document.mode,canvas:s.document.canvas,
           text:(text+(htmlText?"\n"+htmlText:"")).slice(0,a.maxCharsPerSlide),
           notes:a.includeNotes?s.notes.slice(0,700):undefined,
-          images:images.length,imageOrigins:[...new Set(domains)].slice(0,10),
+          images:inventory.count,sourceDiagrams:inventory.svgCount,
+          originalVisualFingerprints:inventory.images.map(image=>image.fingerprint).slice(0,20),
+          imageOrigins:[...new Set(domains)].slice(0,10),
           editableElements:s.document.elements.length,
           animations:s.document.animations.length};
       });
       return {presentation:{id:deck.presentation.id,title:deck.presentation.title},
         slides,totalSlides:slides.length,
-        instruction:"Keep all intellectual content, numeric data, citations and notes unchanged; improve visual expression using HTML/CSS or structured layers, then apply with edit_slides and revision checks."};
+        instruction:"Preserve ALL original visuals (including HTML images, CSS backgrounds and SVG diagrams), intellectual content, data, citations and notes. Call inventory_source_visuals before restyling and compare_variants after. Add source images using place_source_image without Canva/Adobe. Save with revision checks."};
     });
 
   register("make_visual_copy","Créer une copie graphique de toute la présentation",
