@@ -42,3 +42,16 @@ test("inventories original images in native layers, HTML and CSS without exposin
   assert.ok(result.images[0]!.fingerprint.length===64);
   assert.equal(JSON.stringify(result).includes(smallPng),false);
 });
+
+test("ChatGPT fileParams schema declares all four required platform file fields", async()=>{
+  const { ChatImagePlacementSchema, OpenAIImageFileSchema } = await import("./sourceImages.ts");
+  const fileObject = { download_url:"https://files.oaiusercontent.com/token",
+    file_id:"file_abc123",mime_type:"image/png",file_name:"figure.png" };
+  const valid = { presentationId:"11111111-1111-4111-8111-111111111111",
+    slideId:"22222222-2222-4222-8222-222222222222",revision:1,file:fileObject };
+  assert.equal(ChatImagePlacementSchema.safeParse(valid).success,true);
+  assert.equal(ChatImagePlacementSchema.safeParse({...valid,file:{...fileObject,mime_type:undefined,file_name:undefined}}).success,true);
+  assert.equal(OpenAIImageFileSchema.safeParse({file_id:fileObject.file_id}).success,false);
+  assert.equal(OpenAIImageFileSchema.safeParse({download_url:fileObject.download_url}).success,false);
+  assert.equal(ChatImagePlacementSchema.safeParse({...valid,file:{...fileObject,unexpected:"secret"}}).success,false);
+});
