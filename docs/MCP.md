@@ -87,3 +87,19 @@ Le serveur 0.10.0 publie **37 outils**, dont `compose_diagrams`, `curate_images`
 ## Étape 11 : historique et export fiable
 
 Le serveur 0.11.0 expose 39 outils dont `list_slide_history` et `restore_slide_revision`. L'historique conserve l'état précédent des modifications déjà enregistrées (jusqu'à 60 entrées par diapositive). La restauration exige une révision récente, protège les changements concurrents et archive normalement la version remplacée. `prepare_export` fournit désormais un diagnostic succinct de compatibilité PPTX/Google Slides. L'éditeur et le MCP partagent les points de restauration conservés dans la base Neon ChatGPT. Une modification SQL transactionnelle plus forte exigerait une migration distincte ; l'état de cette limite figure dans [FINALISATION_STEP11.md](FINALISATION_STEP11.md).
+
+
+## Import direct d’images fournies et conservation des originaux (MCP 0.19)
+
+Deux outils évitent d'utiliser Canva ou Adobe comme intermédiaires pour placer un visuel :
+
+- **inventory_source_visuals** : inventorie les images natives, les balises HTML img, les fonds CSS et les schémas SVG ; la réponse contient des empreintes SHA-256, les formats, des index et les révisions, sans divulguer les octets des images.
+- **place_source_image** : insère un original sous forme d'objet natif éditable, en conservant les autres calques, le HTML et les animations. Une révision est obligatoire. Le cadrage par défaut est **contain**, sans couper le visuel.
+
+Fournir exactement une source : **imageBase64** (PNG, JPEG, WebP ou GIF, Base64 ou data URI), **referenceId** (identifiant d'une référence visuelle déjà enregistrée dans l'application), ou **sourceSlideId** (copie de l'image d'une autre diapositive du même diaporama, avec **sourceImageIndex** si nécessaire).
+
+La copie depuis une autre slide évite de retransmettre de longs octets Base64. Le média est conservé durablement dans le document JSON ; aucune table supplémentaire ni hébergeur externe. Limite de 3 Mo par image, avec validation des signatures, de l'encodage et des dimensions. Les SVG non fiables sont refusés en entrée.
+
+**Limite ChatGPT** : un MCP tiers ne peut pas lire directement un identifiant de fichier privé de ChatGPT. Le client doit transférer les octets, ou fournir une référence enregistrée dans l'application. L'accès automatique à toute pièce jointe ChatGPT ne doit pas être annoncé comme acquis.
+
+Avant toute refonte, appeler **get_creation_instructions**, puis **get_improvement_brief** et **inventory_source_visuals**. Après création des variantes, **compare_variants** signale désormais **source_images_missing** ou **source_diagrams_missing** si des figures d'origine ont disparu, y compris dans le HTML et les fonds CSS. Terminer par une inspection Chromium des pixels, jamais par un audit statique seul.
