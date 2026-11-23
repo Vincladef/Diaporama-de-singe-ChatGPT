@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { SlideDocument, SlideElement } from "../domain/slide.ts";
 import { inspectMarkupMedia } from "../quality/markupMedia.ts";
 import { getCreationReferenceFile } from "./creationReferences.ts";
+import { canFetchVisualResource, safeResourceUrl } from "../visual/safety.ts";
 
 
 const MAX_BYTES = 3_000_000;
@@ -144,4 +145,77 @@ export async function placeSourceImage(raw: SourceImagePlacement) {
       ...(source.mimeType ? { mimeType:source.mimeType, width:source.width,
         height:source.height, sizeBytes:source.sizeBytes } : { type:"https" }) },
     note:"Image insérée comme objet éditable ; le contenu et les animations existants restent inchangés." };
+}
+
+
+/** ChatGPT supports first-party file attachments with MCP _meta["openai/fileParams"].
+ * The host supplies a short-lived download_url and file_id to the top-level file parameter. */
+export const OpenAIImageFileSchema = z.object({
+  download_url: z.string().url(),
+  file_id: z.string().min(1).max(512),
+  mime_type: z.string().max(120).optional(),
+  file_name: z.string().max(255).optional(),
+}).strict();
+export const ChatImagePlacementSchema = z.object({
+  presentationId: z.uuid(),
+  slideId: z.uuid(),
+  revision: z.number().int().min(1),
+  file: OpenAIImageFileSchema,
+  elementId: z.string().min(1).max(128).optional(),
+  alt: z.string().max(350).optional(),
+  x: z.number().min(-20000).max(20000).optional(),
+  y: z.number().min(-20000).max(20000).optional(),
+  width: z.number().min(10).max(20000).optional(),
+  height: z.number().min(10).max(20000).optional(),
+  fit: z.enum(["contain", "cover", "fill"]).default("contain"),
+}).strict();
+export type ChatImagePlacement = z.infer<typeof ChatImagePlacementSchema>;
+
+/** Redirect-limited public HTTPS fetch with hard byte and time limits.
+ * Every hop must be externally routable; signed URLs are never logged or returned. */
+export async function fetchChatImage(downloadUrl: string): Promise<Buffer> {
+  let url = downloadUrl;
+  for (let redirect = 0; redirect < 4; redirect++) {
+    if (!safeResourceUrl(url) || !await canFetchVisualResource(url))
+      throw new Error("unsafe_file_download_url");
+    const response = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(15_000),
+      headers: { Accept: "image/png,image/jpeg,image/webp,image/gif,application/octet-stream" } });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const target = response.headers.get("location");
+      if (!target) throw new Error("file_redirect_without_target");
+      url = new URL(target, url).toString();
+      continue;
+    }
+    if (!response.ok) throw new Error("file_download_failed_" + response.status);
+    const length = Number(response.headers.get("content-length") ?? 0);
+    if (length > MAX_BYTES) throw new Error("image_too_large");
+    if (!response.body) throw new Error("file_body_missing");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        size += part.value.byteLength;
+        if (size > MAX_BYTES) { await reader.cancel().catch(() => {}); throw new Error("image_too_large"); }
+        chunks.push(part.value);
+      }
+    } finally { reader.releaseLock(); }
+    return Buffer.concat(chunks.map(chunk => Buffer.from(chunk)), size);
+  }
+  throw new Error("file_too_many_redirects");
+}
+export async function placeChatImage(input: ChatImagePlacement) {
+  const a = ChatImagePlacementSchema.parse(input);
+  if (a.file.mime_type && !["image/png", "image/jpeg", "image/webp", "image/gif",
+      "application/octet-stream"].includes(a.file.mime_type.toLowerCase()))
+    throw new Error("unsupported_chat_file_type");
+  const bytes = await fetchChatImage(a.file.download_url);
+  const result = await placeSourceImage({
+    presentationId:a.presentationId,slideId:a.slideId,revision:a.revision,
+    imageBase64:bytes.toString("base64"),elementId:a.elementId,alt:a.alt,
+    x:a.x,y:a.y,width:a.width,height:a.height,fit:a.fit,
+  });
+  return {...result,sourceFileId:a.file.file_id,attachmentUsed:true};
 }
