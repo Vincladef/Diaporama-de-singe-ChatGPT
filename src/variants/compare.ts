@@ -1,7 +1,6 @@
 import type { SlideDocument } from "../domain/slide.ts";
 import { reviewDocument } from "../mcp/visual.ts";
 import { inspectMarkupMedia } from "../quality/markupMedia.ts";
-import { createHash } from "node:crypto";
 
 export type VariantComparable={name:string;notes:string;document:SlideDocument;id?:string};
 const stripHtml=(s:string)=>s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
@@ -13,13 +12,13 @@ function texts(doc:SlideDocument):string[]{
   if(raw)entries.push(raw);
   return entries.filter(Boolean).sort();
 }
-/** Include authored HTML <img> and CSS backgrounds, not just native image layers.
- * Hash long data URLs so previews never leak multi-megabyte source payloads. */
+/** Include HTML <img> and CSS backgrounds, not just native image layers.
+ * Sources remain internal to the comparison; no binary data is returned to MCP. */
 function images(doc:SlideDocument):string[]{
   const markup=inspectMarkupMedia(doc);
   return [...doc.elements.filter(e=>e.type==="image").map(e=>e.src??""),
     ...markup.imageUrls,...markup.backgroundUrls]
-    .filter(Boolean).map(src=>createHash("sha256").update(src).digest("hex")).sort();
+    .filter(Boolean).sort();
 }
 function missingCount(base:string[],other:string[]):number{
   const counts=new Map<string,number>();
