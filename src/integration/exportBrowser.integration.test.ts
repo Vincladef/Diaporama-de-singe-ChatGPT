@@ -130,8 +130,10 @@ test("real Chromium browser exports actual editable and faithful PPTX from real 
    // Real browser rasterizes individually animated HTML cards. The output
    // contains one slide and a genuine OOXML animation timing tree.
    const hybrid=await page.evaluate(async()=>{
-     const {buildPowerPoint}=await import("/src/export/pptx.ts");
-     const {createEmptySlideDocument}=await import("/src/domain/slide.ts");
+     const pptxUrl="/src/export/pptx.ts";
+     const {buildPowerPoint}=await import(pptxUrl);
+     const documentUrl="/src/domain/slide.ts";
+     const {createEmptySlideDocument}=await import(documentUrl);
      const doc=createEmptySlideDocument();
      doc.mode="freeform";
      doc.freeform={
