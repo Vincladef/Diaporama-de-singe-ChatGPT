@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createEmptySlideDocument} from "../domain/slide.ts";
 import {sourceContentSignature,compareContentSignatures,compareLockedDeck,
-  checkLockedChanges,type LockedBaseline} from "./contentLock.ts";
+  checkLockedChanges,type LockedBaseline} from "./contentFingerprint.ts";
 
 function sample(){
   const document=createEmptySlideDocument();
