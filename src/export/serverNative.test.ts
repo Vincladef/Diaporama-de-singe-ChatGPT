@@ -17,9 +17,10 @@ test("server exports one native slide with editable text, shapes and embedded me
     {id:"rectangle",type:"shape",styles:{left:"900px",top:"400px",
       width:"400px",height:"160px",backgroundColor:"#234557"}}
   ];
-  const bytes=await buildServerNativePptx("Vérification",{id:"slide",position:0,
+  const row={id:"slide",position:0,
     revision:1,presentation_id:"deck",document,notes:"Notes originales",
-    updated_at:""} as never as import("../mcp/store.ts").DbSlide[]);
+    updated_at:""} as import("../mcp/store.ts").DbSlide;
+  const bytes=await buildServerNativePptx("Vérification",[row]);
   const zip=await JSZip.loadAsync(bytes);
   const slide=await zip.file("ppt/slides/slide1.xml")?.async("string");
   assert.ok(slide?.includes("Texte clinique intact"));
