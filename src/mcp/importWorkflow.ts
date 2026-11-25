@@ -14,7 +14,7 @@ const uuid=z.uuid();
 export const ImportPptxInputSchema=z.object({
   file:OpenAIImageFileSchema,
   title:z.string().trim().min(1).max(180).optional(),
-  selectedSlides:z.array(z.number().int().min(0).max(999)).min(1).max(40).optional(),
+  selectedSlides:z.array(z.number().int().min(0).max(999)).min(1).max(100).optional(),
   lockContent:z.boolean().default(true),
 }).strict();
 export const StyleChangeSchema=z.object({
@@ -121,7 +121,7 @@ export async function importAttachedPptx(input:z.infer<typeof ImportPptxInputSch
     originalName,media.process);
   const selected=a.selectedSlides?.length?[...new Set(a.selectedSlides)].sort((x,y)=>x-y):
     raw.slides.map((_,i)=>i);
-  if(selected.length>40||selected.some(i=>i>=raw.slides.length))throw Error("invalid_import_slide_selection");
+  if(selected.length>100||selected.some(i=>i>=raw.slides.length))throw Error("invalid_import_slide_selection");
   const groups=partition(selected.map(index=>raw.slides[index]!));
   if(!groups.length)throw Error("no_slides_selected");
   let created:string|undefined,inserted=0;
