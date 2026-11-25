@@ -13,7 +13,7 @@
   external_node_modules = ["sharp"]
 
 [functions.exports]
-  external_node_modules = ["sharp", "pptxgenjs"]
+  external_node_modules = ["sharp", "pptxgenjs", "jszip", "image-size"]
 
 [functions.visual-capture]
   external_node_modules = ["@sparticuz/chromium", "playwright-core"]
