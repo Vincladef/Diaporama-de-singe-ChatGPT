@@ -25,6 +25,8 @@ import {VisualReferenceUsedSchema,listSlidePreferences,listRelevantVisualPrefere
 import {inspectVisualRender,readVisualCapture,applyVisualCorrection} from "../../src/mcp/visualReview";
 import { authorizeBearer, oauthChallenge, oauthError, ORIGIN, RESOURCE, database } from "../../src/mcp/security";
 import { InitialSlideSchema, SlideOperationSchema, type SlideOperation } from "../../src/mcp/documents";
+import { ImportPptxInputSchema,StyleChangeSchema,importAttachedPptx,inspectImportedDeck,getSourceAssets,restyleImportedSlides,renderDeckBatch,compareWithSource,prepareServerPptx } from "../../src/mcp/importWorkflow";
+import { lockSourceContent } from "../../src/mcp/contentLock";
 import { AnimationStepSchema, type AnimationStep, type SlideDocument, type SlideElement } from "../../src/domain/slide";
 import { buildPlaybackPlan,timelineTarget } from "../../src/animation/timeline";
 import { auditDeck } from "../../src/quality/audit";
@@ -71,7 +73,7 @@ const slim = (value: unknown): JsonObject => value && typeof value === "object" 
 
 function createServer(request: Request): McpServer {
   const server = new McpServer({
-    name: "diaporama-de-singe-chatgpt", version: "0.19.0",
+    name: "diaporama-de-singe-chatgpt", version: "0.20.0",
   }, { instructions: "You are controlling ONLY the private Diaporama de singe ChatGPT project. FOR NEW VISUAL REQUESTS, FOLLOW TWO PHASES: PHASE 1 is an ACTUAL VISUAL PREVIEW IN CHAT, NOT a slide write: after 3-5 style directions if needed, GENERATE real AI image candidates with the connected image-generation capability and DISPLAY them in the chat before approval; DO NOT default to diagrams: reject cosmetic SVG stick figures, circles, arbitrary arrows, charts without verified data, and AI-looking flowcharts. Only draw a meaningful diagram if its relationships are both essential and grounded. Prefer a strong text-free AI editorial illustration for a one-question-per-slide interview deck. Give each proposed visual its meaning, source or generation method, intended crop, composition and animation; provide a per-slide storyboard. Generic stock-reference photos, text-only promises and mere prompts DO NOT satisfy phase 1. The user should be able to inspect, reject or refine every proposed image and diagram from the chat. Generated previews may be provisional but must be genuinely made. Do NOT create or edit remote presentation slides during phase 1. Ask the user to select or refine. PHASE 2 begins ONLY after the user selects/approves the direction or explicitly instructs immediate execution. Then use create_presentation with multiple slides, edit_slides with multiple operations, and short outline reads. On projected slides, prohibit AI filler microheadings, repeated series labels, fictitious scientific plate IDs, decorative page counters, and inventing metadata. STRICT for interview question decks: ONE EXACT QUESTION and ZERO other visible words anywhere, including inside AI-generated pictures, SVG, background, ornament, annotations, counters or graphic labels. Do not add Baseline, Intervention, Follow-up, Work Design, Coping, scientific-looking graph labels, invented metrics or any explanatory captions. Keep explanations in presenter notes or chat, never projected. Generate visual assets without lettering, overlay the question separately as editable text. Do not imply a specific interview answer through speculative visual data. For visual work supply full freeform HTML/CSS; never assume a fixed template. Respect revision conflicts. Avoid changing the independent Codex project. For complete AI workflows, prefer compose_slides (graphic scenes), review_slides (diagnostics plus signed browser previews), repair_slides (safe bulk corrections), then review again. For creative work choose compose_diagrams, compare_variants, revise_variant and curate_images. generate_variants is DETERMINISTIC (layout/color transformations); for truly independent AI-authored alternatives use create_variants with distinct HTML/CSS documents. AFTER THE DESIGN GATE, for a COMPLETE presentation request, FIRST call get_creation_instructions, create the scientific source slides, then prepare_deck_workflow for consolidated slide-level briefs and follow its instructions. For each page inspect reference pixels, curate and inspect photos, independently compose THREE versions with create_independent_variants; inspect real pixels with inspect_visual_render, apply bounded corrections, and call verify_deck_workflow. Never claim a full pixel review if the verification reports absent captures. For any request for three AI variants, FIRST call prepare_independent_variants (which reads instructions, sources and reference pixels), author THREE separate complete HTML/CSS/SVG slide documents, then call create_independent_variants. BEFORE presenting a generated slide as visually checked, call inspect_visual_render to receive actual Chromium screenshot pixels as an image, examine their appearance together with reference images and DOM diagnostics, then if needed call apply_visual_correction and repeat inspect_visual_render with the same sessionId (max 3 screenshot passes and 2 corrections). Never claim aesthetic review without viewing screenshot pixels. Do not alter scientific content or citations in CSS fixes. NEVER use generate_variants, proposeGraphicVariants or compose_slides to simulate original AI variants. For PPTX visual references, use search_reference_compositions and inspect_reference_page to read actual saved slide PNGs, and render_reference_pages when missing. A renderer can approximate proprietary fonts/effects; never copy source content. inspect_creation_reference provides drawing geometry. For photos first curate_images then inspect_photo_candidates to see decoded pixels and three crops with source dimensions. Apply only a chosen candidate and retain credits and rights. Use ELK diagrams when relationships justify a scientific graph. For selected images, apply_images edits them with tracked credits. Templates are optional: preserve full HTML/CSS freedom. Use list_slide_history and restore_slide_revision for persistent recovery of saved edits; restoration requires a known revision. Before creating or improving ANY presentation, call get_creation_instructions, using presentationId for edits, and honor the stored global and presentation-specific rules (specific rules take priority if they conflict). Do not assume the instructions are empty. If toolCount exceeds the client-visible tool count, tell the user to refresh the plugin tools. When the user supplies slides or pictures, ALWAYS retain their original visual assets, not merely the text. Run inventory_source_visuals first; use place_source_image for image bytes, saved references or reuse from an existing slide, without routing via Canva or Adobe. Compare variants to detect lost HTML images and original diagrams; do not claim successful restyling when important visuals are missing. When a user attaches an image in ChatGPT, PREFER place_chat_image: ChatGPT supplies file.download_url and file.file_id automatically via openai/fileParams; never require Canva/Adobe or manually copied Base64. For already-saved image references or existing slides use place_source_image. Exports: PowerPoint rendering currently runs in the authenticated Web editor. Use prepare_export to guide the owner." });
 
   const publishedToolNames: string[] = [];
@@ -145,6 +147,12 @@ function createServer(request: Request): McpServer {
           }
           return {content:[{type:"text" as const,text:JSON.stringify(metadata)}],structuredContent:metadata};
         }
+        if(name==="render_deck_batch"&&typeof payload.base64==="string"&&payload.mimeType==="image/png"){
+          const {base64,...metadata}=payload;
+          return {content:[{type:"text" as const,text:JSON.stringify(metadata)},
+            {type:"image" as const,data:base64,mimeType:"image/png" as const}],
+            structuredContent:metadata};
+        }
         return { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload };
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown_error";
@@ -159,11 +167,11 @@ function createServer(request: Request): McpServer {
 
   register("workspace_status","État du projet",
     "Check supported MCP features and the separate ChatGPT stack. No secrets returned.",{},false,
-    async()=>({project:"Diaporama de singe ChatGPT",version:"0.19.0",storage:"Neon",transport:"Streamable HTTP",
-      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.19.0",
+    async()=>({project:"Diaporama de singe ChatGPT",version:"0.20.0",storage:"Neon",transport:"Streamable HTTP",
+      toolCount:publishedToolNames.length,toolNames:publishedToolNames,toolCatalogVersion:"0.20.0",
       website:ORIGIN,mcp:RESOURCE,formats:["structured","freeform","hybrid"],
       exports:["PPTX fidèle (dans le navigateur)","PPTX éditable (dans le navigateur)","HTML/JSON via lien signé"],
-      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library","three_independent_ai_variants","chromium_pixel_capture","bounded_multimodal_visual_revision","sharp_image_inspection","elk_auto_layout_editable_science","visual_preferences_memory","integrated_deck_pipeline","real_variant_pixel_smoke","chat_file_params","direct_source_images","source_visual_inventory","source_image_preservation_checks"]}));
+      capabilities:["bulk_create","batch_edit_atomic","reorder","folders","assets","variants","animations_data","click_reveals","projection_mode","import_pptx","deck_quality_audit","visual_copy","restyling_brief","signed_previews","visual_layout_review","bulk_auto_repair","high_level_compositions","tool_catalog_inventory","diagram_and_mindmap_generator","six_art_directions","variant_comparison_and_revision","image_multisearch_curation","batch_photo_treatments","persistent_slide_history","restorable_versions","export_preflight","persistent_creation_instructions","creation_reference_uploads","visual_reference_library","three_independent_ai_variants","chromium_pixel_capture","bounded_multimodal_visual_revision","sharp_image_inspection","elk_auto_layout_editable_science","visual_preferences_memory","integrated_deck_pipeline","real_variant_pixel_smoke","chat_file_params","direct_source_images","source_visual_inventory","source_image_preservation_checks","mcp_native_pptx_import","native_source_object_inventory","original_asset_reuse","persistent_content_locks","batch_native_restyling","source_integrity_comparison","chromium_batch_contact_sheets","server_editable_pptx_download"]}));
 
   register("get_creation_instructions","Lire les instructions de création",
     "MANDATORY before creating, improving or restyling slides: read the persistent artistic and animation instructions. Pass presentationId when working on an existing presentation. Presentation-specific instructions take precedence over global rules in case of conflict.",
@@ -891,6 +899,51 @@ function createServer(request: Request): McpServer {
     "Make a saved design the active slide. Current design is stored as a backup variant.",
     {slideId:uuid,variantId:uuid,revision:z.number().int().min(1).optional()},true,
     async a=>activateVariant(a.slideId,a.variantId,a.revision));
+
+
+  // PPTX workflows work on original native objects; the editor's browser import remains available.
+  register("import_pptx","Importer un PowerPoint joint",
+    "Import an attached PPTX straight from ChatGPT into a NEW editable presentation using the existing OOXML parser. Transfers the real attachment via openai/fileParams; preserves supported texts, photos, object geometry and speaker notes. Automatically locks source content unless disabled. Does not touch another existing presentation. Reports unsupported OOXML features and optimized images.",
+    ImportPptxInputSchema.shape,true,async a=>importAttachedPptx(a),false,["file"]);
+
+  register("inspect_imported_deck","Inventorier les objets du PowerPoint",
+    "Compact full-deck inventory of native editable text, shapes, images, geometry, styles, animations and notes. No slide reconstruction or base64 transfer. Use after import before editing.",
+    {presentationId:uuid,maxChars:z.number().int().min(100).max(5000).default(900)},false,
+    async a=>inspectImportedDeck(a.presentationId,a.maxChars));
+
+  register("get_source_assets","Réutiliser les visuels originaux",
+    "List original images and diagram fingerprints with sourceSlideId/sourceImageIndex usable directly with place_source_image. No external hosting or copying from screenshots.",
+    {presentationId:uuid,offset:z.number().int().min(0).default(0),
+      limit:z.number().int().min(1).max(40).default(40)},false,
+    async a=>getSourceAssets(a.presentationId,a.offset,a.limit));
+
+  register("lock_source_content","Verrouiller les textes et visuels originaux",
+    "Persist strict per-slide fingerprints of exact editable text, embedded/HTML images, SVG contents and notes. Normal styling/repositioning remains allowed. Disabling a lock requires enabled=false and confirmUnlock=true. Content changes made via MCP edit_slides will be rejected while locked.",
+    {presentationId:uuid,enabled:z.boolean().default(true),
+      confirmUnlock:z.boolean().default(false)},true,
+    async a=>lockSourceContent(a.presentationId,a.enabled,a.confirmUnlock),true);
+
+  register("restyle_imported_slides","Restyler en lot sans perdre les objets",
+    "Apply native element style and position patches to up to 40 already-imported slides in one atomic MCP edit. Optionally update background CSS and animation tracks. Never replace the original images or text. Revisions and content locks are enforced; supports dryRun.",
+    {presentationId:uuid,changes:z.array(StyleChangeSchema).min(1).max(40),
+      dryRun:z.boolean().default(false)},true,
+    async a=>restyleImportedSlides(a.presentationId,a.changes,a.dryRun));
+
+  register("compare_with_source","Auditer les différences avec la source",
+    "Check every original slide for changes to text, source images, SVG content and speaker notes. By default compare against stored lock baseline; sourcePresentationId compares against a separate preserved original deck. Include missing slide detection.",
+    {presentationId:uuid,sourcePresentationId:uuid.optional()},false,
+    async a=>compareWithSource(a.presentationId,a.sourcePresentationId));
+
+  register("render_deck_batch","Capturer plusieurs diapositives réellement",
+    "Render a bounded batch (maximum three slides per call) using actual server Chromium pixels and return one compact contact-sheet PNG, image diagnostics, error list and nextOffset. Iterate to review all 40; it is NOT a simulated preview or a 40-slide background job.",
+    {presentationId:uuid,offset:z.number().int().min(0).default(0),
+      limit:z.number().int().min(1).max(3).default(3)},false,
+    async a=>renderDeckBatch(a.presentationId,a.offset,a.limit));
+
+  register("export_pptx_server","Préparer un PPTX natif à télécharger",
+    "Issue a short-lived authenticated signed URL for server-generated editable PowerPoint. Supports native text, shapes and embedded images; reports partial fidelity of complex effects, animations and freeform HTML. Does not create screenshots or use the Web editor.",
+    {presentationId:uuid},false,
+    async a=>prepareServerPptx(a.presentationId));
 
   register("prepare_export","Préparer l'exportation",
     "Open the private Web editor for PPTX generation (faithful or editable), or issue a short-lived signed HTML/JSON download URL. PowerPoint rendering must run in a browser and is NOT generated by this MCP call.",
