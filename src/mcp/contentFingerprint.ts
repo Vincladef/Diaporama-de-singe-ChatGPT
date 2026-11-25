@@ -31,7 +31,11 @@ export function sourceContentSignature(document:SlideDocument,notes:string):Cont
 }
 export function compareContentSignatures(source:ContentSignature,current:ContentSignature):string[]{
   const fields=(["texts","images","vectors","html","notes"] as const);
-  return fields.filter(field=>JSON.stringify(source[field])!==JSON.stringify(current[field]))
+  const stable=(value:unknown):string=>JSON.stringify(value,(_key,item)=>
+    item&&typeof item==="object"&&!Array.isArray(item)
+      ?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b)))
+      :item);
+  return fields.filter(field=>stable(source[field])!==stable(current[field]))
     .map(field=>"content_changed:"+field);
 }
 export function checkLockedChanges(
