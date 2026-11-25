@@ -241,7 +241,13 @@ async function captureViaExistingService(slide:DbSlide):Promise<{png:Buffer;diag
 export async function renderDeckBatch(presentationId:string,offset=0,limit=3){
   const deck=await getDeck(presentationId,"full",offset,limit);
   const slides=deck.slides.filter((s):s is DbSlide=>"document" in s);
-  const responses=await Promise.allSettled(slides.map(captureViaExistingService));
+  // Launch one Chromium capture at a time. Netlify Chromium instances can
+  // exhaust function memory when three are started in parallel.
+  const responses:PromiseSettledResult<Awaited<ReturnType<typeof captureViaExistingService>>>[]=[];
+  for(const slide of slides){
+    try{responses.push({status:"fulfilled",value:await captureViaExistingService(slide)});}
+    catch(reason){responses.push({status:"rejected",reason});}
+  }
   const images:Buffer[]=[];const reports:unknown[]=[];
   for(const [index,result] of responses.entries()){
     const slide=slides[index]!;
