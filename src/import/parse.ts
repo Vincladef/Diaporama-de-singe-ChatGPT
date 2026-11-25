@@ -130,7 +130,7 @@ function getSlideFiles(z:JSZip, warnings:string[]):Promise<{files:string[];size:
     const ordered=arr(rec(data["p:sldIdLst"])["p:sldId"])
       .map(slide=>rels.get(str(rec(slide)["@_r:id"]))?.part).filter((part):part is string=>!!part);
     if(!ordered.length)throw Error("Aucune diapositive trouvée dans ce PPTX.");
-    if(ordered.length>40)throw Error("Ce premier import traite jusqu'à 40 diapositives. Divisez ce fichier ou utilisez le MCP pour importer par lots.");
+    if(ordered.length>100)throw Error("Ce PowerPoint dépasse la limite de 100 diapositives par import.");
     if(ordered.some(part=>!z.file(part)))warnings.push("Certaines diapositives référencées ne sont pas présentes dans le ZIP.");
     return {files:ordered.filter(part=>!!z.file(part)),size:ppt};
   })();
