@@ -97,7 +97,6 @@ export async function buildServerNativePptx(title:string,rows:DbSlide[]):Promise
           ...box,objectName:element.id,
           fill:{color:fill,transparency:styles.backgroundColor||styles.background?0:100},
           line:{color:rgb(styles.borderColor,fill),transparency:styles.borderColor?0:100},
-          radius:0,
         });
       }else if(element.type==="image"&&element.src){
         let img=imageCache.get(element.src);
