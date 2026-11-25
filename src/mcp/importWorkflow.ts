@@ -7,8 +7,7 @@ import {OpenAIImageFileSchema,inventorySourceVisuals} from "./sourceImages.ts";
 import {getDeck,createDeck,addSlides,deleteDeck,updateDeck,editSlides,type DbSlide} from "./store.ts";
 import {SlideOperationSchema,type SlideOperation} from "./documents.ts";
 import {sourceContentSignature,compareContentSignatures,readContentLock,compareLockedDeck,lockSourceContent} from "./contentLock.ts";
-import {captureSlidePixels} from "../visual/capture.ts";
-import {sign,ORIGIN} from "./security.ts";
+import {sign,ORIGIN,digest} from "./security.ts";
 import {inspectExport} from "../export/preflight.ts";
 
 const uuid=z.uuid();
@@ -210,18 +209,41 @@ export async function compareWithSource(presentationId:string,sourcePresentation
   if(!baseline)throw Error("no_content_lock_or_source_presentation");
   return compareLockedDeck(baseline,slides);
 }
+/** Use the existing protected Chromium capture function, not a second browser bundle inside MCP. */
+async function captureViaExistingService(slide:DbSlide):Promise<{png:Buffer;diagnostics:unknown}>{
+  const expiresAt=Date.now()+40_000;
+  const sourceFingerprint=digest(JSON.stringify({
+    slideId:slide.id,revision:slide.revision,document:slide.document,notes:slide.notes
+  }));
+  const payload=JSON.stringify({
+    slideId:slide.id,variantId:null,sourceFingerprint,expiresAt
+  });
+  const response=await fetch(ORIGIN+"/internal/visual-capture",{
+    method:"POST",headers:{"Content-Type":"application/json",
+      "X-Singe-Capture-Signature":sign(payload)},
+    body:payload,cache:"no-store",signal:AbortSignal.timeout(47_000)
+  });
+  if(!response.ok)throw Error("capture_unavailable_"+response.status);
+  const result=await response.json() as {
+    mimeType:string;base64:string;fingerprint:string;diagnostics:unknown
+  };
+  if(result.mimeType!=="image/png"||result.fingerprint!==sourceFingerprint||!result.base64)
+    throw Error("invalid_capture_response");
+  return {png:Buffer.from(result.base64,"base64"),diagnostics:result.diagnostics};
+}
 export async function renderDeckBatch(presentationId:string,offset=0,limit=3){
   const deck=await getDeck(presentationId,"full",offset,limit);
   const slides=deck.slides.filter((s):s is DbSlide=>"document" in s);
+  const responses=await Promise.allSettled(slides.map(captureViaExistingService));
   const images:Buffer[]=[];const reports:unknown[]=[];
-  for(const slide of slides){
-    try{
-      const captured=await captureSlidePixels(slide.document);
-      images.push(await sharp(captured.png).resize({width:480,height:270,fit:"contain",
-        background:"#ffffff"}).png().toBuffer());
-      reports.push({id:slide.id,position:slide.position,diagnostics:captured.diagnostics});
-    }catch(error){
-      const message=error instanceof Error?error.message:"render_error";
+  for(const [index,result] of responses.entries()){
+    const slide=slides[index]!;
+    if(result.status==="fulfilled"){
+      images.push(await sharp(result.value.png)
+        .resize({width:480,height:270,fit:"contain",background:"#ffffff"}).png().toBuffer());
+      reports.push({id:slide.id,position:slide.position,diagnostics:result.value.diagnostics});
+    }else{
+      const message=result.reason instanceof Error?result.reason.message:"render_error";
       reports.push({id:slide.id,position:slide.position,error:message});
     }
   }
