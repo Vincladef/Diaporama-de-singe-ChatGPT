@@ -51,3 +51,15 @@ test("a missing original slide is reported and editing protected text is rejecte
   assert.throws(()=>checkLockedChanges(baseline,[
     {id:"source-slide",document:altered,notes:"Original notes"}]),/locked_content_changed/);
 });
+
+test("image fingerprints survive jsonb key reordering on import locks",()=>{
+  const original=sample();
+  const signature=sourceContentSignature(original,"Notes sources");
+  const reordered=structuredClone(signature);
+  reordered.images=reordered.images.map(x=>({hash:x.hash,index:x.index,kind:x.kind}));
+  const restored=JSON.parse(JSON.stringify(reordered));
+  assert.deepEqual(compareContentSignatures(restored,signature),[]);
+  const modified=structuredClone(signature);
+  modified.images[0]!.hash="changed";
+  assert.ok(compareContentSignatures(restored,modified).includes("content_changed:images"));
+});
