@@ -4,6 +4,7 @@ import { fingerprint } from "./fingerprint";
 import { recordSlideHistory } from "./history";
 import { editSlide, initialSlide, summarizeSlide, type InitialSlide, type SlideOperation } from "./documents";
 import { SlideDocumentSchema, type SlideDocument } from "../domain/slide";
+import {assertNoContentLock,readContentLock,checkLockedChanges} from "./contentLock.ts";
 
 const uuid = z.uuid();
 const title = z.string().trim().min(1).max(180);
@@ -68,6 +69,7 @@ export async function deleteDeck(id: string) {
 }
 export async function addSlides(deckId: string, slides: InitialSlide[]) {
   uuid.parse(deckId);
+  await assertNoContentLock(deckId);
   if (!slides.length || slides.length>40) throw new Error("invalid_slide_count");
   const parsed=slides.map(s=>initialSlide(s));
   const rows=await database().query(
@@ -78,6 +80,9 @@ export async function addSlides(deckId: string, slides: InitialSlide[]) {
 }
 export async function duplicateSlide(id: string) {
   uuid.parse(id);
+  const owner=await database().query("SELECT presentation_id::text AS id FROM public.slides WHERE id=$1::uuid",[id]);
+  if(!owner[0])throw Error("slide_not_found");
+  await assertNoContentLock(String(owner[0].id));
   const rows=await database().query(
     "WITH original AS (SELECT presentation_id,document,notes FROM public.slides WHERE id=$1::uuid), inserted AS (INSERT INTO public.slides(presentation_id,position,document,notes) SELECT original.presentation_id,(SELECT COALESCE(MAX(position),-1)+1 FROM public.slides WHERE presentation_id=original.presentation_id),original.document,original.notes FROM original RETURNING id,position) SELECT id::text AS id,position FROM inserted", [id]);
   if (!rows[0]) throw new Error("slide_not_found");
@@ -85,6 +90,7 @@ export async function duplicateSlide(id: string) {
 }
 export async function removeSlides(deckId: string, ids: string[]) {
   uuid.parse(deckId);
+  await assertNoContentLock(deckId);
   if (!ids.length || ids.length>40) throw new Error("invalid_slide_count");
   ids.forEach(id=>uuid.parse(id));
   const result=await database().query(
@@ -93,7 +99,8 @@ export async function removeSlides(deckId: string, ids: string[]) {
   return { deleted: result.length,slideIds: result.map(r=>r.id) };
 }
 export async function reorderSlides(deckId: string, order: string[]) {
-  uuid.parse(deckId);if(order.length>500)throw new Error("too_many_slides");
+  uuid.parse(deckId);
+  await assertNoContentLock(deckId);if(order.length>500)throw new Error("too_many_slides");
   order.forEach(id=>uuid.parse(id));
   const rows=await database().query("SELECT public.mcp_reorder_slides($1::uuid,$2::uuid[]) AS moved",[deckId,order]);
   return { reordered: rows[0]?.moved ?? 0 };
@@ -115,6 +122,8 @@ export async function editSlides(deckId: string, changes: SlideChange[], dryRun 
     const applied=editSlide(SlideDocumentSchema.parse(row.document),row.notes,c.operations);
     return {id:c.id,revision:row.revision,document:applied.document,notes:applied.notes};
   });
+  const contentLock=await readContentLock(deckId);
+  if(contentLock)checkLockedChanges(contentLock,prepared);
   if(dryRun)return { dryRun:true,updated:0,slides:undefined,changes:prepared.map((c,i)=>({
     ...summarizeSlide({id:c.id,position:byId.get(c.id)!.position,revision:c.revision+1,document:c.document,notes:c.notes}),
     operations:changes[i]?.operations.length})) };
