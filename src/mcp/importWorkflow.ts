@@ -168,12 +168,19 @@ export async function inspectImportedDeck(presentationId:string,maxChars=900){
 export async function getSourceAssets(presentationId:string,offset=0,limit=40){
   const deck=await getDeck(presentationId,"full",offset,limit);
   const slides=deck.slides.filter((s):s is DbSlide=>"document" in s);
-  return {presentationId,assets:slides.flatMap(s=>
-    inventorySourceVisuals(s.document).images.map(asset=>({
-      slideId:s.id,slideNumber:s.position+1,revision:s.revision,...asset,
-      reuse:{sourceSlideId:s.id,sourceImageIndex:asset.sourceIndex}
-    }))),nextOffset:deck.nextOffset,
-    usage:"To reuse without uploading, use place_source_image with sourceSlideId and sourceImageIndex."};
+  return {presentationId,assets:slides.flatMap(s=>{
+    const visuals=inventorySourceVisuals(s.document).images;
+    let copyIndex=0;
+    return visuals.map(asset=>{
+      const supported=asset.kind!=="css-background";
+      const index=supported?copyIndex++:null;
+      return {slideId:s.id,slideNumber:s.position+1,revision:s.revision,...asset,
+        ...(supported?{reuse:{sourceSlideId:s.id,sourceImageIndex:index}}:{
+          reuseUnsupported:"CSS background images are preserved in place but cannot be copied by place_source_image."
+        })};
+    });
+  }),nextOffset:deck.nextOffset,
+    usage:"For native or HTML images, pass reuse.sourceSlideId and reuse.sourceImageIndex to place_source_image."};
 }
 export async function restyleImportedSlides(presentationId:string,raw:unknown[],dryRun=false){
   const parsed=z.array(StyleChangeSchema).min(1).max(40).parse(raw);
