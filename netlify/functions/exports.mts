@@ -1,4 +1,6 @@
 import { getDeck } from "../../src/mcp/store";
+import { buildServerNativePptx } from "../../src/export/serverNative";
+import type {DbSlide} from "../../src/mcp/store";
 import { ORIGIN, safeEqual, sign } from "../../src/mcp/security";
 import { renderSlideHtml } from "../../src/engine/render";
 import type { SlideDocument } from "../../src/domain/slide";
@@ -26,7 +28,7 @@ function viewer(title:string, slides:{document:SlideDocument;notes:string}[]):st
 export default async function handler(request:Request):Promise<Response> {
   if(request.method!=="GET")return new Response(null,{status:405});
   const url=new URL(request.url);
-  const format=url.pathname.endsWith("/html")?"html":url.pathname.endsWith("/json")?"json":null;
+  const format=url.pathname.endsWith("/html")?"html":url.pathname.endsWith("/json")?"json":url.pathname.endsWith("/pptx")?"pptx":null;
   const ticket=url.searchParams.get("ticket")??"";
   const pieces=ticket.split(".");
   if(!format||pieces.length!==2)return Response.json({error:"invalid_ticket"},{status:403});
@@ -41,6 +43,16 @@ export default async function handler(request:Request):Promise<Response> {
     const deck=await getDeck(id,"full",0,100);
     if(deck.nextOffset!==null)return Response.json({error:"export_limit_100_slides"},{status:413});
     const name=(String(deck.presentation.title??"presentation").replace(/[^a-z0-9_-]/gi,"_").slice(0,75)||"presentation");
+    if(format==="pptx"){
+      const native=await buildServerNativePptx(String(deck.presentation.title),
+        deck.slides.filter((slide):slide is DbSlide=>"document" in slide));
+      return new Response(new Uint8Array(native),{headers:{
+        "Content-Type":"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "Content-Disposition":'attachment; filename="'+name+'.pptx"',
+        "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
+        "Referrer-Policy":"no-referrer","Access-Control-Allow-Origin":ORIGIN
+      }});
+    }
     const text=format==="json"
       ?JSON.stringify({presentation:deck.presentation,slides:deck.slides},null,2)
       :viewer(String(deck.presentation.title),deck.slides as {document:SlideDocument;notes:string}[]);
@@ -55,4 +67,4 @@ export default async function handler(request:Request):Promise<Response> {
     return Response.json({error:"export_failed"},{status:500,headers:{"Cache-Control":"no-store"}});
   }
 }
-export const config={path:["/exports/html","/exports/json"],rateLimit:{windowSize:60,windowLimit:40,aggregateBy:"ip" as const}};
+export const config={path:["/exports/html","/exports/json","/exports/pptx"],rateLimit:{windowSize:60,windowLimit:40,aggregateBy:"ip" as const}};
