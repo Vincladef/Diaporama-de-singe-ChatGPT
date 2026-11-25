@@ -1,6 +1,4 @@
 import {chromium as playwright,type Browser} from "playwright-core";
-import {randomUUID} from "node:crypto";
-import {rm} from "node:fs/promises";
 import type {SlideDocument} from "../domain/slide.ts";
 import {renderSlideHtml} from "../engine/render.ts";
 import {canFetchVisualResource} from "./safety.ts";
@@ -21,20 +19,21 @@ const MAX_PNG_BYTES=3_500_000;
 const LOAD_LIMIT_MS=9_000;
 const screenshotOptions={type:"png" as const,animations:"disabled" as const};
 
-async function createBrowser():Promise<{browser:Browser;userDataDir?:string}>{
+async function createBrowser():Promise<{browser:Browser}>{
   // CI provides an installed Playwright Chromium; Netlify bundles Sparticuz Chromium.
   if(process.env.VISUAL_USE_LOCAL_CHROMIUM==="1"){
     const browser=await playwright.launch({headless:true,timeout:16_000});
     return {browser};
   }
   const chromium=(await import("@sparticuz/chromium")).default;
-  const userDataDir="/tmp/singe-capture-"+randomUUID();
+  // Playwright manages its own temporary profile for launch(). Do not pass
+  // --user-data-dir: Playwright rejects it (use launchPersistentContext otherwise).
   const browser=await playwright.launch({
-    args:[...chromium.args,"--user-data-dir="+userDataDir],
+    args:chromium.args.filter(arg=>!arg.startsWith("--user-data-dir")),
     executablePath:await chromium.executablePath(),
     headless:true,timeout:18_000,
   });
-  return {browser,userDataDir};
+  return {browser};
 }
 
 export async function captureSlidePixels(slideDoc:SlideDocument):Promise<CapturedSlide>{
@@ -42,7 +41,7 @@ export async function captureSlidePixels(slideDoc:SlideDocument):Promise<Capture
   if(width>MAX_SIDE||height>MAX_SIDE||width*height>MAX_TOTAL_PIXELS)
     throw Error("capture_canvas_too_large");
   const html=renderSlideHtml(slideDoc);
-  const {browser,userDataDir}=await createBrowser();
+  const {browser}=await createBrowser();
   try{
     const context=await browser.newContext({
       viewport:{width,height},deviceScaleFactor:1,
@@ -150,6 +149,5 @@ export async function captureSlidePixels(slideDoc:SlideDocument):Promise<Capture
     }};
   }finally{
     await browser.close().catch(()=>{});
-    if(userDataDir)await rm(userDataDir,{recursive:true,force:true}).catch(()=>{});
   }
 }
