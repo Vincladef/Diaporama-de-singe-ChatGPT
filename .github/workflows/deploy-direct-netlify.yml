@@ -11,6 +11,7 @@ on:
       - 'sql/**'
       - 'public/**'
       - package.json
+      - netlify.toml
       - index.html
 
 permissions:
