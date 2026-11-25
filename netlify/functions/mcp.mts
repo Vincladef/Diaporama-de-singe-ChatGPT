@@ -160,7 +160,7 @@ function createServer(request: Request): McpServer {
         const code = /revision_conflict|invalid_|too_many_|duplicate_|not_found|conflict|maximum_|missing|folder/.test(message)
           ? message.slice(0,140) : "operation_failed";
         console.error("MCP tool failed:",name,message.slice(0,250));
-        return { content: [{ type: "text", text: JSON.stringify({error:code,tool:name,...(name==="import_pptx"?{diagnostic:(message.split(String.fromCharCode(10))[0] ?? "").slice(0,150)}:{})}) }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify({error:code,tool:name,...(["import_pptx","edit_slides","restyle_imported_slides"].includes(name)?{diagnostic:(message.split(String.fromCharCode(10))[0] ?? "").slice(0,200)}:{})}) }], isError: true };
       }
     });
   }
