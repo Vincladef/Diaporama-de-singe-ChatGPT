@@ -117,7 +117,8 @@ export async function importAttachedPptx(input:z.infer<typeof ImportPptxInputSch
   if(!originalName.toLowerCase().endsWith(".pptx"))throw Error("pptx_extension_required");
   const bytes=await getAttachedPptx(a.file.download_url);
   const media=adaptMedia();
-  const raw=await importPowerPoint(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.length),
+  const view=Uint8Array.from(bytes);
+  const raw=await importPowerPoint(view.buffer,
     originalName,media.process);
   const selected=a.selectedSlides?.length?[...new Set(a.selectedSlides)].sort((x,y)=>x-y):
     raw.slides.map((_,i)=>i);
