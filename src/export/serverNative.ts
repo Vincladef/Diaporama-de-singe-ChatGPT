@@ -1,4 +1,7 @@
-import pptxgen from "pptxgenjs";
+import {createRequire} from "node:module";
+// Force PptxGenJS' Node/CommonJS entry point inside Netlify's CJS function bundle.
+// Its ESM build cannot be executed through require() in that environment.
+const pptxgen=createRequire(process.cwd()+"/package.json")("pptxgenjs") as typeof import("pptxgenjs").default;
 import sharp from "sharp";
 import type {SlideDocument,SlideElement} from "../domain/slide.ts";
 import {canFetchVisualResource,safeResourceUrl} from "../visual/safety.ts";
