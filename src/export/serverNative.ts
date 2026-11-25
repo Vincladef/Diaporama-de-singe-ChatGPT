@@ -1,7 +1,8 @@
-import {createRequire} from "node:module";
-// Force PptxGenJS' Node/CommonJS entry point inside Netlify's CJS function bundle.
-// Its ESM build cannot be executed through require() in that environment.
-const pptxgen=createRequire(process.cwd()+"/package.json")("pptxgenjs") as typeof import("pptxgenjs").default;
+// Select the CommonJS distributable explicitly. The package's ESM entry is
+// incompatible with the Netlify CJS serverless bundle; direct static import
+// also ensures esbuild includes the library in the deployed function.
+// @ts-ignore The distributable has its declarations at pptxgenjs/types.
+import pptxgen from "../../node_modules/pptxgenjs/dist/pptxgen.cjs.js";
 import sharp from "sharp";
 import type {SlideDocument,SlideElement} from "../domain/slide.ts";
 import {canFetchVisualResource,safeResourceUrl} from "../visual/safety.ts";
