@@ -12,6 +12,9 @@
 [functions.mcp]
   external_node_modules = ["sharp"]
 
+[functions.exports]
+  external_node_modules = ["sharp"]
+
 [functions.visual-capture]
   external_node_modules = ["@sparticuz/chromium", "playwright-core"]
 
