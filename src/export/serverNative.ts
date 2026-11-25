@@ -93,11 +93,31 @@ export async function buildServerNativePptx(title:string,rows:DbSlide[]):Promise
       }else if(element.type==="shape"){
         const fill=rgb(styles.backgroundColor??styles.background,"FFFFFF");
         const circle=styles.borderRadius==="50%";
-        slide.addShape(circle?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{
-          ...box,objectName:element.id,
-          fill:{color:fill,transparency:styles.backgroundColor||styles.background?0:100},
-          line:{color:rgb(styles.borderColor,fill),transparency:styles.borderColor?0:100},
-        });
+        const hasFill=!!(styles.backgroundColor||styles.background||styles.borderColor);
+        if(hasFill||!element.text){
+          slide.addShape(circle?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{
+            ...box,objectName:element.id,
+            fill:{color:fill,transparency:styles.backgroundColor||styles.background?0:100},
+            line:{color:rgb(styles.borderColor,fill),transparency:styles.borderColor?0:100},
+          });
+        }
+        // Native shape text must be exported, not silently reduced to an empty rectangle.
+        // Text and the transparent source shape remain independently editable in PPTX.
+        const raw=element.text??element.textRuns?.map(x=>x.text).join("")??"";
+        if(raw){
+          const fontPx=pixels(styles.fontSize,doc.canvas.width,48);
+          slide.addText(raw,{
+            ...box,objectName:element.id+"-text",
+            color:rgb(styles.color,"202A30"),
+            fontFace:String(styles.fontFamily??"Aptos").replace(/["']/g,"").split(",")[0]||"Aptos",
+            fontSize:Math.max(5,Math.min(300,fontPx*72/96)),
+            bold:styles.fontWeight==="bold"||Number(styles.fontWeight)>=600,
+            italic:styles.fontStyle==="italic",
+            align:styles.textAlign==="center"?"center":styles.textAlign==="right"?"right":"left",
+            margin:0,breakLine:false,valign:"top",
+            transparency:0,
+          });
+        }
       }else if(element.type==="image"&&element.src){
         let img=imageCache.get(element.src);
         if(!img){img=await getMediaData(element.src);imageCache.set(element.src,img);}
