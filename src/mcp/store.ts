@@ -280,6 +280,10 @@ export async function activateVariant(slideId: string, variantId: string, expect
     ...SlideDocumentSchema.parse(row.variant_document),
     variantSelection:{originalId,activeId:variantId},
   });
+  const contentLock=await readContentLock(String(row.presentation_id));
+  if(contentLock)checkLockedChanges(contentLock,[{
+    id:slideId,document:selected,notes:String(row.variant_notes??"")
+  }]);
   const result=await db.query(
     "WITH switched AS(UPDATE public.slides SET document=$3::jsonb,notes=$4,"+
     "revision=revision+1,updated_at=now() WHERE id=$1::uuid AND revision=$2 "+
