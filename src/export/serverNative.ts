@@ -101,7 +101,9 @@ export async function buildServerNativePptx(title:string,rows:DbSlide[]):Promise
       }else if(element.type==="image"&&element.src){
         let img=imageCache.get(element.src);
         if(!img){img=await getMediaData(element.src);imageCache.set(element.src,img);}
-        slide.addImage({data:img,...box,objectName:element.id});
+        const fit=String(styles.objectFit??"contain");
+        slide.addImage({data:img,...box,objectName:element.id,
+          sizing:{type:fit==="cover"?"cover":"contain",w:box.w,h:box.h}});
       }else if(element.type==="svg"&&element.text){
         const png=await sharp(Buffer.from(element.text),{limitInputPixels:40_000_000}).png().toBuffer();
         slide.addImage({data:"data:image/png;base64,"+png.toString("base64"),
