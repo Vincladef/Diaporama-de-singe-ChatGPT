@@ -76,10 +76,10 @@ export function ImportStudio({token,onClose,onCreated}:Props){
             ?"Projection du site interactif dans une iframe isolée ; l'aperçu de l'éditeur reste statique."
             :"Les sections data-slide deviennent des diapositives ; scripts supprimés."}</small>
         </div>}
-        <div className="import-google-note"><strong>Depuis Google Slides</strong>
+        {(!source || !/\.(html?|zip)$/i.test(source.name)) && <div className="import-google-note"><strong>Depuis Google Slides</strong>
           <span>Fichier → Télécharger → Microsoft PowerPoint (.pptx), puis importer le fichier ici.</span>
           <a href="https://slides.google.com/" target="_blank" rel="noopener noreferrer">Ouvrir Google Slides ↗</a>
-        </div>
+        </div>}
       </div>
       {progress&&<div className="import-status" role="status">{progress}</div>}
       {error&&<div className="error-line" role="alert">{error}</div>}
