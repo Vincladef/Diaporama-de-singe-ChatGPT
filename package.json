@@ -18,7 +18,8 @@
     "test:integration": "node --experimental-strip-types --test src/integration/fullPipeline.integration.test.ts",
     "test:integration:export": "node --experimental-strip-types --test src/integration/exportBrowser.integration.test.ts",
     "test:mobile": "node --experimental-strip-types --test src/integration/mobileResponsive.integration.test.ts",
-    "test:presenter": "node --experimental-strip-types --test src/integration/presenterModes.integration.test.ts"
+    "test:presenter": "node --experimental-strip-types --test src/integration/presenterModes.integration.test.ts",
+    "test:web-import": "node --experimental-strip-types --test src/integration/webImport.integration.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
