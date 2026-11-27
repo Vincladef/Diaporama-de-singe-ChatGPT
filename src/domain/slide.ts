@@ -48,6 +48,8 @@ export const SlideDocumentSchema = z.object({
   }).strict(),
   elements: z.array(SlideElementSchema).max(1000),
   freeform: z.object({ html: z.string(), css: z.string() }).strict().optional(),
+  /** Imported self-contained web presentation. Never execute in the editor origin. */
+  webPage: z.object({ html: z.string().max(1_100_000), entry: z.string().max(250) }).strict().optional(),
   animations: z.array(AnimationStepSchema).max(1000),
   /** Optional visual theme, independent from authored elements and freeform CSS. */
   themeId: z.string().max(48).optional(),
