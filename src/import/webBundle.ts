@@ -142,7 +142,7 @@ export async function prepareWebSource(file:File):Promise<WebSource>{
     }
     script.removeAttribute("src");
     script.textContent=await member.async("string");
-    if(script.type==="module")
+    if(script.getAttribute("type")==="module")
       warnings.push("Un module JavaScript peut contenir des imports dynamiques qui ne fonctionnent pas hors ligne.");
   }
   for(const node of [...dom.querySelectorAll("img[src],source[src],audio[src],video[src],video[poster],link[rel~='icon'][href]")]){
