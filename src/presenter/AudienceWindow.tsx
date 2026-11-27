@@ -6,7 +6,7 @@ import { ProjectionStage } from "./ProjectionStage";
 type Show={title:string;slides:{id:string;document:SlideDocument}[]};
 type Message={
   sessionId:string;
-  type:"hello"|"init"|"state"|"command"|"close";
+  type:"hello"|"init"|"state"|"command"|"web-command"|"close";
   title?:string;
   slides?:Show["slides"];
   position?:PlaybackPosition;
@@ -44,6 +44,9 @@ export function AudienceWindow(){
       }else if(message.type==="state"&&message.position){
         setPosition(message.position);
         setBlackout(Boolean(message.blackout));
+      }else if(message.type==="web-command"&&
+        (message.command==="next"||message.command==="previous")){
+        window.dispatchEvent(new CustomEvent("singe-web-command",{detail:message.command}));
       }else if(message.type==="close"){
         loaded.current=false;setShow(null);setEnded(true);
       }
