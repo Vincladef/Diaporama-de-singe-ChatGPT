@@ -10,6 +10,7 @@ export type PresenterMessage =
   | { type: "state"; sessionId: string; position: PlaybackPosition; blackout: boolean; busy: boolean }
   | { type: "command"; sessionId: string;
       command: "next" | "previous" | "goto" | "toggleBlackout"; slide?: number }
+  | { type: "web-command"; sessionId: string; command: "next" | "previous" }
   | { type: "close"; sessionId: string };
 
 export function isSessionId(value: string): boolean {

@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import {prepareWebSource} from "./webBundle.ts";
 import { XMLParser } from "fast-xml-parser";
 import { SlideDocumentSchema, createEmptySlideDocument, type SlideDocument, type SlideElement } from "../domain/slide.ts";
 
@@ -228,6 +229,31 @@ export function importHtml(html:string,filename:string):ImportedDeck {
   return {kind:"html",sourceFileName:filename,title:dom.title||filename.replace(/\.html?$/i,""),
     slides,warnings:["Les scripts, formulaires et contenus embarqués ont été retirés ; les URL de ressources externes doivent rester accessibles."]};
 }
+/** Fidelity mode keeps the complete HTML document and its scripts for a sandboxed projector.
+ * The freeform layer is an inert preview only; it is not the executable source.
+ */
+export function importWebPage(html:string,filename:string,warnings:string[]=[]):ImportedDeck{
+  if(typeof DOMParser==="undefined")throw Error("L'import HTML nécessite un navigateur.");
+  if(html.length>1_100_000)throw Error("Le HTML dépasse 1,1 Mo après intégration des ressources.");
+  const source=new DOMParser().parseFromString(html,"text/html");
+  const staticPreview=new DOMParser().parseFromString(html,"text/html");
+  staticPreview.querySelectorAll("script,iframe,frame,object,embed,form,base,meta[http-equiv]").forEach(node=>node.remove());
+  const css=[...staticPreview.querySelectorAll("style")].map(node=>node.textContent??"").join("\n").slice(0,100000);
+  staticPreview.querySelectorAll("style,link[rel=stylesheet]").forEach(node=>node.remove());
+  const safeBody=staticPreview.body.innerHTML.slice(0,250000);
+  const title=source.title?.trim().slice(0,180)||filename.replace(/\.(?:html?|zip)$/i,"");
+  const document:SlideDocument={...createEmptySlideDocument(),mode:"freeform",
+    freeform:{html:safeBody,css},
+    webPage:{html,entry:filename.slice(0,250)}};
+  const json=JSON.stringify({document,notes:""});
+  if(new TextEncoder().encode(json).length>1_350_000)
+    throw Error("Le document HTML dépasse 1,35 Mo, limite par diapositive. Allégez les ressources ou utilisez des images HTTPS.");
+  return {kind:"html",sourceFileName:filename,title,
+    slides:[{document:SlideDocumentSchema.parse(document),notes:"",sourceTitle:title}],
+    warnings:[...warnings,
+      "Mode fidèle : le HTML et son JavaScript fonctionnent uniquement en projection isolée. L'éditeur affiche un aperçu sans scripts.",
+      "Les services réseau, iframes externes et modules non intégrés ne fonctionnent pas en mode sécurisé."]};
+}
 export async function importPowerPoint(bytes:ArrayBuffer,filename:string,mediaAdapter?:MediaAdapter):Promise<ImportedDeck>{
   if(bytes.byteLength>45_000_000)throw Error("Le PowerPoint dépasse 45 Mo. Réduisez les images avant l'import.");
   const zip=await JSZip.loadAsync(bytes,{checkCRC32:false});
@@ -304,10 +330,18 @@ export async function importPowerPoint(bytes:ArrayBuffer,filename:string,mediaAd
   warnings.push("PowerPoint : certains masques, graphiques, SmartArt, formes complexes et transitions ne sont pas intégralement convertis. Vérifiez l'aperçu.");
   return {title:filename.replace(/\.pptx$/i,""),slides,kind:"pptx",sourceFileName:filename,warnings:[...new Set(warnings)]};
 }
-export async function importFile(file:File,mediaAdapter?:MediaAdapter):Promise<ImportedDeck>{
+export async function importFile(file:File,mediaAdapter?:MediaAdapter,
+  options?:{htmlMode?:"web"|"convert"}):Promise<ImportedDeck>{
   const lower=file.name.toLowerCase();
   if(lower.endsWith(".pptx"))return importPowerPoint(await file.arrayBuffer(),file.name,mediaAdapter);
   if(lower.endsWith(".json"))return importNativeJson(await file.text(),file.name);
-  if(lower.endsWith(".html")||lower.endsWith(".htm"))return importHtml(await file.text(),file.name);
-  throw Error("Formats acceptés : .pptx, .json, .html.");
+  if(/\.(html?|zip)$/.test(lower)){
+    const source=await prepareWebSource(file);
+    return options?.htmlMode==="convert"
+      ? {...importHtml(source.html,file.name),warnings:[
+          ...source.warnings,"Conversion HTML en objets libres : le JavaScript et les interactions sont retirés."
+        ]}
+      : importWebPage(source.html,file.name,source.warnings);
+  }
+  throw Error("Formats acceptés : .pptx, .json, .html, .zip.");
 }

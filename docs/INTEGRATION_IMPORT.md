@@ -8,8 +8,8 @@ Périmètre exclusif : **Diaporama de singe ChatGPT**. Ne pas modifier la versio
 
 1. Ouvrir https://diaporama-de-singe-chatgpt.netlify.app/ avec son code d'accès.
 2. Cliquer sur **⇧ Importer**.
-3. Déposer un fichier `.pptx`, `.json`, `.html` ou `.htm`.
-4. Vérifier les vignettes, les limites de compatibilité et le nombre de pages ; désélectionner les diapositives inutiles.
+3. Déposer un fichier `.pptx`, `.json`, `.html`, `.htm` ou `.zip`. Pour un site HTML, compresser le dossier avec `index.html`, ses fichiers CSS, JavaScript et ressources. Le ZIP n'est pas un format PPTX.
+4. Pour HTML/ZIP, choisir **Présenter tel quel** (par défaut, rendu et scripts locaux conservés sous sandbox) ou **Convertir en diapositives** (sections `data-slide`, JavaScript retiré). Vérifier les vignettes et les limites de compatibilité ; désélectionner les pages inutiles.
 5. Nommer la nouvelle présentation et confirmer l'import. Elle est créée dans Neon ; l'original n'est pas écrasé.
 6. Les éléments récupérés peuvent ensuite être édités, animés, projetés et exportés depuis l'interface habituelle.
 
@@ -50,10 +50,13 @@ Les styles PowerPoint ne sont pas tous équivalents au CSS. De même, une diapos
 - Archive PowerPoint : limite de **130 Mo** de contenus décompressés, d'environ **7 Mo** par XML et **16 Mo** par média intégré. Les archives ZIP suspectes sont rejetées avant l'extraction des membres.
 - Les images sont redimensionnées en local vers 1600 px au maximum pour limiter le stockage et accélérer les transferts ; budget global d'environ **16 Mo** après adaptation. Les détails transparents sont conservés lorsque le navigateur sait les décoder.
 - JSON : 18 millions de caractères au plus ; jusqu'à 40 diapositives.
-- HTML : environ 900 000 caractères ; jusqu'à 40 sections `data-slide`, sinon une seule page.
+- HTML : page source jusqu'à environ 900 000 caractères. En **mode fidèle**, une page Web interactive devient une diapositive unique avec son document HTML d'origine stocké dans le JSON. En **conversion**, jusqu'à 40 sections `data-slide` ; sinon une seule page.
+- ZIP HTML : `index.html` prioritaire ; jusqu'à 45 Mo compressés, 65 Mo décompressés, 300 fichiers et 8 Mo par membre. CSS, scripts, images, polices et certains médias locaux sont intégrés dans le HTML. Les ressources embarquées sont limitées à environ 900 Ko et la diapositive persistée à 1,35 Mo. Préférer des images HTTPS pour les fichiers plus grands.
+- En mode fidèle, l'éditeur et les vignettes affichent une **prévisualisation sans scripts** ; le document source s'exécute uniquement en projection. Modifier cette vignette ou le HTML libre ne modifie pas automatiquement la page Web intégrée.
+- Les modules ES avec imports, services réseau et dépendances CDN ne sont pas garantis ; les scripts externes sont écartés. Le navigateur HTML importé utilise son propre mécanisme de navigation ; les commandes gauche/droite disposent d'un relais compatible avec les contrôleurs usuels.
 - Les fichiers sont découpés en requêtes d'au plus 20 pages et environ 1,4 Mo chacune. Une importation interrompue tente de supprimer la copie incomplète.
 - L'import crée **une nouvelle présentation** ; jamais de remplacement silencieux d'un original.
-- Le HTML importé est dépouillé des scripts, formulaires et contenus embarqués ; son rendu est isolé dans un iframe dépourvu de permission d'exécution de JavaScript, avec une CSP restrictive.
+- En conversion, le HTML importé est dépouillé des scripts, formulaires et contenus embarqués ; son rendu est isolé sans JavaScript. En projection fidèle, le document interactif s'exécute dans une iframe `sandbox="allow-scripts"` **sans `allow-same-origin`**, avec une CSP qui bloque l'accès réseau actif, les formulaires et les sous-frames. Ne jamais lever cette isolation.
 - Les routes de la bibliothèque exigent une authentification ; le moteur MCP applique ses scopes OAuth, et les données résident exclusivement dans Neon ChatGPT.
 
 ## MCP : flux d'amélioration recommandé
