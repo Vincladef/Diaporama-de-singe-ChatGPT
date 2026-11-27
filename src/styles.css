@@ -277,6 +277,10 @@
 .import-file-drop input{font-size:11px;width:100%;max-width:290px;color:#5c7664}
 .import-google-note{border:1px solid #dce8df;background:#fafcf9;border-radius:9px;padding:17px;display:flex;flex-direction:column;gap:9px;color:#58705d;font-size:12px;line-height:1.6}
 .import-google-note strong{color:#2d4a37;font-size:13px}
+.import-google-note select{width:100%;border:1px solid #c7d7cc;border-radius:7px;padding:10px 9px;background:white;color:#274333;font:inherit;line-height:1.4;cursor:pointer}
+.import-google-note select:focus-visible{outline:2px solid #4f9a69;outline-offset:2px}
+.import-google-note label{font-weight:600;color:#466751}
+.import-google-note small{color:#6b8273;line-height:1.55}
 .import-google-note a{align-self:start;color:#277044;font-size:11px;text-decoration:underline;text-underline-offset:3px}
 .import-preview{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden;border-top:1px solid #e5ebe6}
 .import-preview-head{padding:15px 22px 12px;display:flex;align-items:end;justify-content:space-between;gap:16px}
