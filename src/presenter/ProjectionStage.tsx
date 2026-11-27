@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SlideDocument } from "../domain/slide";
 import { renderSlideHtml } from "../engine/render";
 import { SlideAnimationPlayer } from "../animation/runtime";
+import { WebProjectionStage } from "./WebProjectionStage";
 
 export type PlayableSlide = { id: string; document: SlideDocument };
 type Props = {
@@ -26,7 +27,7 @@ type Props = {
  * previous version waited up to 4.5 seconds for external images and fonts on
  * each transition; those resources now load independently of navigation.
  */
-export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title, onReady,
+function NativeProjectionStage({ slide, reveal, onAdvance, onBusyChange, title, onReady,
   onEmbeddedKeyDown, animateTransitions = true }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const frames = useRef<(HTMLIFrameElement | null)[]>([null, null]);
@@ -227,4 +228,12 @@ export function ProjectionStage({ slide, reveal, onAdvance, onBusyChange, title,
     })}
     {!ready && <div className="projection-loading">Préparation de la diapositive…</div>}
   </div>;
+}
+
+/** Preserve the native animation engine for ordinary slides and isolate web pages separately. */
+export function ProjectionStage(props:Props){
+  return props.slide.document.webPage
+    ? <WebProjectionStage slide={props.slide} onReady={props.onReady}
+        onBusyChange={props.onBusyChange} title={props.title}/>
+    : <NativeProjectionStage {...props}/>;
 }
