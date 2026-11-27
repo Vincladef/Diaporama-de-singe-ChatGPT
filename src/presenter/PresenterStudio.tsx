@@ -39,12 +39,18 @@ export function PresenterStudio({ detail, initialSlideId, mode, sessionId, initi
 
   // An input must never be discarded while a reveal transition is playing.
   // The animation player cancels the previous seek when the desired position changes.
+  const webCommand = useCallback((action:"next"|"previous") => {
+    window.dispatchEvent(new CustomEvent("singe-web-command",{detail:action}));
+    channel.current?.postMessage({type:"web-command",sessionId,command:action} satisfies PresenterMessage);
+  },[sessionId]);
   const next = useCallback(() => {
+    if(documents[positionRef.current.slide]?.webPage){webCommand("next");return;}
     setPosition(old => nextPosition(documents, old));
-  }, [documents]);
+  }, [documents,webCommand]);
   const previous = useCallback(() => {
+    if(documents[positionRef.current.slide]?.webPage){webCommand("previous");return;}
     setPosition(old => previousPosition(documents, old));
-  }, [documents]);
+  }, [documents,webCommand]);
 
   const close = useCallback(() => {
     if (ending.current) return;
