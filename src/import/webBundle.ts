@@ -50,11 +50,12 @@ export function localPath(origin:string,relative:string):string|null{
 /** A single HTML file also benefits from the isolated runtime, even without a ZIP. */
 export async function prepareWebSource(file:File):Promise<WebSource>{
   if(file.size>MAX_INPUT)throw Error("Fichier trop volumineux (45 Mo maximum).");
-  if(/\.html?$/i.test(file.name))
-    return {html:await file.text(),entry:file.name,warnings:[]};
-  if(!/\.zip$/i.test(file.name))throw Error("Choisissez un fichier HTML ou une archive ZIP.");
-  const zip=await JSZip.loadAsync(await file.arrayBuffer(),{checkCRC32:true});
-  archiveBudget(zip);
+  if(!/\.(?:html?|zip)$/i.test(file.name))
+    throw Error("Choisissez un fichier HTML ou une archive ZIP.");
+  const zip=/\.zip$/i.test(file.name)
+    ?await JSZip.loadAsync(await file.arrayBuffer(),{checkCRC32:true})
+    :new JSZip().file(file.name,await file.text());
+  if(/\.zip$/i.test(file.name))archiveBudget(zip);
   const names=Object.keys(zip.files).filter(p=>!zip.files[p]!.dir&&/\.html?$/i.test(p)&&
     !p.split("/").some(part=>part==="__MACOSX"||part.startsWith(".")));
   if(!names.length)throw Error("Aucun fichier HTML trouvé dans cette archive.");
