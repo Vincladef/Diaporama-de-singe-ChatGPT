@@ -7,6 +7,7 @@ import { SlideThumbnail } from "../editor/SlideThumbnail";
 type Props={token:string;onClose:()=>void;onCreated:(id:string)=>Promise<void>|void};
 export function ImportStudio({token,onClose,onCreated}:Props){
   const [source,setSource]=useState<File|null>(null);
+  const [htmlMode,setHtmlMode]=useState<"web"|"convert">("web");
   const [deck,setDeck]=useState<ImportedDeck|null>(null);
   const [title,setTitle]=useState("");
   const [selected,setSelected]=useState<number[]>([]);
@@ -26,13 +27,13 @@ export function ImportStudio({token,onClose,onCreated}:Props){
     window.addEventListener("keydown",key);
     return()=>window.removeEventListener("keydown",key);
   },[busy,onClose]);
-  async function choose(file:File){
-    if(!/\.(pptx|json|html?)$/i.test(file.name)){setError("Choisissez un fichier PPTX, JSON ou HTML.");return;}
+  async function choose(file:File,mode: "web"|"convert" = htmlMode){
+    if(!/\.(pptx|json|html?|zip)$/i.test(file.name)){setError("Choisissez un fichier PPTX, JSON, HTML ou ZIP.");return;}
     if(file.size>45_000_000){setError("Fichier trop volumineux (limite : 45 Mo).");return;}
     setSource(file);setDeck(null);setDone(null);setBusy(true);setError("");setProgress("Analyse du document…");
     try{
       const budget=createImportMediaBudget();
-      const result=await importFile(file,(data,mime,path)=>optimizeImportedImage(data,mime,path,budget));
+      const result=await importFile(file,(data,mime,path)=>optimizeImportedImage(data,mime,path,budget),{htmlMode:mode});
       setDeck(result);setTitle(result.title.slice(0,180));setSelected(result.slides.map((_,i)=>i));
     }catch(e){setError(e instanceof Error?e.message:"Import impossible.");}
     finally{setBusy(false);setProgress("");}
@@ -50,16 +51,31 @@ export function ImportStudio({token,onClose,onCreated}:Props){
   return <div className="studio-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)onClose();}}>
     <section className="studio-dialog import-dialog" role="dialog" aria-modal="true" aria-label="Importer une présentation">
       <header className="studio-header"><div><strong>Importer et améliorer</strong>
-        <span>PowerPoint · Google Slides exporté en PPTX · JSON Diaporama de singe · HTML</span></div>
+        <span>PowerPoint · JSON · HTML/CSS interactif · archive ZIP avec images et scripts</span></div>
         <button className="studio-close" disabled={busy} onClick={onClose} aria-label="Fermer l'import">×</button></header>
       {!done?<><div className="import-intro">
         <label className="import-file-drop" onDragOver={e=>e.preventDefault()}
           onDrop={e=>{e.preventDefault();const file=e.dataTransfer.files[0];if(file)void choose(file);}}>
           <span className="import-file-icon">⇧</span><strong>{source?.name||"Déposer un diaporama ou choisir un fichier"}</strong>
           <small>Aucun document n'est envoyé à Neon avant votre validation.</small>
-          <input type="file" accept=".pptx,.json,.html,.htm" disabled={busy}
+          <input type="file" accept=".pptx,.json,.html,.htm,.zip" disabled={busy}
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void choose(file);}}/>
         </label>
+        {source && /\.(html?|zip)$/i.test(source.name) && <div className="import-google-note">
+          <strong>Import HTML/CSS</strong>
+          <label htmlFor="import-html-mode">Mode d'importation</label>
+          <select id="import-html-mode" value={htmlMode} disabled={busy}
+            onChange={e=>{
+              const mode=e.target.value as "web"|"convert";
+              setHtmlMode(mode);void choose(source,mode);
+            }}>
+            <option value="web">Présenter tel quel : mise en page et JavaScript conservés</option>
+            <option value="convert">Convertir les sections HTML en diapositives modifiables</option>
+          </select>
+          <small>{htmlMode==="web"
+            ?"Projection du site interactif dans une iframe isolée ; l'aperçu de l'éditeur reste statique."
+            :"Les sections data-slide deviennent des diapositives ; scripts supprimés."}</small>
+        </div>}
         <div className="import-google-note"><strong>Depuis Google Slides</strong>
           <span>Fichier → Télécharger → Microsoft PowerPoint (.pptx), puis importer le fichier ici.</span>
           <a href="https://slides.google.com/" target="_blank" rel="noopener noreferrer">Ouvrir Google Slides ↗</a>
@@ -92,7 +108,7 @@ export function ImportStudio({token,onClose,onCreated}:Props){
           </label>)}</div>
       </div>}
       <footer className="import-footer">
-        <span>{deck?"Les pages sélectionnées seront enregistrées dans Neon ChatGPT.":"Certains masques et effets PowerPoint complexes nécessitent une retouche."}</span>
+        <span>{deck?"Une copie indépendante sera enregistrée dans Neon ChatGPT.":"HTML seul ou ZIP avec index.html et ressources locales ; aucune archive n'est publiée avant validation."}</span>
         <button className="subtle-btn" onClick={onClose} disabled={busy}>Annuler</button>
         <button className="primary" onClick={()=>void create()} disabled={busy||!deck||!selected.length||!title.trim()}>
           {busy?"Importation…":"Importer "+selected.length+" diapositive"+(selected.length>1?"s":"")}</button>
