@@ -35,6 +35,9 @@ jobs:
       - name: Test public projection vs private presenter notes and synchronized controls
         timeout-minutes: 3
         run: npm run test:presenter
+      - name: Verify self-contained HTML ZIP import and isolated script playback
+        timeout-minutes: 3
+        run: npm run test:web-import
       - name: Check smartphone, mobile landscape and tablet interaction layouts
         timeout-minutes: 5
         run: npm run test:mobile
